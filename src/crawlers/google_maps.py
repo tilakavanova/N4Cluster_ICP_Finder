@@ -14,7 +14,11 @@ class GoogleMapsCrawler(BaseCrawler):
 
     async def crawl(self, query: str, location: str) -> AsyncIterator[dict]:
         """Crawl Google Maps for restaurant listings."""
-        from playwright.async_api import async_playwright
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            self.logger.warning("playwright_not_available", msg="Skipping Google Maps crawl — install Playwright for browser-based crawling")
+            return
 
         search_query = f"{query} in {location}"
         self.logger.info("starting_crawl", query=search_query)

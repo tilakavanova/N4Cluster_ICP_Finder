@@ -21,7 +21,11 @@ class DeliveryCrawler(BaseCrawler):
 
     async def _crawl_doordash(self, query: str, location: str) -> AsyncIterator[dict]:
         """Crawl DoorDash listings."""
-        from playwright.async_api import async_playwright
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            self.logger.warning("playwright_not_available", msg="Skipping DoorDash crawl")
+            return
 
         self.logger.info("crawling_doordash", query=query, location=location)
 
@@ -74,7 +78,11 @@ class DeliveryCrawler(BaseCrawler):
 
     async def _crawl_ubereats(self, query: str, location: str) -> AsyncIterator[dict]:
         """Crawl UberEats listings."""
-        from playwright.async_api import async_playwright
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            self.logger.warning("playwright_not_available", msg="Skipping UberEats crawl")
+            return
 
         self.logger.info("crawling_ubereats", query=query, location=location)
 

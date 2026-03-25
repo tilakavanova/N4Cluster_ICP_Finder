@@ -42,7 +42,11 @@ class WebsiteCrawler(BaseCrawler):
 
     async def _fetch_playwright(self, url: str) -> str:
         """Fetch with Playwright for JS-rendered pages."""
-        from playwright.async_api import async_playwright
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            self.logger.warning("playwright_not_available", msg="Cannot render JS — returning empty")
+            return ""
         import asyncio
 
         async with async_playwright() as p:
