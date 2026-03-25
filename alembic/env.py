@@ -1,7 +1,12 @@
 """Alembic environment configuration."""
 
+import sys
 import os
 import asyncio
+from pathlib import Path
+
+# Ensure project root is on sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -o errexit
 
+# Ensure src package is importable
+export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$(pwd)"
+
 # Start Celery worker in the background
 celery -A src.tasks.celery_app worker --loglevel=info --concurrency=2 &
 
