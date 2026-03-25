@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     debug: bool = False
 
     @property
+    def async_database_url(self) -> str:
+        """Convert Render's postgres:// URL to asyncpg-compatible format."""
+        url = self.database_url
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
+    @property
     def proxy_pool(self) -> list[str]:
         if not self.proxy_list:
             return []
