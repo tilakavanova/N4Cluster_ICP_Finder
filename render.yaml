@@ -6,13 +6,13 @@ databases:
     postgresMajorVersion: "16"
 
 services:
-  # FastAPI Web Service
+  # Combined: FastAPI + Celery worker + beat in one process
   - type: web
     name: icp-finder-api
     runtime: python
     plan: free
     buildCommand: chmod +x build.sh && ./build.sh
-    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    startCommand: chmod +x start.sh && ./start.sh
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -34,30 +34,6 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.3"
     healthCheckPath: /health
-
-  # Celery Worker
-  - type: worker
-    name: icp-finder-worker
-    runtime: python
-    plan: free
-    buildCommand: pip install -e "."
-    startCommand: celery -A src.tasks.celery_app worker --loglevel=info --concurrency=2
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: icp-finder-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: icp-finder-redis
-          type: redis
-          property: connectionString
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: PYTHON_VERSION
-        value: "3.12.3"
 
   # Redis
   - type: redis
