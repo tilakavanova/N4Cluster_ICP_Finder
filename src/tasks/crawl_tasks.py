@@ -44,12 +44,15 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
 
             try:
                 results = await crawler.run(query, location)
+                logger.info("crawl_results_received", source=source, total_from_api=len(results))
                 count = 0
+                skipped = 0
 
                 for record in results:
                     name = record.get("name", "").strip()
                     address = record.get("address", "").strip()
                     if not name:
+                        skipped += 1
                         continue
 
                     cuisine = record.get("cuisine_type", [])
@@ -78,6 +81,7 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                         },
                     )
                     await session.execute(stmt)
+                    await session.flush()
 
                     # Get the restaurant ID
                     rest_query = select(Restaurant).where(
@@ -96,7 +100,10 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                         )
                         session.add(source_rec)
                         count += 1
+                    else:
+                        logger.warning("restaurant_not_found_after_insert", name=name, address=address[:80] if address else None)
 
+                logger.info("crawl_insert_summary", source=source, inserted=count, skipped=skipped, total_from_api=len(results))
                 await session.commit()
 
                 if job_id:

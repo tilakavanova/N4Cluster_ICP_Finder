@@ -72,6 +72,8 @@ class GoogleMapsCrawler(BaseCrawler):
 
             except Exception as e:
                 self.logger.error("search_error", page=page, error=str(e))
+                if page == 0:
+                    raise  # Re-raise if first page fails — likely an API key or config issue
                 break
 
     def _parse_place(self, place: dict) -> dict | None:
