@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     llm_max_tokens: int = 4000
 
+    # Crawler API keys
+    google_places_api_key: str = ""
+    yelp_fusion_api_key: str = ""
+    serpapi_api_key: str = ""
+    google_places_max_pages: int = 3
+
     # Crawling
     proxy_list: str = ""
     crawl_concurrency: int = 3

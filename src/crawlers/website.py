@@ -1,4 +1,4 @@
-"""Generic website crawler for restaurant detail pages."""
+"""Generic website crawler for restaurant detail pages (httpx only, no Playwright)."""
 
 import re
 from typing import AsyncIterator
@@ -21,10 +21,19 @@ class WebsiteCrawler(BaseCrawler):
         self.logger.info("crawling_website", url=url)
 
         try:
-            content = await self._fetch_simple(url)
-        except Exception:
-            self.logger.info("falling_back_to_playwright", url=url)
-            content = await self._fetch_playwright(url)
+            async with self._get_client() as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                content = resp.text
+        except Exception as e:
+            self.logger.warning("fetch_failed", url=url, error=str(e))
+            return {
+                "source": self.SOURCE,
+                "source_url": url,
+                "raw_text": "",
+                "raw_html": "",
+                "error": str(e),
+            }
 
         return {
             "source": self.SOURCE,
@@ -32,32 +41,6 @@ class WebsiteCrawler(BaseCrawler):
             "raw_text": self._clean_text(content),
             "raw_html": content[:50000],
         }
-
-    async def _fetch_simple(self, url: str) -> str:
-        """Fetch with httpx."""
-        async with self._get_client() as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return resp.text
-
-    async def _fetch_playwright(self, url: str) -> str:
-        """Fetch with Playwright for JS-rendered pages."""
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            self.logger.warning("playwright_not_available", msg="Cannot render JS — returning empty")
-            return ""
-        import asyncio
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            try:
-                await page.goto(url, wait_until="networkidle", timeout=20000)
-                await asyncio.sleep(2)
-                return await page.content()
-            finally:
-                await browser.close()
 
     def _clean_text(self, html: str) -> str:
         """Strip HTML tags and normalize whitespace."""

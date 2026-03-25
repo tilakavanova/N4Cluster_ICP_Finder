@@ -60,6 +60,48 @@ class BaseCrawler(ABC):
             self.logger.info("fetched", url=url, status=resp.status_code)
             return resp.text
 
+    @retry(
+        stop=stop_after_attempt(settings.crawl_retry_attempts),
+        wait=wait_exponential(multiplier=2, min=3, max=120),
+        retry=retry_if_exception_type((httpx.HTTPError, TimeoutError)),
+        reraise=True,
+    )
+    async def _fetch_json(
+        self,
+        url: str,
+        client: httpx.AsyncClient | None = None,
+        method: str = "GET",
+        headers: dict | None = None,
+        json_body: dict | None = None,
+        params: dict | None = None,
+    ) -> dict:
+        """Fetch JSON from an API with retry and rate limiting."""
+        async with self._semaphore:
+            await self._throttle()
+
+            async def _do_request(c: httpx.AsyncClient) -> dict:
+                if method.upper() == "POST":
+                    resp = await c.post(url, headers=headers, json=json_body, params=params)
+                else:
+                    resp = await c.get(url, headers=headers, params=params)
+
+                # Handle rate limiting specifically
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", 5))
+                    self.logger.warning("rate_limited", url=url, retry_after=retry_after)
+                    await asyncio.sleep(retry_after)
+                    resp.raise_for_status()
+
+                resp.raise_for_status()
+                self.logger.info("api_fetched", url=url, status=resp.status_code)
+                return resp.json()
+
+            if client:
+                return await _do_request(client)
+            else:
+                async with self._get_client() as c:
+                    return await _do_request(c)
+
     @abstractmethod
     async def crawl(self, query: str, location: str) -> AsyncIterator[dict]:
         """Crawl a source and yield raw records."""

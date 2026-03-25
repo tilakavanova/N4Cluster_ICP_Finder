@@ -1,118 +1,135 @@
-"""Yelp crawler using httpx with structured parsing."""
+"""Yelp Fusion API crawler (replaces HTML scraping)."""
 
-import json
-import re
 from typing import AsyncIterator
 
+from src.config import settings
 from src.crawlers.base import BaseCrawler
 from src.utils.logging import get_logger
 
 logger = get_logger("crawler.yelp")
 
+YELP_SEARCH_URL = "https://api.yelp.com/v3/businesses/search"
+YELP_DETAIL_URL = "https://api.yelp.com/v3/businesses"
+
 
 class YelpCrawler(BaseCrawler):
     SOURCE = "yelp"
-    BASE_URL = "https://www.yelp.com"
+
+    def _auth_headers(self) -> dict:
+        return {"Authorization": f"Bearer {settings.yelp_fusion_api_key}"}
 
     async def crawl(self, query: str, location: str) -> AsyncIterator[dict]:
-        """Crawl Yelp search results for restaurants."""
+        """Crawl Yelp Fusion API for restaurant listings."""
+        if not settings.yelp_fusion_api_key:
+            self.logger.warning("no_api_key", msg="YELP_FUSION_API_KEY not set — skipping")
+            return
+
         self.logger.info("starting_crawl", query=query, location=location)
+        headers = self._auth_headers()
+        max_pages = 5
+        limit = 50  # Max per request
 
-        async with self._get_client() as client:
-            offset = 0
-            max_pages = 5
+        for page in range(max_pages):
+            offset = page * limit
+            try:
+                params = {
+                    "term": query,
+                    "location": location,
+                    "categories": "restaurants",
+                    "limit": limit,
+                    "offset": offset,
+                    "sort_by": "review_count",
+                }
 
-            for page_num in range(max_pages):
-                try:
-                    search_url = (
-                        f"{self.BASE_URL}/search?"
-                        f"find_desc={query}&find_loc={location}&start={offset}"
-                    )
-                    html = await self._fetch(search_url, client)
-                    listings = self._parse_search_results(html)
+                data = await self._fetch_json(
+                    YELP_SEARCH_URL,
+                    headers=headers,
+                    params=params,
+                )
 
-                    if not listings:
-                        self.logger.info("no_more_results", page=page_num)
-                        break
-
-                    for listing in listings:
-                        try:
-                            if listing.get("detail_url"):
-                                detail_html = await self._fetch(
-                                    f"{self.BASE_URL}{listing['detail_url']}", client
-                                )
-                                listing.update(self._parse_detail(detail_html))
-                        except Exception as e:
-                            self.logger.warning("detail_fetch_error", error=str(e))
-
-                        listing["source"] = self.SOURCE
-                        yield listing
-
-                    offset += 10
-
-                except Exception as e:
-                    self.logger.error("search_page_error", page=page_num, error=str(e))
+                businesses = data.get("businesses", [])
+                if not businesses:
+                    self.logger.info("no_more_results", page=page)
                     break
 
-    def _parse_search_results(self, html: str) -> list[dict]:
-        """Parse Yelp search results HTML."""
-        results = []
+                self.logger.info("page_results", page=page, count=len(businesses))
 
-        # Extract JSON-LD structured data
-        json_pattern = re.findall(
-            r'<script type="application/ld\+json">(.*?)</script>', html, re.DOTALL
-        )
-        for blob in json_pattern:
-            try:
-                data = json.loads(blob)
-                if isinstance(data, list):
-                    for item in data:
-                        if item.get("@type") in ("Restaurant", "LocalBusiness"):
-                            results.append(self._normalize_jsonld(item))
-                elif isinstance(data, dict) and data.get("@type") in ("Restaurant", "LocalBusiness"):
-                    results.append(self._normalize_jsonld(data))
-            except json.JSONDecodeError:
-                continue
+                for biz in businesses:
+                    record = self._parse_business(biz)
 
-        # Fallback: regex extraction for business cards
-        if not results:
-            name_pattern = re.findall(
-                r'<a[^>]*href="(/biz/[^"]*)"[^>]*>([^<]+)</a>', html
-            )
-            for url, name in name_pattern[:10]:
-                if "/biz/" in url:
-                    results.append({"name": name.strip(), "detail_url": url})
+                    # Fetch details for delivery/transaction info
+                    try:
+                        detail = await self._fetch_detail(biz["id"], headers)
+                        if detail:
+                            record.update(detail)
+                    except Exception as e:
+                        self.logger.warning("detail_error", biz_id=biz["id"], error=str(e))
 
-        return results
+                    yield record
 
-    def _normalize_jsonld(self, data: dict) -> dict:
-        """Convert JSON-LD to our standard format."""
-        address = data.get("address", {})
-        serves_cuisine = data.get("servesCuisine", [])
-        return {
-            "name": data.get("name", ""),
-            "address": address.get("streetAddress", ""),
-            "city": address.get("addressLocality", ""),
-            "state": address.get("addressRegion", ""),
-            "zip_code": address.get("postalCode", ""),
-            "rating": data.get("aggregateRating", {}).get("ratingValue"),
-            "review_count": data.get("aggregateRating", {}).get("reviewCount"),
-            "phone": data.get("telephone", ""),
-            "cuisine": ", ".join(serves_cuisine) if isinstance(serves_cuisine, list) else serves_cuisine,
-            "source_url": data.get("url", ""),
-        }
+                # Check if we've fetched all results
+                total = data.get("total", 0)
+                if offset + limit >= total:
+                    break
 
-    def _parse_detail(self, html: str) -> dict:
-        """Extract additional details from a Yelp business page."""
-        details = {}
-
-        if any(kw in html.lower() for kw in ["doordash", "ubereats", "grubhub", "delivery available"]):
-            details["has_delivery"] = True
-
-        pos_keywords = ["toast", "square", "clover", "lightspeed", "aloha", "micros"]
-        for kw in pos_keywords:
-            if kw in html.lower():
-                details["pos_indicator"] = kw
+            except Exception as e:
+                self.logger.error("search_error", page=page, error=str(e))
                 break
 
-        return details
+    async def _fetch_detail(self, biz_id: str, headers: dict) -> dict | None:
+        """Fetch additional business details from Yelp."""
+        try:
+            data = await self._fetch_json(
+                f"{YELP_DETAIL_URL}/{biz_id}",
+                headers=headers,
+            )
+            result = {}
+
+            # Transaction types (delivery, pickup, restaurant_reservation)
+            transactions = data.get("transactions", [])
+            if "delivery" in transactions:
+                result["has_delivery"] = True
+                result["delivery_platform"] = "yelp_delivery"
+            if transactions:
+                result["transactions"] = transactions
+
+            # Hours
+            hours = data.get("hours", [])
+            if hours:
+                result["is_open_now"] = hours[0].get("is_open_now", False)
+
+            # Photos
+            photos = data.get("photos", [])
+            if photos:
+                result["photo_count"] = len(photos)
+
+            return result
+
+        except Exception as e:
+            self.logger.warning("detail_fetch_error", biz_id=biz_id, error=str(e))
+            return None
+
+    def _parse_business(self, biz: dict) -> dict:
+        """Convert Yelp Fusion business to standard record format."""
+        location = biz.get("location", {})
+        coordinates = biz.get("coordinates", {})
+        categories = biz.get("categories", [])
+
+        return {
+            "name": biz.get("name", ""),
+            "address": location.get("address1", ""),
+            "city": location.get("city", ""),
+            "state": location.get("state", ""),
+            "zip_code": location.get("zip_code", ""),
+            "lat": coordinates.get("latitude"),
+            "lng": coordinates.get("longitude"),
+            "phone": biz.get("display_phone", "") or biz.get("phone", ""),
+            "rating": biz.get("rating"),
+            "review_count": biz.get("review_count", 0),
+            "cuisine": ", ".join(c.get("title", "") for c in categories) if categories else "",
+            "source": self.SOURCE,
+            "source_url": biz.get("url", ""),
+            "yelp_id": biz.get("id", ""),
+            "price": biz.get("price", ""),
+            "is_closed": biz.get("is_closed", False),
+        }

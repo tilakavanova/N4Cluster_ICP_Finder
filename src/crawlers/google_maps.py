@@ -1,132 +1,167 @@
-"""Google Maps crawler using Playwright."""
+"""Google Places API crawler (replaces Playwright-based Google Maps scraper)."""
 
-import asyncio
+import re
 from typing import AsyncIterator
 
+from src.config import settings
 from src.crawlers.base import BaseCrawler
 from src.utils.logging import get_logger
 
-logger = get_logger("crawler.google_maps")
+logger = get_logger("crawler.google_places")
+
+PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
+FIELD_MASK = (
+    "places.id,places.displayName,places.formattedAddress,"
+    "places.rating,places.userRatingCount,places.nationalPhoneNumber,"
+    "places.websiteUri,places.location,places.primaryType,"
+    "places.types,nextPageToken"
+)
 
 
 class GoogleMapsCrawler(BaseCrawler):
     SOURCE = "google_maps"
 
     async def crawl(self, query: str, location: str) -> AsyncIterator[dict]:
-        """Crawl Google Maps for restaurant listings."""
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            self.logger.warning("playwright_not_available", msg="Skipping Google Maps crawl — install Playwright for browser-based crawling")
+        """Crawl Google Places API for restaurant listings."""
+        if not settings.google_places_api_key:
+            self.logger.warning("no_api_key", msg="GOOGLE_PLACES_API_KEY not set — skipping")
             return
 
-        search_query = f"{query} in {location}"
-        self.logger.info("starting_crawl", query=search_query)
+        search_text = f"{query} in {location}"
+        self.logger.info("starting_crawl", query=search_text)
 
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                viewport={"width": 1280, "height": 900},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            )
-            page = await context.new_page()
+        headers = {
+            "X-Goog-Api-Key": settings.google_places_api_key,
+            "X-Goog-FieldMask": FIELD_MASK,
+            "Content-Type": "application/json",
+        }
 
+        page_token = None
+        for page in range(settings.google_places_max_pages):
             try:
-                url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
-                await page.goto(url, wait_until="networkidle", timeout=30000)
-                await asyncio.sleep(2)
+                body = {
+                    "textQuery": search_text,
+                    "includedType": "restaurant",
+                    "languageCode": "en",
+                    "maxResultCount": 20,
+                }
+                if page_token:
+                    body["pageToken"] = page_token
 
-                # Scroll to load more results
-                feed = page.locator('div[role="feed"]')
-                for _ in range(5):
-                    await feed.evaluate("el => el.scrollTop = el.scrollHeight")
-                    await asyncio.sleep(1.5)
+                data = await self._fetch_json(
+                    PLACES_SEARCH_URL,
+                    method="POST",
+                    headers=headers,
+                    json_body=body,
+                )
 
-                # Extract listings
-                listings = await page.locator('div[role="feed"] > div > div > a').all()
-                self.logger.info("found_listings", count=len(listings))
+                places = data.get("places", [])
+                if not places:
+                    self.logger.info("no_more_results", page=page)
+                    break
 
-                for listing in listings:
-                    try:
-                        aria_label = await listing.get_attribute("aria-label") or ""
-                        href = await listing.get_attribute("href") or ""
+                self.logger.info("page_results", page=page, count=len(places))
 
-                        if not aria_label:
-                            continue
+                for place in places:
+                    record = self._parse_place(place)
+                    if record:
+                        yield record
 
-                        await listing.click()
-                        await asyncio.sleep(1.5)
+                page_token = data.get("nextPageToken")
+                if not page_token:
+                    break
 
-                        record = await self._extract_detail(page, aria_label, href)
-                        if record:
-                            yield record
+            except Exception as e:
+                self.logger.error("search_error", page=page, error=str(e))
+                break
 
-                    except Exception as e:
-                        self.logger.warning("listing_error", error=str(e))
-                        continue
-
-            finally:
-                await browser.close()
-
-    async def _extract_detail(self, page, name: str, url: str) -> dict | None:
-        """Extract details from a Google Maps listing detail panel."""
+    def _parse_place(self, place: dict) -> dict | None:
+        """Convert Google Places API response to standard record format."""
         try:
-            detail = {
-                "name": name,
-                "source_url": url,
+            display_name = place.get("displayName", {})
+            location = place.get("location", {})
+            address = place.get("formattedAddress", "")
+
+            # Parse city/state/zip from formatted address
+            city, state, zip_code = self._parse_address(address)
+
+            # Get cuisine from types
+            types = place.get("types", [])
+            primary_type = place.get("primaryType", "")
+            cuisine = self._types_to_cuisine(types, primary_type)
+
+            return {
+                "name": display_name.get("text", ""),
+                "address": address,
+                "city": city,
+                "state": state,
+                "zip_code": zip_code,
+                "lat": location.get("latitude"),
+                "lng": location.get("longitude"),
+                "phone": place.get("nationalPhoneNumber", ""),
+                "website": place.get("websiteUri", ""),
+                "rating": place.get("rating"),
+                "review_count": place.get("userRatingCount", 0),
+                "cuisine": cuisine,
                 "source": self.SOURCE,
+                "source_url": f"https://www.google.com/maps/place/?q=place_id:{place.get('id', '')}",
+                "google_place_id": place.get("id"),
             }
-
-            # Address
-            addr_el = page.locator('button[data-item-id="address"]')
-            if await addr_el.count() > 0:
-                detail["address"] = (await addr_el.first.get_attribute("aria-label") or "").replace("Address: ", "")
-
-            # Rating
-            rating_el = page.locator('div[role="img"][aria-label*="stars"]')
-            if await rating_el.count() > 0:
-                label = await rating_el.first.get_attribute("aria-label") or ""
-                parts = label.split()
-                if parts:
-                    try:
-                        detail["rating"] = float(parts[0])
-                    except ValueError:
-                        pass
-
-            # Review count
-            review_el = page.locator('button[jsaction*="reviewChart"]')
-            if await review_el.count() > 0:
-                text = await review_el.first.inner_text()
-                nums = "".join(c for c in text if c.isdigit())
-                if nums:
-                    detail["review_count"] = int(nums)
-
-            # Phone
-            phone_el = page.locator('button[data-item-id*="phone"]')
-            if await phone_el.count() > 0:
-                detail["phone"] = (await phone_el.first.get_attribute("aria-label") or "").replace("Phone: ", "")
-
-            # Website
-            web_el = page.locator('a[data-item-id="authority"]')
-            if await web_el.count() > 0:
-                detail["website"] = await web_el.first.get_attribute("href") or ""
-
-            # Category / cuisine
-            cat_el = page.locator('button[jsaction*="category"]')
-            if await cat_el.count() > 0:
-                detail["cuisine"] = await cat_el.first.inner_text()
-
-            # Coordinates from URL
-            if "/@" in url:
-                try:
-                    coords = url.split("/@")[1].split(",")[:2]
-                    detail["lat"] = float(coords[0])
-                    detail["lng"] = float(coords[1])
-                except (IndexError, ValueError):
-                    pass
-
-            return detail
-
         except Exception as e:
-            self.logger.warning("detail_extraction_error", error=str(e))
+            self.logger.warning("parse_error", error=str(e))
             return None
+
+    def _parse_address(self, address: str) -> tuple[str, str, str]:
+        """Extract city, state, zip from formatted address."""
+        # Pattern: "123 Main St, New York, NY 10001, USA"
+        match = re.search(r",\s*([^,]+),\s*([A-Z]{2})\s+(\d{5})", address)
+        if match:
+            return match.group(1).strip(), match.group(2), match.group(3)
+
+        # Simpler pattern: "City, ST"
+        match = re.search(r",\s*([^,]+),\s*([A-Z]{2})", address)
+        if match:
+            return match.group(1).strip(), match.group(2), ""
+
+        return "", "", ""
+
+    def _types_to_cuisine(self, types: list[str], primary_type: str) -> str:
+        """Convert Google place types to cuisine string."""
+        cuisine_map = {
+            "chinese_restaurant": "Chinese",
+            "italian_restaurant": "Italian",
+            "japanese_restaurant": "Japanese",
+            "mexican_restaurant": "Mexican",
+            "indian_restaurant": "Indian",
+            "thai_restaurant": "Thai",
+            "korean_restaurant": "Korean",
+            "vietnamese_restaurant": "Vietnamese",
+            "french_restaurant": "French",
+            "greek_restaurant": "Greek",
+            "mediterranean_restaurant": "Mediterranean",
+            "pizza_restaurant": "Pizza",
+            "seafood_restaurant": "Seafood",
+            "steak_house": "Steakhouse",
+            "sushi_restaurant": "Sushi",
+            "barbecue_restaurant": "BBQ",
+            "hamburger_restaurant": "Burgers",
+            "sandwich_shop": "Sandwiches",
+            "coffee_shop": "Coffee",
+            "bakery": "Bakery",
+            "ice_cream_shop": "Ice Cream",
+            "fast_food_restaurant": "Fast Food",
+            "american_restaurant": "American",
+            "vegan_restaurant": "Vegan",
+            "vegetarian_restaurant": "Vegetarian",
+        }
+
+        # Check primary type first
+        if primary_type in cuisine_map:
+            return cuisine_map[primary_type]
+
+        # Check all types
+        for t in types:
+            if t in cuisine_map:
+                return cuisine_map[t]
+
+        return "Restaurant"

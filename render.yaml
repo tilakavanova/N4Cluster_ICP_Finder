@@ -35,6 +35,12 @@ services:
         value: "3.12.3"
       - key: PYTHONPATH
         value: /opt/render/project/src
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: YELP_FUSION_API_KEY
+        sync: false
+      - key: SERPAPI_API_KEY
+        sync: false
     healthCheckPath: /health
 
   # Redis

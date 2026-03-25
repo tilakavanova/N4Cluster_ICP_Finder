@@ -1,126 +1,167 @@
-"""DoorDash / UberEats crawler using Playwright."""
+"""Delivery platform detection via Yelp transactions + optional SerpAPI verification."""
 
-import asyncio
 from typing import AsyncIterator
 
+from src.config import settings
 from src.crawlers.base import BaseCrawler
 from src.utils.logging import get_logger
 
 logger = get_logger("crawler.delivery")
+
+YELP_SEARCH_URL = "https://api.yelp.com/v3/businesses/search"
+SERPAPI_URL = "https://serpapi.com/search.json"
 
 
 class DeliveryCrawler(BaseCrawler):
     SOURCE = "delivery"
 
     async def crawl(self, query: str, location: str) -> AsyncIterator[dict]:
-        """Crawl delivery platforms for restaurant listings."""
-        async for record in self._crawl_doordash(query, location):
-            yield record
-        async for record in self._crawl_ubereats(query, location):
-            yield record
+        """Detect delivery-enabled restaurants via Yelp + SerpAPI."""
+        # Primary: Yelp Fusion with delivery filter
+        if settings.yelp_fusion_api_key:
+            async for record in self._crawl_yelp_delivery(query, location):
+                yield record
+        # Fallback/supplement: SerpAPI
+        elif settings.serpapi_api_key:
+            async for record in self._crawl_serpapi(query, location):
+                yield record
+        else:
+            self.logger.warning("no_api_keys", msg="Need YELP_FUSION_API_KEY or SERPAPI_API_KEY for delivery crawling")
 
-    async def _crawl_doordash(self, query: str, location: str) -> AsyncIterator[dict]:
-        """Crawl DoorDash listings."""
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            self.logger.warning("playwright_not_available", msg="Skipping DoorDash crawl")
-            return
+    async def _crawl_yelp_delivery(self, query: str, location: str) -> AsyncIterator[dict]:
+        """Find delivery-enabled restaurants via Yelp Fusion API."""
+        self.logger.info("crawling_yelp_delivery", query=query, location=location)
+        headers = {"Authorization": f"Bearer {settings.yelp_fusion_api_key}"}
 
-        self.logger.info("crawling_doordash", query=query, location=location)
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-
+        for page in range(3):
             try:
-                search_url = f"https://www.doordash.com/search/store/{query.replace(' ', '%20')}/"
-                await page.goto(search_url, wait_until="networkidle", timeout=30000)
-                await asyncio.sleep(3)
+                params = {
+                    "term": query,
+                    "location": location,
+                    "categories": "restaurants",
+                    "limit": 50,
+                    "offset": page * 50,
+                    "attributes": "delivery",
+                }
 
-                cards = await page.locator('[data-anchor-id="StoreCard"]').all()
-                if not cards:
-                    cards = await page.locator('a[href*="/store/"]').all()
+                data = await self._fetch_json(YELP_SEARCH_URL, headers=headers, params=params)
+                businesses = data.get("businesses", [])
 
-                self.logger.info("doordash_results", count=len(cards))
+                if not businesses:
+                    break
 
-                for card in cards[:20]:
-                    try:
-                        name_el = card.locator("span").first
-                        name = await name_el.inner_text() if await name_el.count() > 0 else ""
-                        href = await card.get_attribute("href") or ""
+                self.logger.info("delivery_results", page=page, count=len(businesses))
 
-                        record = {
-                            "name": name.strip(),
-                            "source": "doordash",
-                            "source_url": f"https://www.doordash.com{href}" if href.startswith("/") else href,
-                            "has_delivery": True,
-                            "delivery_platform": "doordash",
-                        }
+                for biz in businesses:
+                    location_data = biz.get("location", {})
+                    coordinates = biz.get("coordinates", {})
+                    categories = biz.get("categories", [])
+                    transactions = biz.get("transactions", [])
 
-                        text = await card.inner_text()
-                        for line in text.split("\n"):
-                            line = line.strip()
-                            if "min" in line.lower() and any(c.isdigit() for c in line):
-                                record["delivery_time"] = line
-                            if "$" in line and "fee" in line.lower():
-                                record["delivery_fee"] = line
+                    # Determine delivery platforms
+                    platforms = []
+                    if "delivery" in transactions:
+                        platforms.append("yelp_delivery")
 
-                        if name:
-                            yield record
+                    record = {
+                        "name": biz.get("name", ""),
+                        "address": location_data.get("address1", ""),
+                        "city": location_data.get("city", ""),
+                        "state": location_data.get("state", ""),
+                        "zip_code": location_data.get("zip_code", ""),
+                        "lat": coordinates.get("latitude"),
+                        "lng": coordinates.get("longitude"),
+                        "phone": biz.get("display_phone", ""),
+                        "rating": biz.get("rating"),
+                        "review_count": biz.get("review_count", 0),
+                        "cuisine": ", ".join(c.get("title", "") for c in categories),
+                        "source": "delivery",
+                        "source_url": biz.get("url", ""),
+                        "has_delivery": True,
+                        "delivery_platform": "yelp_delivery",
+                        "delivery_platforms": platforms,
+                        "transactions": transactions,
+                    }
 
-                    except Exception as e:
-                        self.logger.warning("doordash_card_error", error=str(e))
-                        continue
+                    # Optionally verify with SerpAPI for DoorDash/UberEats presence
+                    if settings.serpapi_api_key:
+                        extra_platforms = await self._check_delivery_platforms(
+                            biz.get("name", ""), location_data.get("city", "")
+                        )
+                        if extra_platforms:
+                            record["delivery_platforms"].extend(extra_platforms)
 
-            finally:
-                await browser.close()
+                    yield record
 
-    async def _crawl_ubereats(self, query: str, location: str) -> AsyncIterator[dict]:
-        """Crawl UberEats listings."""
+                total = data.get("total", 0)
+                if (page + 1) * 50 >= total:
+                    break
+
+            except Exception as e:
+                self.logger.error("yelp_delivery_error", page=page, error=str(e))
+                break
+
+    async def _crawl_serpapi(self, query: str, location: str) -> AsyncIterator[dict]:
+        """Find delivery restaurants via SerpAPI Google search."""
+        self.logger.info("crawling_serpapi", query=query, location=location)
+
         try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            self.logger.warning("playwright_not_available", msg="Skipping UberEats crawl")
-            return
+            params = {
+                "engine": "google",
+                "q": f"{query} delivery {location}",
+                "api_key": settings.serpapi_api_key,
+                "num": 20,
+            }
 
-        self.logger.info("crawling_ubereats", query=query, location=location)
+            data = await self._fetch_json(SERPAPI_URL, params=params)
+            results = data.get("organic_results", [])
 
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+            for result in results:
+                link = result.get("link", "").lower()
+                title = result.get("title", "")
+                snippet = result.get("snippet", "")
 
-            try:
-                search_url = f"https://www.ubereats.com/search?q={query.replace(' ', '%20')}"
-                await page.goto(search_url, wait_until="networkidle", timeout=30000)
-                await asyncio.sleep(3)
+                platforms = []
+                if "doordash.com" in link:
+                    platforms.append("doordash")
+                if "ubereats.com" in link:
+                    platforms.append("ubereats")
+                if "grubhub.com" in link:
+                    platforms.append("grubhub")
 
-                cards = await page.locator('a[data-testid*="store-card"], a[href*="/store/"]').all()
-                self.logger.info("ubereats_results", count=len(cards))
+                if platforms:
+                    yield {
+                        "name": title.split(" - ")[0].split(" | ")[0].strip(),
+                        "source": "delivery",
+                        "source_url": result.get("link", ""),
+                        "has_delivery": True,
+                        "delivery_platform": platforms[0],
+                        "delivery_platforms": platforms,
+                    }
 
-                for card in cards[:20]:
-                    try:
-                        name = await card.get_attribute("aria-label") or ""
-                        href = await card.get_attribute("href") or ""
+        except Exception as e:
+            self.logger.error("serpapi_error", error=str(e))
 
-                        if not name:
-                            name_el = card.locator("h3, span").first
-                            name = await name_el.inner_text() if await name_el.count() > 0 else ""
+    async def _check_delivery_platforms(self, name: str, city: str) -> list[str]:
+        """Check if a restaurant is on DoorDash/UberEats via SerpAPI."""
+        platforms = []
+        try:
+            params = {
+                "engine": "google",
+                "q": f'"{name}" {city} site:doordash.com OR site:ubereats.com',
+                "api_key": settings.serpapi_api_key,
+                "num": 5,
+            }
 
-                        record = {
-                            "name": name.strip(),
-                            "source": "ubereats",
-                            "source_url": f"https://www.ubereats.com{href}" if href.startswith("/") else href,
-                            "has_delivery": True,
-                            "delivery_platform": "ubereats",
-                        }
+            data = await self._fetch_json(SERPAPI_URL, params=params)
+            for result in data.get("organic_results", []):
+                link = result.get("link", "").lower()
+                if "doordash.com" in link and "doordash" not in platforms:
+                    platforms.append("doordash")
+                if "ubereats.com" in link and "ubereats" not in platforms:
+                    platforms.append("ubereats")
 
-                        if name:
-                            yield record
+        except Exception as e:
+            self.logger.warning("platform_check_error", name=name, error=str(e))
 
-                    except Exception as e:
-                        self.logger.warning("ubereats_card_error", error=str(e))
-                        continue
-
-            finally:
-                await browser.close()
+        return platforms
