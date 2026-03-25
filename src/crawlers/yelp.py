@@ -21,8 +21,7 @@ class YelpCrawler(BaseCrawler):
     async def crawl(self, query: str, location: str) -> AsyncIterator[dict]:
         """Crawl Yelp Fusion API for restaurant listings."""
         if not settings.yelp_fusion_api_key:
-            self.logger.warning("no_api_key", msg="YELP_FUSION_API_KEY not set — skipping")
-            return
+            raise ValueError("YELP_FUSION_API_KEY is not set. Add it to your environment variables.")
 
         self.logger.info("starting_crawl", query=query, location=location)
         headers = self._auth_headers()
