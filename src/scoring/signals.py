@@ -42,6 +42,8 @@ POS_PROVIDERS = {
 def detect_chain(name: str, extracted_data: dict | None = None) -> tuple[bool, str | None]:
     """Check if a restaurant is part of a known chain."""
     name_lower = name.lower().strip()
+    if not name_lower:
+        return False, None
 
     for chain in KNOWN_CHAINS:
         if chain in name_lower or name_lower in chain:
