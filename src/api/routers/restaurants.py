@@ -8,7 +8,10 @@ from sqlalchemy.orm import selectinload
 
 from src.db.session import get_session
 from src.db.models import Restaurant, ICPScore
-from src.api.schemas import RestaurantResponse, RestaurantDetail, NearbyResponse
+from src.api.schemas import (
+    RestaurantResponse, RestaurantDetail, NearbyResponse,
+    DiscoverResponse, DiscoverResultItem, DiscoverMeta,
+)
 from src.utils.geo import haversine_miles, bounding_box
 
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
@@ -69,6 +72,66 @@ async def search_restaurants(
     )
     result = await session.execute(query)
     return result.scalars().all()
+
+
+@router.get("/discover", response_model=DiscoverResponse)
+async def discover_restaurants(
+    location: str = Query(..., min_length=2, description="City,State or 5-digit ZIP code"),
+    radius_miles: float = Query(5.0, gt=0, le=50, description="Search radius in miles"),
+    cuisine: str | None = None,
+    limit: int = Query(20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+):
+    """Real-time restaurant discovery with on-demand crawling.
+
+    Searches for restaurants near the given location. If no cached data exists,
+    automatically crawls Google Places API and returns fresh results.
+    Results are persisted for future requests.
+    """
+    import time
+    from src.api.discover import find_cached_restaurants, crawl_and_persist
+
+    start = time.monotonic()
+
+    # Try cached data first
+    cached_results, source_type = await find_cached_restaurants(
+        session, location, radius_miles, cuisine, limit,
+    )
+
+    if cached_results:
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        return DiscoverResponse(
+            results=[DiscoverResultItem(**r) for r in cached_results],
+            meta=DiscoverMeta(
+                total=len(cached_results),
+                source="cached",
+                location=location,
+                radius_miles=radius_miles,
+                crawl_time_ms=elapsed_ms,
+            ),
+        )
+
+    # No cached data — crawl inline
+    crawled_results = await crawl_and_persist(session, location, limit)
+    elapsed_ms = int((time.monotonic() - start) * 1000)
+
+    if not crawled_results:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No restaurants found for location '{location}'. "
+                   f"Ensure GOOGLE_PLACES_API_KEY is set and the location is valid.",
+        )
+
+    return DiscoverResponse(
+        results=[DiscoverResultItem(**r) for r in crawled_results],
+        meta=DiscoverMeta(
+            total=len(crawled_results),
+            source="freshly_crawled",
+            location=location,
+            radius_miles=radius_miles,
+            crawl_time_ms=elapsed_ms,
+        ),
+    )
 
 
 @router.get("/nearby", response_model=list[NearbyResponse])

@@ -96,6 +96,38 @@ class CrawlJobResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Discover (real-time search) schemas ---
+
+class DiscoverResultItem(BaseModel):
+    name: str
+    address: str | None = None
+    city: str | None = None
+    state: str | None = None
+    zip_code: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    phone: str | None = None
+    website: str | None = None
+    cuisine: str | None = None
+    rating: float | None = None
+    review_count: int | None = None
+    distance_miles: float | None = None
+    source: str | None = None
+
+
+class DiscoverMeta(BaseModel):
+    total: int
+    source: str = Field(..., description="'cached' or 'freshly_crawled'")
+    location: str
+    radius_miles: float
+    crawl_time_ms: int | None = None
+
+
+class DiscoverResponse(BaseModel):
+    results: list[DiscoverResultItem]
+    meta: DiscoverMeta
+
+
 # --- Query params ---
 
 class RestaurantFilter(BaseModel):
