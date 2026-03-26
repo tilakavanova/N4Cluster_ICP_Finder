@@ -31,6 +31,10 @@ class RestaurantResponse(RestaurantBase):
     model_config = {"from_attributes": True}
 
 
+class NearbyResponse(RestaurantResponse):
+    distance_miles: float = Field(..., description="Distance from search center in miles")
+
+
 class RestaurantDetail(RestaurantResponse):
     source_records: list["SourceRecordResponse"] = []
     icp_score: "ICPScoreResponse | None" = None

@@ -2,13 +2,14 @@
 
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.db.session import get_session
 from src.db.models import Restaurant, ICPScore
-from src.api.schemas import RestaurantResponse, RestaurantDetail
+from src.api.schemas import RestaurantResponse, RestaurantDetail, NearbyResponse
+from src.utils.geo import haversine_miles, bounding_box
 
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
@@ -68,6 +69,94 @@ async def search_restaurants(
     )
     result = await session.execute(query)
     return result.scalars().all()
+
+
+@router.get("/nearby", response_model=list[NearbyResponse])
+async def nearby_restaurants(
+    zip_code: str = Query(..., min_length=5, max_length=5, description="5-digit ZIP code"),
+    radius: float = Query(5.0, gt=0, le=50, description="Search radius in miles"),
+    cuisine: str | None = None,
+    is_chain: bool | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+):
+    """Find restaurants near a ZIP code within a given radius (miles).
+
+    Looks up the centroid of the ZIP code from existing restaurant data,
+    then returns all restaurants within the specified radius sorted by distance.
+    """
+    # Find centroid for the given zip code from existing restaurants
+    centroid_query = select(
+        func.avg(Restaurant.lat).label("center_lat"),
+        func.avg(Restaurant.lng).label("center_lng"),
+        func.count(Restaurant.id).label("cnt"),
+    ).where(
+        Restaurant.zip_code == zip_code,
+        Restaurant.lat.isnot(None),
+        Restaurant.lng.isnot(None),
+    )
+    centroid_result = await session.execute(centroid_query)
+    row = centroid_result.one()
+
+    if not row.center_lat or not row.center_lng:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No restaurants found with ZIP code {zip_code} to determine location.",
+        )
+
+    center_lat = float(row.center_lat)
+    center_lng = float(row.center_lng)
+
+    # Bounding box pre-filter for performance
+    min_lat, max_lat, min_lng, max_lng = bounding_box(center_lat, center_lng, radius)
+
+    query = select(Restaurant).where(
+        Restaurant.lat.isnot(None),
+        Restaurant.lng.isnot(None),
+        Restaurant.lat.between(min_lat, max_lat),
+        Restaurant.lng.between(min_lng, max_lng),
+    )
+
+    if cuisine:
+        query = query.where(Restaurant.cuisine_type.any(cuisine))
+    if is_chain is not None:
+        query = query.where(Restaurant.is_chain == is_chain)
+
+    result = await session.execute(query)
+    candidates = result.scalars().all()
+
+    # Precise haversine filter and distance calculation
+    nearby = []
+    for r in candidates:
+        dist = haversine_miles(center_lat, center_lng, r.lat, r.lng)
+        if dist <= radius:
+            nearby.append((r, round(dist, 2)))
+
+    # Sort by distance, apply limit
+    nearby.sort(key=lambda x: x[1])
+    nearby = nearby[:limit]
+
+    return [
+        NearbyResponse(
+            id=r.id,
+            name=r.name,
+            address=r.address,
+            city=r.city,
+            state=r.state,
+            zip_code=r.zip_code,
+            lat=r.lat,
+            lng=r.lng,
+            phone=r.phone,
+            website=r.website,
+            cuisine_type=r.cuisine_type or [],
+            is_chain=r.is_chain or False,
+            chain_name=r.chain_name,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+            distance_miles=dist,
+        )
+        for r, dist in nearby
+    ]
 
 
 @router.get("/{restaurant_id}", response_model=RestaurantDetail)
