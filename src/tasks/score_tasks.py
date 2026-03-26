@@ -10,6 +10,7 @@ logger = get_logger("tasks.score")
 @celery_app.task(name="src.tasks.score_tasks.score_restaurants")
 def score_restaurants(restaurant_ids: list[str] | None = None):
     """Compute ICP scores for restaurants."""
+    logger.info("score_task_started", restaurant_ids_count=len(restaurant_ids) if restaurant_ids else "all")
 
     async def _score():
         from datetime import datetime, timezone
@@ -100,7 +101,11 @@ def score_restaurants(restaurant_ids: list[str] | None = None):
             logger.info("scoring_complete", scored=len(scores))
             return {"scored": len(scores)}
 
-    return run_async(_score())
+    try:
+        return run_async(_score())
+    except Exception as e:
+        logger.error("score_task_failed", error=str(e), error_type=type(e).__name__)
+        raise
 
 
 @celery_app.task(name="src.tasks.score_tasks.rescore_all")
