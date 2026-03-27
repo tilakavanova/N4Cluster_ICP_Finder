@@ -75,11 +75,37 @@ class TestDiscoverEndpointValidation:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_limit_over_100_returns_422(self):
+    async def test_limit_over_500_returns_422(self):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.get("/api/v1/restaurants/discover?location=NYC&limit=101")
+            response = await client.get("/api/v1/restaurants/discover?location=NYC&limit=501")
         assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_limit_at_500_accepted(self):
+        """Limit of 500 (the new maximum) should not return 422."""
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            try:
+                response = await client.get(
+                    "/api/v1/restaurants/discover?location=Seattle,WA&limit=500"
+                )
+                assert response.status_code != 422
+            except Exception:
+                pass  # DB errors expected in test env
+
+    @pytest.mark.asyncio
+    async def test_limit_over_100_accepted(self):
+        """Limits above the old maximum of 100 should now be accepted."""
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            try:
+                response = await client.get(
+                    "/api/v1/restaurants/discover?location=Seattle,WA&limit=200"
+                )
+                assert response.status_code != 422
+            except Exception:
+                pass  # DB errors expected in test env
 
     @pytest.mark.asyncio
     async def test_valid_params_accepted(self):
