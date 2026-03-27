@@ -21,7 +21,7 @@ def extract_records(self, restaurant_ids: list[str] | None = None):
             query = select(SourceRecord).where(SourceRecord.extracted_data.is_(None))
             if restaurant_ids:
                 query = query.where(SourceRecord.restaurant_id.in_(restaurant_ids))
-            query = query.limit(100)
+            query = query.limit(500)
 
             result = await session.execute(query)
             records = result.scalars().all()

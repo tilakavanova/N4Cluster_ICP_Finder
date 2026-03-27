@@ -26,7 +26,7 @@ async def list_restaurants(
     min_score: float | None = None,
     is_chain: bool | None = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
 ):
     """List restaurants with optional filters."""
@@ -56,7 +56,7 @@ async def list_restaurants(
 async def search_restaurants(
     q: str = Query(..., min_length=2, description="Search query"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
 ):
     """Full-text search for restaurants by name or address."""
@@ -79,7 +79,7 @@ async def discover_restaurants(
     location: str = Query(..., min_length=2, description="City,State or 5-digit ZIP code"),
     radius_miles: float = Query(5.0, gt=0, le=50, description="Search radius in miles"),
     cuisine: str | None = None,
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
 ):
     """Real-time restaurant discovery with on-demand crawling.
