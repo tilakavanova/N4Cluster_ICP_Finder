@@ -322,20 +322,22 @@ async def create_job_from_dashboard(
     job_id = str(job.id)
     await session.commit()
 
-    # Try Celery first, fallback to synchronous inline
-    try:
-        from celery import chain
-        from src.tasks.crawl_tasks import crawl_source
-        from src.tasks.extract_tasks import extract_records
-        from src.tasks.score_tasks import score_restaurants
+    if settings.use_celery:
+        try:
+            from celery import chain
+            from src.tasks.crawl_tasks import crawl_source
+            from src.tasks.extract_tasks import extract_records
+            from src.tasks.score_tasks import score_restaurants
 
-        pipeline = chain(
-            crawl_source.s(source, query, location, job_id),
-            extract_records.si(),
-            score_restaurants.si(),
-        )
-        pipeline.apply_async()
-    except Exception:
+            pipeline = chain(
+                crawl_source.s(source, query, location, job_id),
+                extract_records.si(),
+                score_restaurants.si(),
+            )
+            pipeline.apply_async()
+        except Exception:
+            pass
+    else:
         from src.api.routers.jobs import _run_crawl_inline
         await _run_crawl_inline(source, query, location, job_id)
 

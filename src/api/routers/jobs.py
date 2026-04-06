@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_api_key
+from src.config import settings
 from src.db.session import get_session, async_session
 from src.db.models import CrawlJob, Restaurant, SourceRecord
 from src.api.schemas import CrawlJobCreate, CrawlJobResponse
@@ -139,27 +140,25 @@ async def create_crawl_job(
     job_id = str(job.id)
     await session.commit()
 
-    # Try Celery pipeline first
-    celery_dispatched = False
-    try:
-        from celery import chain
-        from src.tasks.crawl_tasks import crawl_source
-        from src.tasks.extract_tasks import extract_records
-        from src.tasks.score_tasks import score_restaurants
+    if settings.use_celery:
+        # Dispatch to Celery workers
+        try:
+            from celery import chain
+            from src.tasks.crawl_tasks import crawl_source
+            from src.tasks.extract_tasks import extract_records
+            from src.tasks.score_tasks import score_restaurants
 
-        pipeline = chain(
-            crawl_source.s(job_in.source, job_in.query, job_in.location, job_id),
-            extract_records.si(),
-            score_restaurants.si(),
-        )
-        pipeline.apply_async()
-        celery_dispatched = True
-        logger.info("crawl_dispatched_celery", job_id=job_id)
-    except Exception as e:
-        logger.warning("celery_unavailable_running_inline", error=str(e), job_id=job_id)
-
-    # Fallback: run crawl inline (synchronous, blocks until done)
-    if not celery_dispatched:
+            pipeline = chain(
+                crawl_source.s(job_in.source, job_in.query, job_in.location, job_id),
+                extract_records.si(),
+                score_restaurants.si(),
+            )
+            pipeline.apply_async()
+            logger.info("crawl_dispatched_celery", job_id=job_id)
+        except Exception as e:
+            logger.error("celery_dispatch_failed", error=str(e), job_id=job_id)
+    else:
+        # Run crawl inline (synchronous, blocks until done)
         await _run_crawl_inline(job_in.source, job_in.query, job_in.location, job_id)
         logger.info("crawl_completed_inline", job_id=job_id)
 

@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     weight_reviews: float = 10.0
     scoring_version: int = 1
 
+    # Crawl execution mode
+    use_celery: bool = False  # Set to true only if Celery workers are running
+
     # Cleanup
     crawl_job_retention_days: int = 30
     stale_job_timeout_minutes: int = 60
