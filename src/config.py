@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     allowed_origins: str = "https://n4cluster.com,https://www.n4cluster.com"
     api_key: str = ""
 
+    # Dashboard auth
+    dashboard_username: str = "admin"
+    dashboard_password: str = ""  # Must be set via env var for dashboard access
+
     @property
     def async_database_url(self) -> str:
         """Convert Render's postgres:// URL to asyncpg-compatible format."""

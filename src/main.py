@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from starlette.middleware.sessions import SessionMiddleware
 
 from src.config import settings
 from src.utils.logging import setup_logging, get_logger
@@ -34,6 +35,16 @@ app = FastAPI(
     description="Restaurant ICP (Ideal Customer Profile) identification and scoring system",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# Session middleware for dashboard login
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key or "dev-secret-change-me",
+    session_cookie="icp_session",
+    max_age=8 * 60 * 60,  # 8 hours
+    same_site="lax",
+    https_only=not settings.debug,
 )
 
 # Rate limiting

@@ -3,15 +3,17 @@
 import csv
 import io
 import math
+import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.db.models import Lead, CrawlJob, Restaurant, ICPScore
 from src.db.session import get_session
 
@@ -23,6 +25,51 @@ templates = Environment(
 )
 
 PAGE_SIZE = 25
+
+
+def _require_login(request: Request) -> bool:
+    """Check if the user is logged in. Returns True if authenticated."""
+    if not settings.dashboard_password:
+        return True  # No password set — open access (dev mode)
+    return request.session.get("authenticated") is True
+
+
+# ── Login / Logout ──────────────────────────────────────────────
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, error: str = Query("")):
+    """Show login form."""
+    if _require_login(request):
+        return RedirectResponse(url="/dashboard", status_code=303)
+    html = templates.get_template("login.html").render(error=error)
+    return HTMLResponse(html)
+
+
+@router.post("/login")
+async def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+):
+    """Validate credentials and create session."""
+    if (
+        secrets.compare_digest(username, settings.dashboard_username)
+        and secrets.compare_digest(password, settings.dashboard_password)
+    ):
+        request.session["authenticated"] = True
+        request.session["username"] = username
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    html = templates.get_template("login.html").render(error="Invalid username or password")
+    return HTMLResponse(html, status_code=401)
+
+
+@router.get("/logout")
+async def logout(request: Request):
+    """Clear session and redirect to login."""
+    request.session.clear()
+    return RedirectResponse(url="/dashboard/login", status_code=303)
 
 
 async def _get_stats(session: AsyncSession) -> dict:
@@ -57,6 +104,8 @@ async def leads_dashboard(
     session: AsyncSession = Depends(get_session),
 ):
     """Main leads dashboard with filters and pagination."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
     filters = {"status": status, "source": source, "icp_fit_label": icp_fit_label, "q": q}
 
     query = select(Lead).order_by(Lead.created_at.desc())
@@ -98,10 +147,13 @@ async def leads_dashboard(
 
 @router.get("/leads/{lead_id}", response_class=HTMLResponse)
 async def lead_detail(
+    request: Request,
     lead_id: UUID,
     session: AsyncSession = Depends(get_session),
 ):
     """Lead detail page with ICP score breakdown."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
     result = await session.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
@@ -116,11 +168,14 @@ async def lead_detail(
 
 @router.patch("/leads/{lead_id}/status")
 async def update_lead_status(
+    request: Request,
     lead_id: UUID,
     status: str = Form(...),
     session: AsyncSession = Depends(get_session),
 ):
     """HTMX endpoint to update lead status inline."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
     result = await session.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
@@ -131,12 +186,15 @@ async def update_lead_status(
 
 @router.get("/export")
 async def export_leads_csv(
+    request: Request,
     status: str = Query(""),
     source: str = Query(""),
     icp_fit_label: str = Query(""),
     session: AsyncSession = Depends(get_session),
 ):
     """Export filtered leads as CSV download."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
     query = select(Lead).order_by(Lead.created_at.desc())
     if status:
         query = query.where(Lead.status == status)
@@ -206,6 +264,8 @@ async def jobs_dashboard(
     session: AsyncSession = Depends(get_session),
 ):
     """Crawl jobs dashboard with job list and create form."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
     result = await session.execute(
         select(CrawlJob).order_by(CrawlJob.created_at.desc()).limit(50)
     )
@@ -223,9 +283,12 @@ async def jobs_dashboard(
 
 @router.get("/jobs/list", response_class=HTMLResponse)
 async def jobs_table_partial(
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
     """HTMX partial — just the jobs table for auto-refresh."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
     result = await session.execute(
         select(CrawlJob).order_by(CrawlJob.created_at.desc()).limit(50)
     )
@@ -236,12 +299,15 @@ async def jobs_table_partial(
 
 @router.post("/jobs")
 async def create_job_from_dashboard(
+    request: Request,
     source: str = Form(...),
     location: str = Form(...),
     query: str = Form("restaurants"),
     session: AsyncSession = Depends(get_session),
 ):
     """Create a crawl job from the dashboard form."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
     job = CrawlJob(
         source=source,
         query=query,
@@ -290,6 +356,8 @@ async def restaurants_dashboard(
     session: AsyncSession = Depends(get_session),
 ):
     """Restaurant database with ICP leaderboard."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
     from sqlalchemy.orm import joinedload
 
     filters = {"city": city, "state": state, "fit_label": fit_label, "min_score": min_score, "q": q}
@@ -372,6 +440,8 @@ async def analytics_dashboard(
     session: AsyncSession = Depends(get_session),
 ):
     """Analytics dashboard with charts."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
     from collections import namedtuple
 
     Row = namedtuple("Row", ["label", "count"])
