@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/leads", tags=["leads"], dependencies=[Depends(requir
 
 
 @router.post("", response_model=LeadResponse, status_code=201)
-async def create_lead(payload: LeadCreate, session: AsyncSession = Depends(get_session)):
+async def create_lead(request: Request, payload: LeadCreate, session: AsyncSession = Depends(get_session)):
     """Create a new lead. Deduplicates by email — updates existing lead if found."""
     # Check for existing lead with same email
     existing = await session.execute(
