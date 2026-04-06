@@ -21,24 +21,43 @@ router = APIRouter(prefix="/leads", tags=["leads"], dependencies=[Depends(requir
 
 @router.post("", response_model=LeadResponse, status_code=201)
 async def create_lead(payload: LeadCreate, session: AsyncSession = Depends(get_session)):
-    """Create a new lead. Auto-matches against restaurant DB and enriches with ICP score."""
-    lead = Lead(
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        email=payload.email,
-        company=payload.company,
-        business_type=payload.business_type,
-        locations=payload.locations,
-        interest=payload.interest,
-        message=payload.message,
-        source=payload.source,
-        utm_source=payload.utm_source,
-        utm_medium=payload.utm_medium,
-        utm_campaign=payload.utm_campaign,
+    """Create a new lead. Deduplicates by email — updates existing lead if found."""
+    # Check for existing lead with same email
+    existing = await session.execute(
+        select(Lead).where(func.lower(Lead.email) == payload.email.lower().strip())
     )
+    lead = existing.scalar_one_or_none()
 
-    session.add(lead)
-    await session.flush()
+    if lead:
+        # Update existing lead with new submission data
+        lead.first_name = payload.first_name or lead.first_name
+        lead.last_name = payload.last_name or lead.last_name
+        lead.company = payload.company or lead.company
+        lead.business_type = payload.business_type or lead.business_type
+        lead.locations = payload.locations or lead.locations
+        lead.interest = payload.interest or lead.interest
+        lead.message = payload.message or lead.message
+        lead.utm_source = payload.utm_source or lead.utm_source
+        lead.utm_medium = payload.utm_medium or lead.utm_medium
+        lead.utm_campaign = payload.utm_campaign or lead.utm_campaign
+        logger.info("lead_deduplicated", email=payload.email, lead_id=str(lead.id))
+    else:
+        lead = Lead(
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            email=payload.email.lower().strip(),
+            company=payload.company,
+            business_type=payload.business_type,
+            locations=payload.locations,
+            interest=payload.interest,
+            message=payload.message,
+            source=payload.source,
+            utm_source=payload.utm_source,
+            utm_medium=payload.utm_medium,
+            utm_campaign=payload.utm_campaign,
+        )
+        session.add(lead)
+        await session.flush()
 
     # Match and enrich via enrichment service
     enrichment = LeadEnrichmentService(session)
