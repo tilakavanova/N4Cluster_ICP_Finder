@@ -1,13 +1,15 @@
 """Lead enrichment service — matches leads against restaurant DB and attaches ICP data."""
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
-from src.db.models import Lead, Restaurant, ICPScore, SourceRecord
+from src.db.models import Lead, Restaurant, ICPScore
 from src.utils.logging import get_logger
 
 logger = get_logger("services.lead_enrichment")
+
+# Only enrich if match confidence meets this threshold
+MIN_ENRICHMENT_CONFIDENCE = 0.7
 
 
 class LeadEnrichmentService:
@@ -20,12 +22,26 @@ class LeadEnrichmentService:
         """Full enrichment pipeline for a lead.
 
         1. Fuzzy-match company name against Restaurant table
-        2. If matched, copy all ICP score signals onto the lead
-        3. Return the enriched lead (caller must commit)
+        2. Only enrich if match confidence >= 0.7
+        3. Copy all ICP score signals onto the lead
         """
         restaurant = await self._find_best_match(lead)
         if not restaurant:
             logger.info("lead_no_match", email=lead.email, company=lead.company)
+            return lead
+
+        # Gate enrichment on confidence threshold
+        if (lead.match_confidence or 0) < MIN_ENRICHMENT_CONFIDENCE:
+            logger.info(
+                "lead_match_low_confidence",
+                email=lead.email,
+                company=lead.company,
+                matched=restaurant.name,
+                confidence=lead.match_confidence,
+            )
+            # Still record the match but don't enrich with ICP data
+            lead.restaurant_id = restaurant.id
+            lead.matched_restaurant_name = restaurant.name
             return lead
 
         lead.restaurant_id = restaurant.id
@@ -63,22 +79,19 @@ class LeadEnrichmentService:
         """Find the best restaurant match using tiered fuzzy matching.
 
         Strategy (highest confidence first):
-        1. Exact name + city match → confidence 0.95
-        2. Fuzzy name (>0.6 similarity) + same city → confidence 0.80
-        3. Fuzzy name (>0.5 similarity) alone → confidence 0.50
+        1. Exact name match (case-insensitive) → confidence 0.95
+        2. High fuzzy similarity (>0.75) → confidence 0.68-0.90
+        Removed: Tier 3 (>0.4) was too loose and caused false matches.
         """
         if not lead.company:
             return None
 
-        # Tier 1: Exact name + city (case-insensitive)
-        if lead.business_type and lead.business_type not in ("Other",):
-            # Try to extract city from the lead's context (business_type is not city,
-            # but we can try matching on exact name first)
-            pass
+        company = lead.company.strip()
 
+        # Tier 1: Exact name match (case-insensitive)
         result = await self.session.execute(
             select(Restaurant)
-            .where(func.lower(Restaurant.name) == func.lower(lead.company))
+            .where(func.lower(Restaurant.name) == func.lower(company))
             .limit(1)
         )
         exact_match = result.scalar_one_or_none()
@@ -86,34 +99,19 @@ class LeadEnrichmentService:
             lead.match_confidence = 0.95
             return exact_match
 
-        # Tier 2: High fuzzy similarity (>0.6)
+        # Tier 2: High fuzzy similarity (>0.75) — tightened from 0.6
         result = await self.session.execute(
             select(
                 Restaurant,
-                func.similarity(Restaurant.name, lead.company).label("sim"),
+                func.similarity(Restaurant.name, company).label("sim"),
             )
-            .where(func.similarity(Restaurant.name, lead.company) > 0.6)
-            .order_by(func.similarity(Restaurant.name, lead.company).desc())
+            .where(func.similarity(Restaurant.name, company) > 0.75)
+            .order_by(func.similarity(Restaurant.name, company).desc())
             .limit(1)
         )
         row = result.first()
         if row:
-            lead.match_confidence = round(float(row.sim) * 0.9, 2)  # Scale to ~0.54-0.90
-            return row[0]
-
-        # Tier 3: Lower fuzzy threshold (>0.4) — weaker match
-        result = await self.session.execute(
-            select(
-                Restaurant,
-                func.similarity(Restaurant.name, lead.company).label("sim"),
-            )
-            .where(func.similarity(Restaurant.name, lead.company) > 0.4)
-            .order_by(func.similarity(Restaurant.name, lead.company).desc())
-            .limit(1)
-        )
-        row = result.first()
-        if row:
-            lead.match_confidence = round(float(row.sim) * 0.6, 2)  # Scale to ~0.24-0.36
+            lead.match_confidence = round(float(row.sim) * 0.9, 2)
             return row[0]
 
         return None

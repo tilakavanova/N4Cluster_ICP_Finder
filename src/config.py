@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     weight_reviews: float = 10.0
     scoring_version: int = 1
 
+    # LLM cost controls
+    llm_daily_token_limit: int = 0  # 0 = unlimited. Set to e.g. 500000 for 500K tokens/day
+
     # App
     secret_key: str = ""
     log_level: str = "INFO"

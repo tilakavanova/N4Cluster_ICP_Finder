@@ -11,8 +11,8 @@ services:
     name: icp-finder-api
     runtime: python
     plan: free
-    buildCommand: chmod +x build.sh && ./build.sh
-    startCommand: chmod +x start.sh && ./start.sh
+    buildCommand: chmod +x scripts/build.sh && ./scripts/build.sh
+    startCommand: chmod +x scripts/start.sh && ./scripts/start.sh
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -29,6 +29,10 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
+      - key: API_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: "https://n4cluster.com,https://www.n4cluster.com"
       - key: LOG_LEVEL
         value: INFO
       - key: PYTHON_VERSION

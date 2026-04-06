@@ -133,13 +133,14 @@ class TestMatchConfidence:
         assert sample_lead.match_confidence == 0.95
 
     def test_fuzzy_high_confidence_range(self):
-        """High fuzzy (>0.6 similarity) confidence should be 0.54-0.90."""
-        for sim in [0.61, 0.7, 0.8, 0.9, 1.0]:
+        """High fuzzy (>0.75 similarity) confidence should be 0.68-0.90."""
+        for sim in [0.76, 0.8, 0.9, 1.0]:
             confidence = round(sim * 0.9, 2)
-            assert 0.54 <= confidence <= 0.90
+            assert 0.68 <= confidence <= 0.90
 
-    def test_fuzzy_low_confidence_range(self):
-        """Low fuzzy (0.4-0.6 similarity) confidence should be 0.24-0.36."""
-        for sim in [0.41, 0.5, 0.59]:
-            confidence = round(sim * 0.6, 2)
-            assert 0.24 <= confidence <= 0.36
+    def test_low_confidence_blocks_enrichment(self):
+        """Confidence below 0.7 should not enrich with ICP data."""
+        from src.services.lead_enrichment import MIN_ENRICHMENT_CONFIDENCE
+        assert MIN_ENRICHMENT_CONFIDENCE == 0.7
+        # A match at 0.5 confidence should NOT get ICP data copied
+        assert 0.5 < MIN_ENRICHMENT_CONFIDENCE

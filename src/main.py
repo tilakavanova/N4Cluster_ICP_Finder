@@ -85,6 +85,13 @@ async def health():
     return {"status": "healthy", "version": "0.1.0"}
 
 
+@app.get("/api/v1/admin/llm-usage")
+async def llm_usage():
+    """Return daily LLM token usage for cost monitoring."""
+    from src.extraction.llm_client import get_daily_usage
+    return get_daily_usage()
+
+
 def run():
     """Entry point for CLI."""
     import uvicorn
