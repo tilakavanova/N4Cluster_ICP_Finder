@@ -76,6 +76,35 @@ class ICPScore(Base):
     restaurant = relationship("Restaurant", back_populates="icp_score")
 
 
+class Lead(Base):
+    __tablename__ = "leads"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    first_name = Column(Text, nullable=False)
+    last_name = Column(Text, nullable=False)
+    email = Column(Text, nullable=False, index=True)
+    company = Column(Text)
+    business_type = Column(Text)
+    locations = Column(Text)
+    interest = Column(Text)
+    message = Column(Text)
+    source = Column(String(30), nullable=False, default="website_demo")
+    status = Column(String(20), nullable=False, default="new", index=True)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=True)
+    icp_score_id = Column(UUID(as_uuid=True), ForeignKey("icp_scores.id"), nullable=True)
+    icp_fit_label = Column(String(20))
+    hubspot_contact_id = Column(Text)
+    hubspot_deal_id = Column(Text)
+    utm_source = Column(Text)
+    utm_medium = Column(Text)
+    utm_campaign = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+    icp_score = relationship("ICPScore", foreign_keys=[icp_score_id])
+
+
 class CrawlJob(Base):
     __tablename__ = "crawl_jobs"
 

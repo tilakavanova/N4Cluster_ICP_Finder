@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from src.config import settings
 from src.utils.logging import setup_logging, get_logger
-from src.api.routers import restaurants, jobs, scores, seed
+from src.api.routers import restaurants, jobs, scores, seed, leads
 
 logger = get_logger("app")
 
@@ -63,6 +63,7 @@ app.include_router(restaurants.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(scores.router, prefix="/api/v1")
 app.include_router(seed.router, prefix="/api/v1")
+app.include_router(leads.router, prefix="/api/v1")
 
 
 @app.get("/health")

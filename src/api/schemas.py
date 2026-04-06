@@ -96,6 +96,70 @@ class CrawlJobResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Lead schemas ---
+
+class LeadCreate(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    company: str | None = None
+    business_type: str | None = None
+    locations: str | None = None
+    interest: str | None = None
+    message: str | None = None
+    source: str = Field(default="website_demo", description="Lead source: website_demo, website_newsletter, website_partner, manual")
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+
+
+class LeadUpdate(BaseModel):
+    status: str | None = None
+    hubspot_contact_id: str | None = None
+    hubspot_deal_id: str | None = None
+
+
+class LeadResponse(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+    email: str
+    company: str | None = None
+    business_type: str | None = None
+    locations: str | None = None
+    interest: str | None = None
+    message: str | None = None
+    source: str
+    status: str
+    restaurant_id: UUID | None = None
+    icp_score_id: UUID | None = None
+    icp_fit_label: str | None = None
+    hubspot_contact_id: str | None = None
+    hubspot_deal_id: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class LeadDetail(LeadResponse):
+    restaurant: "RestaurantResponse | None" = None
+    icp_score: "ICPScoreResponse | None" = None
+
+
+class LeadFilter(BaseModel):
+    status: str | None = None
+    source: str | None = None
+    icp_fit_label: str | None = None
+    email: str | None = None
+    company: str | None = None
+    page: int = 1
+    page_size: int = 20
+
+
 # --- Discover (real-time search) schemas ---
 
 class DiscoverResultItem(BaseModel):
@@ -152,3 +216,4 @@ class ExportFormat(BaseModel):
 
 # Rebuild models for forward refs
 RestaurantDetail.model_rebuild()
+LeadDetail.model_rebuild()
