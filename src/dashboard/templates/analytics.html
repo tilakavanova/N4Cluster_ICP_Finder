@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+<!-- Stats row -->
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Leads</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ overview.total_leads }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Restaurants</div>
+    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ overview.total_restaurants }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Conversion Rate</div>
+    <div class="text-2xl font-bold text-teal-500 mt-1">{{ "%.1f"|format(overview.conversion_rate) }}%</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Crawl Jobs Run</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ overview.total_jobs }}</div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <!-- Leads by Source -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h3 class="text-sm font-semibold text-navy-950 mb-4">Leads by Source</h3>
+    <canvas id="sourceChart" height="200"></canvas>
+  </div>
+
+  <!-- ICP Fit Distribution -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h3 class="text-sm font-semibold text-navy-950 mb-4">ICP Fit Distribution</h3>
+    <canvas id="fitChart" height="200"></canvas>
+  </div>
+
+  <!-- Lead Pipeline Funnel -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h3 class="text-sm font-semibold text-navy-950 mb-4">Lead Pipeline</h3>
+    <canvas id="funnelChart" height="200"></canvas>
+  </div>
+
+  <!-- Leads Over Time (last 30 days) -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h3 class="text-sm font-semibold text-navy-950 mb-4">Leads Over Time (30 days)</h3>
+    <canvas id="timeChart" height="200"></canvas>
+  </div>
+
+  <!-- Top Cities -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6 lg:col-span-2">
+    <h3 class="text-sm font-semibold text-navy-950 mb-4">Top Cities by Lead Volume</h3>
+    {% if top_cities %}
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      {% for city in top_cities %}
+      <div class="rounded-lg bg-slate-50 px-4 py-3 text-center">
+        <div class="text-lg font-bold text-navy-950">{{ city.count }}</div>
+        <div class="text-xs text-slate-600">{{ city.city or "Unknown" }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No location data available yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  const colors = {
+    cobalt: '#2563eb', teal: '#14b8a6', navy: '#040d1c',
+    green: '#16a34a', blue: '#3b82f6', yellow: '#eab308', red: '#ef4444',
+    slate: '#64748b', amber: '#f59e0b',
+  };
+
+  // Leads by Source
+  new Chart(document.getElementById('sourceChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ by_source | map(attribute='source') | list | tojson }},
+      datasets: [{
+        data: {{ by_source | map(attribute='count') | list | tojson }},
+        backgroundColor: [colors.cobalt, colors.teal, colors.amber, colors.slate],
+        borderRadius: 4,
+      }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+
+  // ICP Fit Distribution
+  new Chart(document.getElementById('fitChart'), {
+    type: 'doughnut',
+    data: {
+      labels: {{ by_fit | map(attribute='fit') | list | tojson }},
+      datasets: [{
+        data: {{ by_fit | map(attribute='count') | list | tojson }},
+        backgroundColor: [colors.green, colors.blue, colors.yellow, colors.red, colors.slate],
+      }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // Lead Pipeline
+  new Chart(document.getElementById('funnelChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ by_status | map(attribute='status') | list | tojson }},
+      datasets: [{
+        data: {{ by_status | map(attribute='count') | list | tojson }},
+        backgroundColor: [colors.slate, colors.yellow, colors.blue, '#a855f7', colors.green, colors.red],
+        borderRadius: 4,
+      }]
+    },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+
+  // Leads Over Time
+  new Chart(document.getElementById('timeChart'), {
+    type: 'line',
+    data: {
+      labels: {{ over_time | map(attribute='date') | list | tojson }},
+      datasets: [{
+        label: 'Leads',
+        data: {{ over_time | map(attribute='count') | list | tojson }},
+        borderColor: colors.cobalt,
+        backgroundColor: colors.cobalt + '20',
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Restaurants{% endblock %}
+
+{% block content %}
+<!-- Stats row -->
+<div class="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-6">
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ stats.total }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Independent</div>
+    <div class="text-2xl font-bold text-green-600 mt-1">{{ stats.independent }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">On Delivery</div>
+    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ stats.has_delivery }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">POS Detected</div>
+    <div class="text-2xl font-bold text-teal-500 mt-1">{{ stats.has_pos }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg ICP Score</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ "%.1f"|format(stats.avg_score) if stats.avg_score else "—" }}</div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="bg-white rounded-lg border border-slate-200 px-5 py-4 mb-4">
+  <form method="get" action="/dashboard/restaurants" class="flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">City</label>
+      <input type="text" name="city" value="{{ filters.city or '' }}" placeholder="e.g. Boston" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-32">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">State</label>
+      <input type="text" name="state" value="{{ filters.state or '' }}" placeholder="e.g. MA" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-16" maxlength="2">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">ICP Fit</label>
+      <select name="fit_label" class="rounded-md border border-slate-300 text-sm px-3 py-1.5">
+        <option value="">All</option>
+        {% for s in ["excellent", "good", "moderate", "poor"] %}
+        <option value="{{ s }}" {% if filters.fit_label == s %}selected{% endif %}>{{ s|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Min Score</label>
+      <input type="number" name="min_score" value="{{ filters.min_score or '' }}" placeholder="0" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-20" min="0" max="100">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+      <input type="text" name="q" value="{{ filters.q or '' }}" placeholder="Restaurant name..." class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-48">
+    </div>
+    <button type="submit" class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-sm font-medium px-4 py-1.5 rounded-md">Filter</button>
+    <a href="/dashboard/restaurants" class="text-sm text-slate-500 hover:text-slate-700 px-2 py-1.5">Clear</a>
+  </form>
+</div>
+
+<!-- Restaurant table -->
+<div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+  <table class="min-w-full divide-y divide-slate-200">
+    <thead class="bg-slate-50">
+      <tr>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Name</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">City</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Cuisine</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">ICP Score</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Fit</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Independent</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Delivery</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">POS</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for r in restaurants %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-3">
+          <div class="text-sm font-medium text-navy-950">{{ r.name }}</div>
+          {% if r.address %}<div class="text-xs text-slate-500">{{ r.address }}</div>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-sm text-slate-600">{{ r.city or "—" }}{% if r.state %}, {{ r.state }}{% endif %}</td>
+        <td class="px-4 py-3">
+          {% if r.cuisine_type %}
+          <div class="flex flex-wrap gap-1">
+            {% for c in r.cuisine_type[:3] %}
+            <span class="bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded">{{ c }}</span>
+            {% endfor %}
+            {% if r.cuisine_type|length > 3 %}<span class="text-xs text-slate-400">+{{ r.cuisine_type|length - 3 }}</span>{% endif %}
+          </div>
+          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3">
+          {% if r.icp_score %}
+          <div class="flex items-center gap-2">
+            <div class="w-16 bg-slate-100 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full
+                {% if r.icp_score.total_icp_score >= 75 %}bg-green-500
+                {% elif r.icp_score.total_icp_score >= 55 %}bg-blue-500
+                {% elif r.icp_score.total_icp_score >= 35 %}bg-yellow-500
+                {% else %}bg-red-400{% endif %}"
+                style="width: {{ r.icp_score.total_icp_score }}%"></div>
+            </div>
+            <span class="text-sm font-medium text-navy-950">{{ "%.0f"|format(r.icp_score.total_icp_score) }}</span>
+          </div>
+          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3">
+          {% if r.icp_score %}
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+            {% if r.icp_score.fit_label == 'excellent' %}bg-green-100 text-green-700
+            {% elif r.icp_score.fit_label == 'good' %}bg-blue-100 text-blue-700
+            {% elif r.icp_score.fit_label == 'moderate' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-red-100 text-red-700{% endif %}">
+            {{ r.icp_score.fit_label|title }}
+          </span>
+          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if r.is_chain == false %}
+          <span class="text-green-600">&#10003;</span>
+          {% elif r.is_chain %}
+          <span class="text-red-400">&#10007;</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if r.icp_score and r.icp_score.has_delivery %}
+          <span class="text-green-600">&#10003;</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-sm text-slate-600">
+          {% if r.icp_score and r.icp_score.pos_provider %}{{ r.icp_score.pos_provider }}
+          {% elif r.icp_score and r.icp_score.has_pos %}<span class="text-green-600">&#10003;</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="8" class="px-4 py-12 text-center text-sm text-slate-500">No restaurants found. Run a crawl job to populate the database.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="flex items-center justify-between mt-4">
+  <div class="text-sm text-slate-500">Page {{ page }} of {{ total_pages }}</div>
+  <div class="flex gap-1">
+    {% if page > 1 %}<a href="?page={{ page - 1 }}&city={{ filters.city or '' }}&state={{ filters.state or '' }}&fit_label={{ filters.fit_label or '' }}&min_score={{ filters.min_score or '' }}&q={{ filters.q or '' }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Prev</a>{% endif %}
+    {% if page < total_pages %}<a href="?page={{ page + 1 }}&city={{ filters.city or '' }}&state={{ filters.state or '' }}&fit_label={{ filters.fit_label or '' }}&min_score={{ filters.min_score or '' }}&q={{ filters.q or '' }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Next</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
