@@ -15,6 +15,7 @@ class TestLLMClient:
         with patch("src.extraction.llm_client.settings") as mock:
             mock.openai_api_key = ""
             mock.anthropic_api_key = ""
+            mock.llm_daily_token_limit = 0
             client = LLMClient()
             with pytest.raises(RuntimeError, match="No LLM API keys configured"):
                 await client.extract_json("test prompt")
@@ -26,6 +27,7 @@ class TestLLMClient:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = '{"name": "Test"}'
+        mock_response.usage = MagicMock(prompt_tokens=100, completion_tokens=50)
         mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
         client._openai_client = mock_openai
 
@@ -33,6 +35,7 @@ class TestLLMClient:
             mock.openai_api_key = "sk-test"
             mock.llm_model = "gpt-4o-mini"
             mock.llm_max_tokens = 4000
+            mock.llm_daily_token_limit = 0
             result = await client.extract_json("test")
             assert result == {"name": "Test"}
 
@@ -45,6 +48,7 @@ class TestLLMClient:
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
         mock_response.content[0].text = '{"name": "Fallback"}'
+        mock_response.usage = MagicMock(input_tokens=100, output_tokens=50)
         mock_anthropic.messages.create = AsyncMock(return_value=mock_response)
         client._anthropic_client = mock_anthropic
 
@@ -52,6 +56,7 @@ class TestLLMClient:
             mock.openai_api_key = ""
             mock.anthropic_api_key = "sk-ant-test"
             mock.llm_max_tokens = 4000
+            mock.llm_daily_token_limit = 0
             result = await client.extract_json("test")
             assert result == {"name": "Fallback"}
 
@@ -64,6 +69,7 @@ class TestLLMClient:
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
         mock_response.content[0].text = '```json\n{"name": "Test"}\n```'
+        mock_response.usage = MagicMock(input_tokens=100, output_tokens=50)
         mock_anthropic.messages.create = AsyncMock(return_value=mock_response)
         client._anthropic_client = mock_anthropic
 
@@ -71,5 +77,6 @@ class TestLLMClient:
             mock.openai_api_key = ""
             mock.anthropic_api_key = "sk-ant-test"
             mock.llm_max_tokens = 4000
+            mock.llm_daily_token_limit = 0
             result = await client.extract_json("test")
             assert result == {"name": "Test"}

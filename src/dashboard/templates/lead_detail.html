@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.first_name }} {{ lead.last_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <a href="/dashboard" class="text-sm text-cobalt-500 hover:text-cobalt-600">&larr; Back to Leads</a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- Lead info -->
+  <div class="lg:col-span-2 space-y-6">
+    <div class="bg-white rounded-lg border border-slate-200 p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h1 class="text-xl font-bold text-navy-950">{{ lead.first_name }} {{ lead.last_name }}</h1>
+          <p class="text-sm text-slate-500">{{ lead.email }}</p>
+        </div>
+        <select
+          class="rounded border border-slate-200 text-sm px-3 py-1.5 font-medium"
+          hx-patch="/dashboard/leads/{{ lead.id }}/status"
+          hx-trigger="change"
+          hx-swap="none"
+          name="status">
+          {% for s in ["new", "contacted", "demo_scheduled", "pilot", "won", "lost"] %}
+          <option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ s|replace("_", " ")|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <span class="text-slate-500">Company</span>
+          <p class="font-medium text-navy-950">{{ lead.company or "—" }}</p>
+        </div>
+        <div>
+          <span class="text-slate-500">Business Type</span>
+          <p class="font-medium text-navy-950">{{ lead.business_type or "—" }}</p>
+        </div>
+        <div>
+          <span class="text-slate-500">Locations</span>
+          <p class="font-medium text-navy-950">{{ lead.locations or "—" }}</p>
+        </div>
+        <div>
+          <span class="text-slate-500">Interest</span>
+          <p class="font-medium text-navy-950">{{ lead.interest or "—" }}</p>
+        </div>
+        <div>
+          <span class="text-slate-500">Source</span>
+          <p class="font-medium text-navy-950">{{ lead.source|replace("_", " ")|title }}</p>
+        </div>
+        <div>
+          <span class="text-slate-500">Created</span>
+          <p class="font-medium text-navy-950">{{ lead.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+        </div>
+      </div>
+
+      {% if lead.message %}
+      <div class="mt-4 pt-4 border-t border-slate-100">
+        <span class="text-xs font-medium text-slate-500 uppercase">Message</span>
+        <p class="text-sm text-navy-950 mt-1">{{ lead.message }}</p>
+      </div>
+      {% endif %}
+
+      {% if lead.utm_source or lead.utm_medium or lead.utm_campaign %}
+      <div class="mt-4 pt-4 border-t border-slate-100">
+        <span class="text-xs font-medium text-slate-500 uppercase">Attribution</span>
+        <div class="flex gap-4 mt-1 text-sm">
+          {% if lead.utm_source %}<span class="bg-slate-100 px-2 py-0.5 rounded text-slate-700">source: {{ lead.utm_source }}</span>{% endif %}
+          {% if lead.utm_medium %}<span class="bg-slate-100 px-2 py-0.5 rounded text-slate-700">medium: {{ lead.utm_medium }}</span>{% endif %}
+          {% if lead.utm_campaign %}<span class="bg-slate-100 px-2 py-0.5 rounded text-slate-700">campaign: {{ lead.utm_campaign }}</span>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ICP Score sidebar -->
+  <div class="space-y-6">
+    {% if lead.icp_fit_label %}
+    <div class="bg-white rounded-lg border border-slate-200 p-6">
+      <h3 class="text-sm font-semibold text-slate-700 mb-3">ICP Score</h3>
+      <div class="text-center mb-4">
+        <div class="text-4xl font-bold {% if lead.icp_fit_label == 'excellent' %}text-green-600{% elif lead.icp_fit_label == 'good' %}text-blue-600{% elif lead.icp_fit_label == 'moderate' %}text-yellow-600{% else %}text-red-600{% endif %}">
+          {{ "%.0f"|format(lead.icp_total_score or 0) }}
+        </div>
+        <div class="text-sm font-medium text-slate-500">{{ lead.icp_fit_label|title }} Fit</div>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">Independent</span><span class="font-medium">{{ "Yes" if lead.is_independent else "No" if lead.is_independent is not none else "—" }}</span></div>
+          <div class="w-full bg-slate-100 rounded-full h-1.5"><div class="h-1.5 rounded-full {{ 'bg-green-500' if lead.is_independent else 'bg-red-400' }}" style="width: {{ 100 if lead.is_independent else 0 }}%"></div></div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">Delivery</span><span class="font-medium">{{ "Yes" if lead.has_delivery else "No" if lead.has_delivery is not none else "—" }}</span></div>
+          <div class="w-full bg-slate-100 rounded-full h-1.5"><div class="h-1.5 rounded-full {{ 'bg-green-500' if lead.has_delivery else 'bg-red-400' }}" style="width: {{ 100 if lead.has_delivery else 0 }}%"></div></div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">POS Detected</span><span class="font-medium">{{ lead.pos_provider or ("Yes" if lead.has_pos else "No" if lead.has_pos is not none else "—") }}</span></div>
+          <div class="w-full bg-slate-100 rounded-full h-1.5"><div class="h-1.5 rounded-full {{ 'bg-green-500' if lead.has_pos else 'bg-red-400' }}" style="width: {{ 100 if lead.has_pos else 0 }}%"></div></div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">Geo Density</span><span class="font-medium">{{ "%.0f%%"|format((lead.geo_density_score or 0) * 100) }}</span></div>
+          <div class="w-full bg-slate-100 rounded-full h-1.5"><div class="h-1.5 rounded-full bg-cobalt-500" style="width: {{ (lead.geo_density_score or 0) * 100 }}%"></div></div>
+        </div>
+      </div>
+
+      {% if lead.delivery_platforms %}
+      <div class="mt-4 pt-3 border-t border-slate-100">
+        <span class="text-xs text-slate-500">Delivery Platforms</span>
+        <div class="flex flex-wrap gap-1 mt-1">
+          {% for p in lead.delivery_platforms %}
+          <span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded">{{ p }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Match info -->
+    <div class="bg-white rounded-lg border border-slate-200 p-6">
+      <h3 class="text-sm font-semibold text-slate-700 mb-3">Restaurant Match</h3>
+      {% if lead.matched_restaurant_name %}
+      <p class="text-sm font-medium text-navy-950">{{ lead.matched_restaurant_name }}</p>
+      <p class="text-xs text-slate-500 mt-1">Confidence: {{ "%.0f%%"|format((lead.match_confidence or 0) * 100) }}</p>
+      {% else %}
+      <p class="text-sm text-slate-500">No restaurant match found</p>
+      {% endif %}
+    </div>
+
+    <!-- CRM -->
+    <div class="bg-white rounded-lg border border-slate-200 p-6">
+      <h3 class="text-sm font-semibold text-slate-700 mb-3">CRM</h3>
+      <div class="space-y-2 text-sm">
+        <div>
+          <span class="text-slate-500">HubSpot Contact</span>
+          <p class="font-medium text-navy-950">{{ lead.hubspot_contact_id or "Not linked" }}</p>
+        </div>
+        <div>
+          <span class="text-slate-500">HubSpot Deal</span>
+          <p class="font-medium text-navy-950">{{ lead.hubspot_deal_id or "Not linked" }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

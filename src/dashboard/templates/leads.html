@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Leads{% endblock %}
+
+{% block content %}
+<!-- Stats row -->
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Leads</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ stats.total }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">This Week</div>
+    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ stats.this_week }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg ICP Score</div>
+    <div class="text-2xl font-bold text-teal-500 mt-1">{{ "%.1f"|format(stats.avg_icp_score) if stats.avg_icp_score else "—" }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Excellent Fit</div>
+    <div class="text-2xl font-bold text-green-600 mt-1">{{ stats.excellent_count }}</div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="bg-white rounded-lg border border-slate-200 px-5 py-4 mb-4">
+  <form method="get" action="/dashboard" class="flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Status</label>
+      <select name="status" class="rounded-md border border-slate-300 text-sm px-3 py-1.5">
+        <option value="">All</option>
+        {% for s in ["new", "contacted", "demo_scheduled", "pilot", "won", "lost"] %}
+        <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s|replace("_", " ")|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Source</label>
+      <select name="source" class="rounded-md border border-slate-300 text-sm px-3 py-1.5">
+        <option value="">All</option>
+        {% for s in ["website_demo", "website_newsletter", "website_partner", "manual"] %}
+        <option value="{{ s }}" {% if filters.source == s %}selected{% endif %}>{{ s|replace("_", " ")|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">ICP Fit</label>
+      <select name="icp_fit_label" class="rounded-md border border-slate-300 text-sm px-3 py-1.5">
+        <option value="">All</option>
+        {% for s in ["excellent", "good", "moderate", "poor"] %}
+        <option value="{{ s }}" {% if filters.icp_fit_label == s %}selected{% endif %}>{{ s|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+      <input type="text" name="q" value="{{ filters.q or '' }}" placeholder="Email or company..." class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-48">
+    </div>
+    <button type="submit" class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-sm font-medium px-4 py-1.5 rounded-md">Filter</button>
+    <a href="/dashboard" class="text-sm text-slate-500 hover:text-slate-700 px-2 py-1.5">Clear</a>
+    <div class="ml-auto">
+      <a href="/dashboard/export?status={{ filters.status or '' }}&source={{ filters.source or '' }}&icp_fit_label={{ filters.icp_fit_label or '' }}" class="inline-flex items-center gap-1.5 text-sm font-medium text-cobalt-500 hover:text-cobalt-600">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Export CSV
+      </a>
+    </div>
+  </form>
+</div>
+
+<!-- Leads table -->
+<div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+  <table class="min-w-full divide-y divide-slate-200">
+    <thead class="bg-slate-50">
+      <tr>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Name</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Email</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Company</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Source</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">ICP</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for lead in leads %}
+      <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='/dashboard/leads/{{ lead.id }}'">
+        <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ lead.first_name }} {{ lead.last_name }}</td>
+        <td class="px-4 py-3 text-sm text-slate-600">{{ lead.email }}</td>
+        <td class="px-4 py-3 text-sm text-slate-600">{{ lead.company or "—" }}</td>
+        <td class="px-4 py-3">
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+            {% if lead.source == 'website_demo' %}bg-cobalt-500/10 text-cobalt-600
+            {% elif lead.source == 'website_newsletter' %}bg-teal-500/10 text-teal-600
+            {% elif lead.source == 'website_partner' %}bg-amber-500/10 text-amber-600
+            {% else %}bg-slate-100 text-slate-600{% endif %}">
+            {{ lead.source|replace("_", " ")|replace("website ", "") }}
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          {% if lead.icp_fit_label %}
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+            {% if lead.icp_fit_label == 'excellent' %}bg-green-100 text-green-700
+            {% elif lead.icp_fit_label == 'good' %}bg-blue-100 text-blue-700
+            {% elif lead.icp_fit_label == 'moderate' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-red-100 text-red-700{% endif %}">
+            {{ lead.icp_fit_label|title }}
+            {% if lead.icp_total_score %}<span class="ml-1 opacity-70">{{ "%.0f"|format(lead.icp_total_score) }}</span>{% endif %}
+          </span>
+          {% else %}
+          <span class="text-xs text-slate-400">—</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3" onclick="event.stopPropagation()">
+          <select
+            class="rounded border border-slate-200 text-xs px-2 py-1
+              {% if lead.status == 'won' %}bg-green-50 text-green-700
+              {% elif lead.status == 'lost' %}bg-red-50 text-red-700
+              {% elif lead.status == 'pilot' %}bg-purple-50 text-purple-700
+              {% elif lead.status == 'demo_scheduled' %}bg-blue-50 text-blue-700
+              {% elif lead.status == 'contacted' %}bg-yellow-50 text-yellow-700
+              {% else %}bg-slate-50 text-slate-700{% endif %}"
+            hx-patch="/dashboard/leads/{{ lead.id }}/status"
+            hx-trigger="change"
+            hx-swap="none"
+            name="status">
+            {% for s in ["new", "contacted", "demo_scheduled", "pilot", "won", "lost"] %}
+            <option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ s|replace("_", " ")|title }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-500">{{ lead.created_at.strftime('%b %d') }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">No leads found. Leads will appear here when submitted via the website form.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="flex items-center justify-between mt-4">
+  <div class="text-sm text-slate-500">Page {{ page }} of {{ total_pages }} ({{ stats.total }} leads)</div>
+  <div class="flex gap-1">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}&status={{ filters.status or '' }}&source={{ filters.source or '' }}&icp_fit_label={{ filters.icp_fit_label or '' }}&q={{ filters.q or '' }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Prev</a>
+    {% endif %}
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}&status={{ filters.status or '' }}&source={{ filters.source or '' }}&icp_fit_label={{ filters.icp_fit_label or '' }}&q={{ filters.q or '' }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Next</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

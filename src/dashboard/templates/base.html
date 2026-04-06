@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Dashboard{% endblock %} | N4Cluster ICP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: { 950: '#040d1c', 900: '#0a1628', 800: '#0f2040' },
+            cobalt: { 600: '#1a4fd6', 500: '#2563eb', 400: '#3b82f6' },
+            teal: { 500: '#14b8a6', 400: '#2dd4bf' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .htmx-settling { opacity: 0.8; }
+    .htmx-swapping { opacity: 0.5; transition: opacity 0.2s; }
+  </style>
+</head>
+<body class="h-full" hx-boost="true">
+  <div class="min-h-full">
+    <!-- Navigation -->
+    <nav class="bg-navy-950">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="flex h-14 items-center justify-between">
+          <div class="flex items-center gap-6">
+            <a href="/dashboard" class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-md bg-cobalt-500 flex items-center justify-center">
+                <span class="text-white font-bold text-xs">N4</span>
+              </div>
+              <span class="text-white font-semibold text-sm">ICP Dashboard</span>
+            </a>
+            <div class="flex items-center gap-1">
+              <a href="/dashboard" class="px-3 py-1.5 rounded-md text-sm font-medium {% if active_tab == 'leads' %}bg-navy-800 text-white{% else %}text-slate-400 hover:text-white hover:bg-navy-900{% endif %}">Leads</a>
+              <a href="/dashboard/jobs" class="px-3 py-1.5 rounded-md text-sm font-medium {% if active_tab == 'jobs' %}bg-navy-800 text-white{% else %}text-slate-400 hover:text-white hover:bg-navy-900{% endif %}">Crawl Jobs</a>
+              <a href="/dashboard/restaurants" class="px-3 py-1.5 rounded-md text-sm font-medium {% if active_tab == 'restaurants' %}bg-navy-800 text-white{% else %}text-slate-400 hover:text-white hover:bg-navy-900{% endif %}">Restaurants</a>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <a href="/api/v1/admin/llm-usage" target="_blank" class="text-xs text-slate-500 hover:text-slate-300">LLM Usage</a>
+            <a href="/docs" target="_blank" class="text-xs text-slate-500 hover:text-slate-300">API Docs</a>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>
