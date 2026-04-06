@@ -3,7 +3,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 # --- Restaurant schemas ---
@@ -98,25 +100,29 @@ class CrawlJobResponse(BaseModel):
 
 # --- Lead schemas ---
 
+LEAD_SOURCES = Literal["website_demo", "website_newsletter", "website_partner", "manual"]
+LEAD_STATUSES = Literal["new", "contacted", "demo_scheduled", "pilot", "won", "lost"]
+
+
 class LeadCreate(BaseModel):
-    first_name: str
-    last_name: str
-    email: str
-    company: str | None = None
-    business_type: str | None = None
-    locations: str | None = None
-    interest: str | None = None
-    message: str | None = None
-    source: str = Field(default="website_demo", description="Lead source: website_demo, website_newsletter, website_partner, manual")
-    utm_source: str | None = None
-    utm_medium: str | None = None
-    utm_campaign: str | None = None
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    company: str | None = Field(None, max_length=255)
+    business_type: str | None = Field(None, max_length=100)
+    locations: str | None = Field(None, max_length=20)
+    interest: str | None = Field(None, max_length=100)
+    message: str | None = Field(None, max_length=2000)
+    source: LEAD_SOURCES = "website_demo"
+    utm_source: str | None = Field(None, max_length=100)
+    utm_medium: str | None = Field(None, max_length=100)
+    utm_campaign: str | None = Field(None, max_length=200)
 
 
 class LeadUpdate(BaseModel):
-    status: str | None = None
-    hubspot_contact_id: str | None = None
-    hubspot_deal_id: str | None = None
+    status: LEAD_STATUSES | None = None
+    hubspot_contact_id: str | None = Field(None, max_length=100)
+    hubspot_deal_id: str | None = Field(None, max_length=100)
 
 
 class LeadResponse(BaseModel):

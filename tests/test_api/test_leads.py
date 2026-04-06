@@ -26,16 +26,6 @@ def sample_lead_payload():
     }
 
 
-@pytest.fixture
-def sample_newsletter_payload():
-    return {
-        "first_name": "",
-        "last_name": "",
-        "email": "subscriber@example.com",
-        "source": "website_newsletter",
-    }
-
-
 class TestLeadSchemas:
     """Test Pydantic schema validation."""
 
@@ -52,8 +42,11 @@ class TestLeadSchemas:
         assert lead.company is None
         assert lead.utm_source is None
 
-    def test_lead_create_newsletter(self, sample_newsletter_payload):
-        lead = LeadCreate(**sample_newsletter_payload)
+    def test_lead_create_newsletter(self):
+        lead = LeadCreate(
+            first_name="Sub", last_name="Scriber",
+            email="subscriber@example.com", source="website_newsletter",
+        )
         assert lead.source == "website_newsletter"
 
     def test_lead_update_status(self):
@@ -66,6 +59,26 @@ class TestLeadSchemas:
         data = update.model_dump(exclude_unset=True)
         assert "hubspot_contact_id" in data
         assert "hubspot_deal_id" in data
+
+    def test_invalid_email_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            LeadCreate(first_name="T", last_name="U", email="not-an-email")
+
+    def test_empty_first_name_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            LeadCreate(first_name="", last_name="U", email="t@example.com")
+
+    def test_invalid_source_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            LeadCreate(first_name="T", last_name="U", email="t@example.com", source="invalid_source")
+
+    def test_invalid_status_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            LeadUpdate(status="xyzzy_invalid")
 
 
 class TestLeadModel:
@@ -99,7 +112,7 @@ class TestLeadRouterUnit:
     def test_valid_sources(self):
         valid_sources = ["website_demo", "website_newsletter", "website_partner", "manual"]
         for source in valid_sources:
-            lead = LeadCreate(first_name="T", last_name="U", email="t@e.com", source=source)
+            lead = LeadCreate(first_name="Test", last_name="User", email="test@example.com", source=source)
             assert lead.source == source
 
     def test_valid_statuses(self):
