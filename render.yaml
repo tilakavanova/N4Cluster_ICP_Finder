@@ -6,7 +6,6 @@ databases:
     postgresMajorVersion: "16"
 
 services:
-  # Combined: FastAPI + Celery worker + beat in one process
   - type: web
     name: icp-finder-api
     runtime: python
@@ -33,8 +32,14 @@ services:
         generateValue: true
       - key: ALLOWED_ORIGINS
         value: "https://n4cluster.com,https://www.n4cluster.com"
+      - key: DASHBOARD_USERNAME
+        value: "admin"
+      - key: DASHBOARD_PASSWORD
+        sync: false
       - key: LOG_LEVEL
         value: INFO
+      - key: DEBUG
+        value: "false"
       - key: PYTHON_VERSION
         value: "3.12.3"
       - key: PYTHONPATH
@@ -47,7 +52,6 @@ services:
         sync: false
     healthCheckPath: /health
 
-  # Redis
   - type: redis
     name: icp-finder-redis
     plan: free

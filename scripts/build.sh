@@ -2,9 +2,10 @@
 set -e
 
 echo "Installing dependencies..."
+pip install --upgrade pip
 pip install -r requirements.txt
 
 echo "Running database migrations..."
-alembic upgrade head
+python -m alembic upgrade head
 
 echo "Build complete."
