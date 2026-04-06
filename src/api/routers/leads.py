@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from src.api.schemas import LeadCreate, LeadUpdate, LeadResponse, LeadDetail, LeadFilter
+from src.api.auth import require_api_key
 from src.db.models import Lead, Restaurant, ICPScore
 from src.db.session import get_session
 from src.services.lead_enrichment import LeadEnrichmentService
@@ -15,7 +16,7 @@ from src.utils.logging import get_logger
 
 logger = get_logger("leads")
 
-router = APIRouter(prefix="/leads", tags=["leads"])
+router = APIRouter(prefix="/leads", tags=["leads"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("", response_model=LeadResponse, status_code=201)
