@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import select, func
@@ -303,6 +303,7 @@ async def jobs_table_partial(
 @router.post("/jobs")
 async def create_job_from_dashboard(
     request: Request,
+    background_tasks: BackgroundTasks,
     source: str = Form(...),
     location: str = Form(...),
     query: str = Form("restaurants"),
@@ -319,8 +320,10 @@ async def create_job_from_dashboard(
     )
     session.add(job)
     await session.flush()
+    job_id = str(job.id)
+    await session.commit()
 
-    # Dispatch celery pipeline
+    # Try Celery first, fallback to inline
     try:
         from celery import chain
         from src.tasks.crawl_tasks import crawl_source
@@ -328,16 +331,15 @@ async def create_job_from_dashboard(
         from src.tasks.score_tasks import score_restaurants
 
         pipeline = chain(
-            crawl_source.s(source, query, location, str(job.id)),
+            crawl_source.s(source, query, location, job_id),
             extract_records.si(),
             score_restaurants.si(),
         )
         pipeline.apply_async()
     except Exception:
-        # Celery not available (local dev without Redis)
-        pass
+        from src.api.routers.jobs import _run_crawl_inline
+        background_tasks.add_task(_run_crawl_inline, source, query, location, job_id)
 
-    from fastapi.responses import RedirectResponse
     return RedirectResponse(
         url=f"/dashboard/jobs?message=Crawl job started: {source} in {location}",
         status_code=303,
