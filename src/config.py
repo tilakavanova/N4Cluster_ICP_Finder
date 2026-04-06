@@ -44,9 +44,11 @@ class Settings(BaseSettings):
     scoring_version: int = 1
 
     # App
-    secret_key: str = "change-me"
+    secret_key: str = ""
     log_level: str = "INFO"
     debug: bool = False
+    allowed_origins: str = "https://n4cluster.com,https://www.n4cluster.com"
+    api_key: str = ""
 
     @property
     def async_database_url(self) -> str:
@@ -57,6 +59,12 @@ class Settings(BaseSettings):
         elif url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
+
+    @property
+    def cors_origins(self) -> list[str]:
+        if self.debug:
+            return ["*"]
+        return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
 
     @property
     def proxy_pool(self) -> list[str]:
