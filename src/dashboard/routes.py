@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import select, func
@@ -303,13 +303,12 @@ async def jobs_table_partial(
 @router.post("/jobs")
 async def create_job_from_dashboard(
     request: Request,
-    background_tasks: BackgroundTasks,
     source: str = Form(...),
     location: str = Form(...),
     query: str = Form("restaurants"),
     session: AsyncSession = Depends(get_session),
 ):
-    """Create a crawl job from the dashboard form."""
+    """Create a crawl job from the dashboard form. Runs synchronously."""
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
     job = CrawlJob(
@@ -323,7 +322,7 @@ async def create_job_from_dashboard(
     job_id = str(job.id)
     await session.commit()
 
-    # Try Celery first, fallback to inline
+    # Try Celery first, fallback to synchronous inline
     try:
         from celery import chain
         from src.tasks.crawl_tasks import crawl_source
@@ -338,10 +337,18 @@ async def create_job_from_dashboard(
         pipeline.apply_async()
     except Exception:
         from src.api.routers.jobs import _run_crawl_inline
-        background_tasks.add_task(_run_crawl_inline, source, query, location, job_id)
+        await _run_crawl_inline(source, query, location, job_id)
+
+    # Re-fetch job to get final status
+    from src.db.session import async_session as async_session_factory
+    async with async_session_factory() as fresh:
+        result = await fresh.execute(select(CrawlJob).where(CrawlJob.id == job.id))
+        final_job = result.scalar_one_or_none()
+        items = final_job.total_items if final_job else 0
+        status = final_job.status if final_job else "unknown"
 
     return RedirectResponse(
-        url=f"/dashboard/jobs?message=Crawl job started: {source} in {location}",
+        url=f"/dashboard/jobs?message=Crawl completed: {source} in {location} — {items} restaurants found ({status})",
         status_code=303,
     )
 

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -125,10 +125,9 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
 @router.post("", response_model=CrawlJobResponse, status_code=201)
 async def create_crawl_job(
     job_in: CrawlJobCreate,
-    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
 ):
-    """Create a crawl job. Tries Celery first, falls back to inline execution."""
+    """Create a crawl job and run it. Tries Celery first, falls back to synchronous inline."""
     job = CrawlJob(
         source=job_in.source,
         query=job_in.query,
@@ -157,16 +156,17 @@ async def create_crawl_job(
         celery_dispatched = True
         logger.info("crawl_dispatched_celery", job_id=job_id)
     except Exception as e:
-        logger.warning("celery_unavailable_using_inline", error=str(e), job_id=job_id)
+        logger.warning("celery_unavailable_running_inline", error=str(e), job_id=job_id)
 
-    # Fallback: run inline via FastAPI BackgroundTasks
+    # Fallback: run crawl inline (synchronous, blocks until done)
     if not celery_dispatched:
-        background_tasks.add_task(_run_crawl_inline, job_in.source, job_in.query, job_in.location, job_id)
-        logger.info("crawl_dispatched_inline", job_id=job_id)
+        await _run_crawl_inline(job_in.source, job_in.query, job_in.location, job_id)
+        logger.info("crawl_completed_inline", job_id=job_id)
 
-    # Re-fetch to return current state
-    result = await session.execute(select(CrawlJob).where(CrawlJob.id == job.id))
-    return result.scalar_one()
+    # Re-fetch to return final state
+    async with async_session() as fresh_session:
+        result = await fresh_session.execute(select(CrawlJob).where(CrawlJob.id == job.id))
+        return result.scalar_one()
 
 
 @router.get("", response_model=list[CrawlJobResponse])
