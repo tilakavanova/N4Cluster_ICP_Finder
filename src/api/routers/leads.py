@@ -10,37 +10,12 @@ from sqlalchemy.orm import joinedload
 from src.api.schemas import LeadCreate, LeadUpdate, LeadResponse, LeadDetail, LeadFilter
 from src.db.models import Lead, Restaurant, ICPScore
 from src.db.session import get_session
+from src.services.lead_enrichment import LeadEnrichmentService
 from src.utils.logging import get_logger
 
 logger = get_logger("leads")
 
 router = APIRouter(prefix="/leads", tags=["leads"])
-
-
-async def _match_restaurant(session: AsyncSession, company: str) -> Restaurant | None:
-    """Fuzzy match a lead's company name against the Restaurant table using pg_trgm."""
-    if not company:
-        return None
-    result = await session.execute(
-        select(Restaurant)
-        .where(func.similarity(Restaurant.name, company) > 0.4)
-        .order_by(func.similarity(Restaurant.name, company).desc())
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
-async def _enrich_lead(session: AsyncSession, lead: Lead) -> None:
-    """Attach ICP score data to a lead if a restaurant match exists."""
-    if not lead.restaurant_id:
-        return
-    result = await session.execute(
-        select(ICPScore).where(ICPScore.restaurant_id == lead.restaurant_id)
-    )
-    score = result.scalar_one_or_none()
-    if score:
-        lead.icp_score_id = score.id
-        lead.icp_fit_label = score.fit_label
 
 
 @router.post("", response_model=LeadResponse, status_code=201)
@@ -61,17 +36,12 @@ async def create_lead(payload: LeadCreate, session: AsyncSession = Depends(get_s
         utm_campaign=payload.utm_campaign,
     )
 
-    # Fuzzy match against restaurant database
-    restaurant = await _match_restaurant(session, payload.company)
-    if restaurant:
-        lead.restaurant_id = restaurant.id
-        logger.info("lead_matched_restaurant", lead_email=payload.email, restaurant=restaurant.name)
-
     session.add(lead)
     await session.flush()
 
-    # Enrich with ICP score
-    await _enrich_lead(session, lead)
+    # Match and enrich via enrichment service
+    enrichment = LeadEnrichmentService(session)
+    await enrichment.match_and_enrich(lead)
 
     logger.info(
         "lead_created",
@@ -80,6 +50,8 @@ async def create_lead(payload: LeadCreate, session: AsyncSession = Depends(get_s
         source=payload.source,
         matched=lead.restaurant_id is not None,
         icp_fit=lead.icp_fit_label,
+        icp_score=lead.icp_total_score,
+        confidence=lead.match_confidence,
     )
     return lead
 

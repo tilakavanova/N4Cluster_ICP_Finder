@@ -134,6 +134,15 @@ class LeadResponse(BaseModel):
     restaurant_id: UUID | None = None
     icp_score_id: UUID | None = None
     icp_fit_label: str | None = None
+    icp_total_score: float | None = None
+    matched_restaurant_name: str | None = None
+    match_confidence: float | None = None
+    is_independent: bool | None = None
+    has_delivery: bool | None = None
+    delivery_platforms: list[str] = []
+    has_pos: bool | None = None
+    pos_provider: str | None = None
+    geo_density_score: float | None = None
     hubspot_contact_id: str | None = None
     hubspot_deal_id: str | None = None
     utm_source: str | None = None
