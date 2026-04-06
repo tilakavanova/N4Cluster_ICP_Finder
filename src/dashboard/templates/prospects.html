@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Prospect Finder{% endblock %}
+
+{% block content %}
+<!-- Search form -->
+<div class="bg-white rounded-lg border border-slate-200 p-6 mb-6">
+  <h2 class="text-lg font-bold text-navy-950 mb-1">Prospect Finder</h2>
+  <p class="text-sm text-slate-500 mb-4">Find restaurants near a ZIP code ranked by ICP score. Export as CSV for outreach.</p>
+
+  <form method="get" action="/dashboard/prospects" class="flex flex-wrap items-end gap-4">
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">ZIP Code *</label>
+      <input type="text" name="zip_code" value="{{ filters.zip_code or '' }}" required
+        placeholder="e.g. 02115" maxlength="5" pattern="[0-9]{5}"
+        class="rounded-md border border-slate-300 text-sm px-3 py-2 w-28 font-mono">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Radius (miles)</label>
+      <div class="flex items-center gap-2">
+        <input type="range" name="radius" min="1" max="25" step="1"
+          value="{{ filters.radius or 5 }}" id="radiusSlider"
+          class="w-32 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+          oninput="document.getElementById('radiusValue').textContent=this.value">
+        <span id="radiusValue" class="text-sm font-medium text-navy-950 w-6">{{ filters.radius or 5 }}</span>
+        <span class="text-xs text-slate-500">mi</span>
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">Min ICP Score</label>
+      <input type="number" name="min_score" value="{{ filters.min_score or '' }}" placeholder="0"
+        min="0" max="100" class="rounded-md border border-slate-300 text-sm px-3 py-2 w-20">
+    </div>
+    <div class="flex items-center gap-4">
+      <label class="flex items-center gap-1.5 cursor-pointer">
+        <input type="checkbox" name="independent_only" value="1" {% if filters.independent_only %}checked{% endif %}
+          class="rounded border-slate-300 text-cobalt-500 focus:ring-cobalt-500">
+        <span class="text-sm text-slate-700">Independent only</span>
+      </label>
+      <label class="flex items-center gap-1.5 cursor-pointer">
+        <input type="checkbox" name="has_delivery" value="1" {% if filters.has_delivery %}checked{% endif %}
+          class="rounded border-slate-300 text-cobalt-500 focus:ring-cobalt-500">
+        <span class="text-sm text-slate-700">On delivery platforms</span>
+      </label>
+    </div>
+    <button type="submit" class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-sm font-semibold px-5 py-2 rounded-md transition-colors">
+      Search
+    </button>
+  </form>
+</div>
+
+{% if searched %}
+<!-- Stats -->
+<div class="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-4">
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-3">
+    <div class="text-xs font-medium text-slate-500 uppercase">Found</div>
+    <div class="text-xl font-bold text-navy-950 mt-0.5">{{ stats.total }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-3">
+    <div class="text-xs font-medium text-slate-500 uppercase">Excellent Fit</div>
+    <div class="text-xl font-bold text-green-600 mt-0.5">{{ stats.excellent }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-3">
+    <div class="text-xs font-medium text-slate-500 uppercase">Good Fit</div>
+    <div class="text-xl font-bold text-blue-600 mt-0.5">{{ stats.good }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-3">
+    <div class="text-xs font-medium text-slate-500 uppercase">Avg ICP Score</div>
+    <div class="text-xl font-bold text-teal-500 mt-0.5">{{ "%.1f"|format(stats.avg_score) if stats.avg_score else "—" }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-3">
+    <div class="text-xs font-medium text-slate-500 uppercase">Avg Distance</div>
+    <div class="text-xl font-bold text-navy-950 mt-0.5">{{ "%.1f"|format(stats.avg_distance) if stats.avg_distance else "—" }} mi</div>
+  </div>
+</div>
+
+<!-- Export button -->
+<div class="flex justify-between items-center mb-3">
+  <div class="text-sm text-slate-600">
+    Showing {{ prospects|length }} restaurants within {{ filters.radius or 5 }} miles of {{ filters.zip_code }}
+  </div>
+  {% if prospects %}
+  <a href="/dashboard/prospects/export?zip_code={{ filters.zip_code }}&radius={{ filters.radius or 5 }}&min_score={{ filters.min_score or '' }}&independent_only={{ '1' if filters.independent_only else '' }}&has_delivery={{ '1' if filters.has_delivery else '' }}"
+    class="inline-flex items-center gap-1.5 bg-navy-950 hover:bg-navy-900 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors">
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+    Export CSV for Outreach ({{ prospects|length }} restaurants)
+  </a>
+  {% endif %}
+</div>
+
+<!-- Results table -->
+<div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+  <table class="min-w-full divide-y divide-slate-200">
+    <thead class="bg-slate-50">
+      <tr>
+        <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Restaurant</th>
+        <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Distance</th>
+        <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">ICP Score</th>
+        <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Fit</th>
+        <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Indep.</th>
+        <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Delivery</th>
+        <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">POS</th>
+        <th class="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Contact</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in prospects %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-3 py-3">
+          <div class="text-sm font-medium text-navy-950">{{ p.name }}</div>
+          <div class="text-xs text-slate-500">{{ p.address or '' }}{% if p.city %}, {{ p.city }}{% endif %}{% if p.state %} {{ p.state }}{% endif %} {{ p.zip_code or '' }}</div>
+          {% if p.cuisine_type %}
+          <div class="flex flex-wrap gap-1 mt-1">
+            {% for c in p.cuisine_type[:2] %}<span class="bg-slate-100 text-slate-600 text-xs px-1 py-0.5 rounded">{{ c }}</span>{% endfor %}
+          </div>
+          {% endif %}
+        </td>
+        <td class="px-3 py-3 text-sm font-medium text-navy-950">{{ "%.1f"|format(p.distance) }} mi</td>
+        <td class="px-3 py-3">
+          {% if p.icp_score is not none %}
+          <div class="flex items-center gap-2">
+            <div class="w-12 bg-slate-100 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full
+                {% if p.icp_score >= 75 %}bg-green-500
+                {% elif p.icp_score >= 55 %}bg-blue-500
+                {% elif p.icp_score >= 35 %}bg-yellow-500
+                {% else %}bg-red-400{% endif %}"
+                style="width: {{ p.icp_score }}%"></div>
+            </div>
+            <span class="text-sm font-bold text-navy-950">{{ "%.0f"|format(p.icp_score) }}</span>
+          </div>
+          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+        </td>
+        <td class="px-3 py-3">
+          {% if p.fit_label and p.fit_label != 'unknown' %}
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+            {% if p.fit_label == 'excellent' %}bg-green-100 text-green-700
+            {% elif p.fit_label == 'good' %}bg-blue-100 text-blue-700
+            {% elif p.fit_label == 'moderate' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-red-100 text-red-700{% endif %}">
+            {{ p.fit_label|title }}
+          </span>
+          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+        </td>
+        <td class="px-3 py-3 text-center">
+          {% if p.is_independent %}<span class="text-green-600">&#10003;</span>
+          {% elif p.is_chain %}<span class="text-red-400">&#10007;</span>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </td>
+        <td class="px-3 py-3">
+          {% if p.delivery_platforms %}
+          <div class="flex flex-wrap gap-1">
+            {% for d in p.delivery_platforms %}<span class="bg-orange-50 text-orange-700 text-xs px-1 py-0.5 rounded">{{ d }}</span>{% endfor %}
+          </div>
+          {% else %}<span class="text-slate-300">—</span>{% endif %}
+        </td>
+        <td class="px-3 py-3 text-sm text-slate-600">
+          {% if p.pos_provider %}{{ p.pos_provider }}{% elif p.has_pos %}<span class="text-green-600">&#10003;</span>{% else %}<span class="text-slate-300">—</span>{% endif %}
+        </td>
+        <td class="px-3 py-3">
+          {% if p.phone %}<div class="text-xs text-slate-700">{{ p.phone }}</div>{% endif %}
+          {% if p.website %}<a href="{{ p.website }}" target="_blank" class="text-xs text-cobalt-500 hover:underline truncate block max-w-[120px]">{{ p.website|replace('https://','')|replace('http://','')|truncate(25) }}</a>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="8" class="px-4 py-12 text-center text-sm text-slate-500">
+          No restaurants found within {{ filters.radius or 5 }} miles of {{ filters.zip_code }}. Try a larger radius or run a crawl job for this area first.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif not searched %}
+<div class="bg-white rounded-lg border border-slate-200 p-12 text-center">
+  <div class="w-16 h-16 rounded-full bg-cobalt-500/10 flex items-center justify-center mx-auto mb-4">
+    <svg class="w-8 h-8 text-cobalt-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+    </svg>
+  </div>
+  <h3 class="text-lg font-bold text-navy-950 mb-1">Search for prospects</h3>
+  <p class="text-sm text-slate-500 max-w-md mx-auto">Enter a ZIP code to find restaurants in that area ranked by ICP score. Export the results as CSV for your outreach campaign.</p>
+</div>
+{% endif %}
+{% endblock %}

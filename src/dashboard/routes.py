@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.db.models import Lead, CrawlJob, Restaurant, ICPScore
 from src.db.session import get_session
+from src.utils.geo import haversine_miles, bounding_box
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -532,3 +533,199 @@ async def analytics_dashboard(
         active_tab="analytics",
     )
     return HTMLResponse(html)
+
+
+# ── Prospect Finder ─────────────────────────────────────────────
+
+
+async def _find_prospects(
+    session: AsyncSession,
+    zip_code: str,
+    radius: float,
+    min_score: float | None,
+    independent_only: bool,
+    has_delivery: bool,
+) -> list[dict]:
+    """Find restaurants near a ZIP code with ICP scores and distance."""
+    from sqlalchemy.orm import joinedload
+
+    # Get centroid for ZIP
+    centroid = await session.execute(
+        select(
+            func.avg(Restaurant.lat).label("lat"),
+            func.avg(Restaurant.lng).label("lng"),
+        ).where(
+            Restaurant.zip_code == zip_code,
+            Restaurant.lat.isnot(None),
+            Restaurant.lng.isnot(None),
+        )
+    )
+    row = centroid.one()
+    if not row.lat or not row.lng:
+        return []
+
+    center_lat, center_lng = float(row.lat), float(row.lng)
+    min_lat, max_lat, min_lng, max_lng = bounding_box(center_lat, center_lng, radius)
+
+    query = (
+        select(Restaurant)
+        .options(joinedload(Restaurant.icp_score))
+        .outerjoin(ICPScore)
+        .where(
+            Restaurant.lat.isnot(None),
+            Restaurant.lng.isnot(None),
+            Restaurant.lat.between(min_lat, max_lat),
+            Restaurant.lng.between(min_lng, max_lng),
+        )
+    )
+
+    if independent_only:
+        query = query.where(Restaurant.is_chain == False)
+    if has_delivery:
+        query = query.where(ICPScore.has_delivery == True)
+    if min_score is not None:
+        query = query.where(ICPScore.total_icp_score >= min_score)
+
+    result = await session.execute(query)
+    candidates = result.unique().scalars().all()
+
+    prospects = []
+    for r in candidates:
+        dist = haversine_miles(center_lat, center_lng, r.lat, r.lng)
+        if dist <= radius:
+            score = r.icp_score
+            prospects.append({
+                "id": r.id,
+                "name": r.name,
+                "address": r.address,
+                "city": r.city,
+                "state": r.state,
+                "zip_code": r.zip_code,
+                "phone": r.phone,
+                "website": r.website,
+                "cuisine_type": r.cuisine_type or [],
+                "is_chain": r.is_chain,
+                "is_independent": not r.is_chain if r.is_chain is not None else None,
+                "distance": round(dist, 1),
+                "icp_score": score.total_icp_score if score else None,
+                "fit_label": score.fit_label if score else None,
+                "has_delivery": score.has_delivery if score else None,
+                "delivery_platforms": score.delivery_platforms or [] if score else [],
+                "has_pos": score.has_pos if score else None,
+                "pos_provider": score.pos_provider if score else None,
+            })
+
+    # Sort by ICP score (desc), then distance (asc)
+    prospects.sort(key=lambda p: (-(p["icp_score"] or 0), p["distance"]))
+    return prospects
+
+
+@router.get("/prospects", response_class=HTMLResponse)
+async def prospect_finder(
+    request: Request,
+    zip_code: str = Query(""),
+    radius: int = Query(5, ge=1, le=25),
+    min_score: str = Query(""),
+    independent_only: str = Query(""),
+    has_delivery: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Prospect Finder — ZIP code proximity search with ICP ranking."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    filters = {
+        "zip_code": zip_code,
+        "radius": radius,
+        "min_score": min_score,
+        "independent_only": independent_only == "1",
+        "has_delivery": has_delivery == "1",
+    }
+
+    searched = bool(zip_code and len(zip_code) == 5)
+    prospects = []
+    stats = {}
+
+    if searched:
+        ms = None
+        if min_score:
+            try:
+                ms = float(min_score)
+            except ValueError:
+                pass
+
+        prospects = await _find_prospects(
+            session, zip_code, float(radius), ms,
+            filters["independent_only"], filters["has_delivery"],
+        )
+
+        scores = [p["icp_score"] for p in prospects if p["icp_score"] is not None]
+        distances = [p["distance"] for p in prospects]
+        stats = {
+            "total": len(prospects),
+            "excellent": sum(1 for p in prospects if p.get("fit_label") == "excellent"),
+            "good": sum(1 for p in prospects if p.get("fit_label") == "good"),
+            "avg_score": sum(scores) / len(scores) if scores else None,
+            "avg_distance": sum(distances) / len(distances) if distances else None,
+        }
+
+    html = templates.get_template("prospects.html").render(
+        prospects=prospects,
+        stats=stats,
+        filters=filters,
+        searched=searched,
+        active_tab="prospects",
+    )
+    return HTMLResponse(html)
+
+
+@router.get("/prospects/export")
+async def export_prospects_csv(
+    request: Request,
+    zip_code: str = Query(...),
+    radius: int = Query(5),
+    min_score: str = Query(""),
+    independent_only: str = Query(""),
+    has_delivery: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Export prospect search results as CSV for outreach."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    ms = None
+    if min_score:
+        try:
+            ms = float(min_score)
+        except ValueError:
+            pass
+
+    prospects = await _find_prospects(
+        session, zip_code, float(radius), ms,
+        independent_only == "1", has_delivery == "1",
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Name", "Address", "City", "State", "ZIP", "Phone", "Website",
+        "Distance (mi)", "ICP Score", "ICP Fit", "Independent",
+        "Delivery Platforms", "POS Provider", "Cuisines",
+    ])
+    for p in prospects:
+        writer.writerow([
+            p["name"], p["address"] or "", p["city"] or "", p["state"] or "",
+            p["zip_code"] or "", p["phone"] or "", p["website"] or "",
+            p["distance"], p["icp_score"] or "", p["fit_label"] or "",
+            "Yes" if p["is_independent"] else "No" if p["is_independent"] is not None else "",
+            ", ".join(p["delivery_platforms"]) if p["delivery_platforms"] else "",
+            p["pos_provider"] or "", ", ".join(p["cuisine_type"]),
+        ])
+
+    output.seek(0)
+    filename = f"prospects-{zip_code}-{radius}mi.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
