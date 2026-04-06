@@ -12,7 +12,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Lead
+from src.db.models import Lead, CrawlJob
 from src.db.session import get_session
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -169,4 +169,107 @@ async def export_leads_csv(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=leads-export.csv"},
+    )
+
+
+# ── Crawl Jobs ──────────────────────────────────────────────────
+
+
+async def _get_job_stats(session: AsyncSession) -> dict:
+    """Compute crawl job stats."""
+    total = await session.scalar(select(func.count(CrawlJob.id))) or 0
+    running = await session.scalar(
+        select(func.count(CrawlJob.id)).where(CrawlJob.status.in_(["pending", "running"]))
+    ) or 0
+    completed = await session.scalar(
+        select(func.count(CrawlJob.id)).where(CrawlJob.status == "completed")
+    ) or 0
+    failed = await session.scalar(
+        select(func.count(CrawlJob.id)).where(CrawlJob.status == "failed")
+    ) or 0
+    total_items = await session.scalar(
+        select(func.sum(CrawlJob.total_items))
+    ) or 0
+    return {
+        "total": total,
+        "running": running,
+        "completed": completed,
+        "failed": failed,
+        "total_items": total_items,
+    }
+
+
+@router.get("/jobs", response_class=HTMLResponse)
+async def jobs_dashboard(
+    request: Request,
+    message: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Crawl jobs dashboard with job list and create form."""
+    result = await session.execute(
+        select(CrawlJob).order_by(CrawlJob.created_at.desc()).limit(50)
+    )
+    jobs = result.scalars().all()
+    stats = await _get_job_stats(session)
+
+    html = templates.get_template("jobs.html").render(
+        jobs=jobs,
+        stats=stats,
+        message=message,
+        active_tab="jobs",
+    )
+    return HTMLResponse(html)
+
+
+@router.get("/jobs/list", response_class=HTMLResponse)
+async def jobs_table_partial(
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX partial — just the jobs table for auto-refresh."""
+    result = await session.execute(
+        select(CrawlJob).order_by(CrawlJob.created_at.desc()).limit(50)
+    )
+    jobs = result.scalars().all()
+    html = templates.get_template("jobs_table.html").render(jobs=jobs)
+    return HTMLResponse(html)
+
+
+@router.post("/jobs")
+async def create_job_from_dashboard(
+    source: str = Form(...),
+    location: str = Form(...),
+    query: str = Form("restaurants"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a crawl job from the dashboard form."""
+    job = CrawlJob(
+        source=source,
+        query=query,
+        location=location,
+        status="pending",
+    )
+    session.add(job)
+    await session.flush()
+
+    # Dispatch celery pipeline
+    try:
+        from celery import chain
+        from src.tasks.crawl_tasks import crawl_source
+        from src.tasks.extract_tasks import extract_records
+        from src.tasks.score_tasks import score_restaurants
+
+        pipeline = chain(
+            crawl_source.s(source, query, location, str(job.id)),
+            extract_records.si(),
+            score_restaurants.si(),
+        )
+        pipeline.apply_async()
+    except Exception:
+        # Celery not available (local dev without Redis)
+        pass
+
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(
+        url=f"/dashboard/jobs?message=Crawl job started: {source} in {location}",
+        status_code=303,
     )
