@@ -127,3 +127,14 @@ class CrawlJob(Base):
     started_at = Column(DateTime(timezone=True))
     finished_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    action = Column(String(50), nullable=False, index=True)
+    entity_type = Column(String(30))
+    details = Column(JSONB, default=dict)
+    performed_by = Column(Text, default="system")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)

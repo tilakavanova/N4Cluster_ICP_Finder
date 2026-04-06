@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     weight_reviews: float = 10.0
     scoring_version: int = 1
 
+    # Cleanup
+    crawl_job_retention_days: int = 30
+    stale_job_timeout_minutes: int = 60
+
     # LLM cost controls
     llm_daily_token_limit: int = 0  # 0 = unlimited. Set to e.g. 500000 for 500K tokens/day
 

@@ -14,8 +14,9 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.db.models import Lead, CrawlJob, Restaurant, ICPScore
+from src.db.models import Lead, CrawlJob, Restaurant, ICPScore, AuditLog
 from src.db.session import get_session
+from src.services.cleanup import CleanupService
 from src.utils.geo import haversine_miles, bounding_box
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -277,6 +278,7 @@ async def jobs_dashboard(
         jobs=jobs,
         stats=stats,
         message=message,
+        retention_days=settings.crawl_job_retention_days,
         active_tab="jobs",
     )
     return HTMLResponse(html)
@@ -338,6 +340,28 @@ async def create_job_from_dashboard(
     from fastapi.responses import RedirectResponse
     return RedirectResponse(
         url=f"/dashboard/jobs?message=Crawl job started: {source} in {location}",
+        status_code=303,
+    )
+
+
+@router.post("/jobs/cleanup")
+async def cleanup_jobs_from_dashboard(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Run cleanup from the dashboard."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+    service = CleanupService(session)
+    result = await service.run_full_cleanup(performed_by="dashboard")
+    msg = (
+        f"Cleanup complete: {result['jobs_deleted']} jobs deleted, "
+        f"{result['stale_marked']} stale marked, "
+        f"{result['orphans_cleaned']} orphans cleaned "
+        f"({result['elapsed_ms']}ms)"
+    )
+    return RedirectResponse(
+        url=f"/dashboard/jobs?message={msg}",
         status_code=303,
     )
 

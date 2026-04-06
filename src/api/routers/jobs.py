@@ -1,13 +1,15 @@
 """Crawl job management endpoints."""
 
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.auth import require_api_key
 from src.db.session import get_session
 from src.db.models import CrawlJob
 from src.api.schemas import CrawlJobCreate, CrawlJobResponse
+from src.services.cleanup import CleanupService
 from src.tasks.crawl_tasks import crawl_source
 from src.tasks.extract_tasks import extract_records
 from src.tasks.score_tasks import score_restaurants
@@ -67,3 +69,17 @@ async def get_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.delete("/cleanup", dependencies=[Depends(require_api_key)])
+async def cleanup_old_jobs(
+    max_age_days: int = Query(None, ge=1, le=365, description="Override retention period in days"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Delete old completed/failed jobs, mark stale jobs, clean orphaned records."""
+    service = CleanupService(session)
+    result = await service.run_full_cleanup(
+        max_age_days=max_age_days,
+        performed_by="api",
+    )
+    return result

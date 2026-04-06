@@ -12,6 +12,7 @@ celery_app = Celery(
         "src.tasks.crawl_tasks",
         "src.tasks.extract_tasks",
         "src.tasks.score_tasks",
+        "src.tasks.cleanup_tasks",
     ],
 )
 
@@ -40,6 +41,11 @@ celery_app.conf.beat_schedule = {
     "weekly-full-rescore": {
         "task": "src.tasks.score_tasks.rescore_all",
         "schedule": crontab(hour=4, minute=0, day_of_week=0),  # Sunday 4 AM
+        "args": (),
+    },
+    "daily-cleanup-old-jobs": {
+        "task": "cleanup_old_jobs",
+        "schedule": crontab(hour=3, minute=0),  # 3 AM UTC daily
         "args": (),
     },
 }
