@@ -1,6 +1,6 @@
 {#
-  ICP score popover for prospect results (dict-based, not ORM).
-  Required context: p (prospect dict with icp_score, fit_label, etc.)
+  ICP score popover for prospect results (dict-based).
+  Required context: p (prospect dict)
 #}
 {% if p.icp_score is not none %}
 <div class="icp-popover-trigger relative inline-block cursor-help group">
@@ -12,9 +12,9 @@
     {{ p.fit_label|title }} <span class="ml-1 opacity-70">{{ "%.0f"|format(p.icp_score) }}</span>
   </span>
 
-  <div class="icp-popover hidden group-hover:block absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-navy-950 text-white rounded-xl shadow-2xl border border-navy-800 p-4 text-xs"
+  <div class="icp-popover hidden group-hover:block absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 w-72 bg-navy-950 text-white rounded-xl shadow-2xl border border-navy-800 p-4 text-xs"
        style="pointer-events: auto;">
-    <div class="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-6 border-r-6 border-t-6 border-l-transparent border-r-transparent border-t-navy-950"></div>
+    <div class="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-6 border-r-6 border-b-6 border-l-transparent border-r-transparent border-b-navy-950"></div>
 
     <div class="flex items-center justify-between mb-3 pb-2 border-b border-navy-800">
       <span class="text-lg font-bold">{{ "%.1f"|format(p.icp_score) }}</span>
@@ -27,12 +27,88 @@
       </span>
     </div>
 
-    <div class="space-y-1.5">
-      <div class="flex justify-between"><span class="text-slate-400">Independent</span><span>{{ "Yes" if p.is_independent else "No" if p.is_independent is not none else "—" }}</span></div>
-      <div class="flex justify-between"><span class="text-slate-400">Delivery</span><span>{{ "Yes" if p.has_delivery else "No" }}</span></div>
-      {% if p.delivery_platforms %}<div class="flex flex-wrap gap-1">{% for d in p.delivery_platforms %}<span class="bg-navy-800 px-1 py-0.5 rounded">{{ d }}</span>{% endfor %}</div>{% endif %}
-      <div class="flex justify-between"><span class="text-slate-400">POS</span><span>{{ p.pos_provider or "—" }}</span></div>
-      <div class="flex justify-between"><span class="text-slate-400">Distance</span><span>{{ "%.1f"|format(p.distance) }} mi</span></div>
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 w-24">Independent</span>
+        <div class="flex-1 mx-2 bg-navy-800 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full {{ 'bg-green-500' if p.is_independent else 'bg-red-400' }}" style="width: {{ 100 if p.is_independent else 0 }}%"></div>
+        </div>
+        <span class="w-14 text-right font-medium">{{ "Yes" if p.is_independent else "No" }} <span class="text-slate-500">15%</span></span>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 w-24">Platforms</span>
+        <div class="flex-1 mx-2 bg-navy-800 rounded-full h-1.5">
+          {% set plat_count = p.delivery_platforms|length if p.delivery_platforms else 0 %}
+          <div class="h-1.5 rounded-full bg-cobalt-500" style="width: {{ ([plat_count / 3 * 100, 100] | min) | int }}%"></div>
+        </div>
+        <span class="w-14 text-right font-medium">{{ plat_count }} <span class="text-slate-500">20%</span></span>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 w-24">POS</span>
+        <div class="flex-1 mx-2 bg-navy-800 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full {{ 'bg-green-500' if p.has_pos else 'bg-slate-600' }}" style="width: {{ 100 if p.has_pos else 30 }}%"></div>
+        </div>
+        <span class="w-14 text-right font-medium">{{ p.pos_provider or "—" }} <span class="text-slate-500">12%</span></span>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 w-24">Density</span>
+        <div class="flex-1 mx-2 bg-navy-800 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full bg-teal-500" style="width: {{ ((p.geo_density or 0) * 100) | int }}%"></div>
+        </div>
+        <span class="w-14 text-right font-medium">{{ "%.0f"|format((p.geo_density or 0) * 100) }}% <span class="text-slate-500">12%</span></span>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 w-24">Volume</span>
+        <div class="flex-1 mx-2 bg-navy-800 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full bg-amber-500" style="width: {{ ((p.volume_proxy or 0) * 100) | int }}%"></div>
+        </div>
+        <span class="w-14 text-right font-medium">{{ "%.0f"|format((p.volume_proxy or 0) * 100) }}% <span class="text-slate-500">15%</span></span>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 w-24">Cuisine</span>
+        <div class="flex-1 mx-2 bg-navy-800 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full {{ 'bg-green-500' if (p.cuisine_fit or 1) > 0.5 else 'bg-red-400' }}" style="width: {{ ((p.cuisine_fit or 0.8) * 100) | int }}%"></div>
+        </div>
+        <span class="w-14 text-right font-medium">{{ "%.0f"|format((p.cuisine_fit or 0.8) * 100) }}% <span class="text-slate-500">10%</span></span>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 w-24">Price</span>
+        <div class="flex-1 mx-2 bg-navy-800 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full bg-cobalt-400" style="width: {{ ((p.price_point_fit or 0.7) * 100) | int }}%"></div>
+        </div>
+        <span class="w-14 text-right font-medium">{{ p.price_tier or "—" }} <span class="text-slate-500">8%</span></span>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400 w-24">Activity</span>
+        <div class="flex-1 mx-2 bg-navy-800 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full bg-teal-400" style="width: {{ ((p.engagement_recency or 0.3) * 100) | int }}%"></div>
+        </div>
+        <span class="w-14 text-right font-medium">{{ "%.0f"|format((p.engagement_recency or 0.3) * 100) }}% <span class="text-slate-500">8%</span></span>
+      </div>
+    </div>
+
+    {% if p.disqualifier_penalty and p.disqualifier_penalty > 0 %}
+    <div class="mt-3 pt-2 border-t border-navy-800 flex items-center justify-between text-red-400">
+      <span>Penalties</span>
+      <span class="font-bold">-{{ "%.0f"|format(p.disqualifier_penalty) }} pts</span>
+    </div>
+    {% endif %}
+
+    {% if p.delivery_platforms %}
+    <div class="mt-2 pt-2 border-t border-navy-800 flex flex-wrap gap-1">
+      {% for d in p.delivery_platforms %}<span class="bg-navy-800 px-1.5 py-0.5 rounded text-slate-300">{{ d }}</span>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="mt-2 pt-2 border-t border-navy-800 text-slate-500">
+      <span>{{ "%.1f"|format(p.distance) }} mi away</span>
     </div>
   </div>
 </div>

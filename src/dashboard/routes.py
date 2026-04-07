@@ -671,6 +671,13 @@ async def _find_prospects(
                 "delivery_platforms": score.delivery_platforms or [] if score else [],
                 "has_pos": score.has_pos if score else None,
                 "pos_provider": score.pos_provider if score else None,
+                "geo_density": score.geo_density_score if score else None,
+                "volume_proxy": score.volume_proxy if score else None,
+                "cuisine_fit": score.cuisine_fit if score else None,
+                "price_tier": score.price_tier if score else None,
+                "price_point_fit": score.price_point_fit if score else None,
+                "engagement_recency": score.engagement_recency if score else None,
+                "disqualifier_penalty": score.disqualifier_penalty if score else None,
             })
 
     # Sort by ICP score (desc), then distance (asc)
