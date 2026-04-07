@@ -168,7 +168,8 @@ class TestInlineCrawlFunction:
         mock_crawler.run = AsyncMock(return_value=[])
 
         with patch("src.api.routers.jobs.async_session", return_value=mock_context), \
-             patch("src.tasks.crawl_tasks._get_crawler", return_value=mock_crawler):
+             patch("src.tasks.crawl_tasks._get_crawler", return_value=mock_crawler), \
+             patch("src.api.routers.jobs._score_restaurants_inline", new_callable=AsyncMock, return_value=0):
             await _run_crawl_inline("google_maps", "restaurants", "Empty Town", job_id)
 
         assert mock_job.status == "completed"
@@ -197,7 +198,8 @@ class TestInlineCrawlFunction:
         ])
 
         with patch("src.api.routers.jobs.async_session", return_value=mock_context), \
-             patch("src.tasks.crawl_tasks._get_crawler", return_value=mock_crawler):
+             patch("src.tasks.crawl_tasks._get_crawler", return_value=mock_crawler), \
+             patch("src.api.routers.jobs._score_restaurants_inline", new_callable=AsyncMock, return_value=0):
             await _run_crawl_inline("google_maps", "restaurants", "Test", job_id)
 
         assert mock_job.status == "completed"

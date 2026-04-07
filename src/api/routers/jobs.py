@@ -21,6 +21,78 @@ logger = get_logger("jobs")
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
+async def _score_restaurants_inline(session: AsyncSession) -> int:
+    """Score all unscored restaurants. Runs after crawl."""
+    from src.scoring.icp_scorer import icp_scorer
+    from src.scoring.geo_density import compute_density_scores
+    from src.db.models import ICPScore, SourceRecord as SR
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    # Find restaurants without ICP scores
+    scored_ids = select(ICPScore.restaurant_id)
+    result = await session.execute(
+        select(Restaurant).where(Restaurant.id.notin_(scored_ids))
+    )
+    unscored = result.scalars().all()
+    if not unscored:
+        return 0
+
+    rest_ids = [r.id for r in unscored]
+    sr_result = await session.execute(select(SR).where(SR.restaurant_id.in_(rest_ids)))
+    all_records = sr_result.scalars().all()
+
+    sr_map = {}
+    for sr in all_records:
+        rid = str(sr.restaurant_id)
+        sr_map.setdefault(rid, []).append({
+            "source": sr.source,
+            "raw_data": sr.raw_data,
+            "extracted_data": sr.extracted_data,
+        })
+
+    rest_dicts = [
+        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng, "review_count": 0, "rating": 0.0}
+        for r in unscored
+    ]
+
+    density_scores = compute_density_scores(rest_dicts)
+    scores = icp_scorer.score_batch(rest_dicts, sr_map, density_scores)
+
+    for score in scores:
+        stmt = pg_insert(ICPScore).values(
+            restaurant_id=score["restaurant_id"],
+            is_independent=score["is_independent"],
+            has_delivery=score["has_delivery"],
+            delivery_platforms=score["delivery_platforms"],
+            has_pos=score["has_pos"],
+            pos_provider=score["pos_provider"],
+            geo_density_score=score["geo_density_score"],
+            review_volume=score["review_volume"],
+            rating_avg=score["rating_avg"],
+            total_icp_score=score["total_icp_score"],
+            fit_label=score["fit_label"],
+            scoring_version=score["scoring_version"],
+            scored_at=datetime.now(timezone.utc),
+        ).on_conflict_do_update(
+            index_elements=["restaurant_id"],
+            set_={
+                "total_icp_score": score["total_icp_score"],
+                "fit_label": score["fit_label"],
+                "is_independent": score["is_independent"],
+                "has_delivery": score["has_delivery"],
+                "delivery_platforms": score["delivery_platforms"],
+                "has_pos": score["has_pos"],
+                "pos_provider": score["pos_provider"],
+                "geo_density_score": score["geo_density_score"],
+                "scored_at": datetime.now(timezone.utc),
+            },
+        )
+        await session.execute(stmt)
+
+    await session.commit()
+    return len(scores)
+
+
 async def _run_crawl_inline(source: str, query: str, location: str, job_id: str):
     """Run crawl pipeline inline (no Celery). Used when Redis/workers unavailable."""
     from src.tasks.crawl_tasks import _get_crawler
@@ -102,6 +174,10 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
 
             await session.commit()
 
+            # Step 2: Score the crawled restaurants
+            scored = await _score_restaurants_inline(session)
+            logger.info("inline_scoring_complete", scored=scored)
+
             # Mark completed
             job = await session.get(CrawlJob, job_id)
             if job:
@@ -110,7 +186,7 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                 job.finished_at = datetime.now(timezone.utc)
                 await session.commit()
 
-            logger.info("inline_crawl_complete", source=source, items=count, job_id=job_id)
+            logger.info("inline_crawl_complete", source=source, items=count, scored=scored, job_id=job_id)
 
         except Exception as e:
             logger.error("inline_crawl_failed", source=source, error=str(e), job_id=job_id)
