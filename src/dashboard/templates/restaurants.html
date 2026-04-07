@@ -92,30 +92,10 @@
           </div>
           {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
         </td>
-        <td class="px-4 py-3">
+        <td class="px-4 py-3" colspan="2">
           {% if r.icp_score %}
-          <div class="flex items-center gap-2">
-            <div class="w-16 bg-slate-100 rounded-full h-1.5">
-              <div class="h-1.5 rounded-full
-                {% if r.icp_score.total_icp_score >= 75 %}bg-green-500
-                {% elif r.icp_score.total_icp_score >= 55 %}bg-blue-500
-                {% elif r.icp_score.total_icp_score >= 35 %}bg-yellow-500
-                {% else %}bg-red-400{% endif %}"
-                style="width: {{ r.icp_score.total_icp_score }}%"></div>
-            </div>
-            <span class="text-sm font-medium text-navy-950">{{ "%.0f"|format(r.icp_score.total_icp_score) }}</span>
-          </div>
-          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
-        </td>
-        <td class="px-4 py-3">
-          {% if r.icp_score %}
-          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-            {% if r.icp_score.fit_label == 'excellent' %}bg-green-100 text-green-700
-            {% elif r.icp_score.fit_label == 'good' %}bg-blue-100 text-blue-700
-            {% elif r.icp_score.fit_label == 'moderate' %}bg-yellow-100 text-yellow-700
-            {% else %}bg-red-100 text-red-700{% endif %}">
-            {{ r.icp_score.fit_label|title }}
-          </span>
+            {% set score_obj = r.icp_score %}
+            {% include "partials/score_popover.html" %}
           {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
         </td>
         <td class="px-4 py-3 text-center">

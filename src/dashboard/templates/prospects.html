@@ -115,31 +115,8 @@
           {% endif %}
         </td>
         <td class="px-3 py-3 text-sm font-medium text-navy-950">{{ "%.1f"|format(p.distance) }} mi</td>
-        <td class="px-3 py-3">
-          {% if p.icp_score is not none %}
-          <div class="flex items-center gap-2">
-            <div class="w-12 bg-slate-100 rounded-full h-1.5">
-              <div class="h-1.5 rounded-full
-                {% if p.icp_score >= 75 %}bg-green-500
-                {% elif p.icp_score >= 55 %}bg-blue-500
-                {% elif p.icp_score >= 35 %}bg-yellow-500
-                {% else %}bg-red-400{% endif %}"
-                style="width: {{ p.icp_score }}%"></div>
-            </div>
-            <span class="text-sm font-bold text-navy-950">{{ "%.0f"|format(p.icp_score) }}</span>
-          </div>
-          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
-        </td>
-        <td class="px-3 py-3">
-          {% if p.fit_label and p.fit_label != 'unknown' %}
-          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-            {% if p.fit_label == 'excellent' %}bg-green-100 text-green-700
-            {% elif p.fit_label == 'good' %}bg-blue-100 text-blue-700
-            {% elif p.fit_label == 'moderate' %}bg-yellow-100 text-yellow-700
-            {% else %}bg-red-100 text-red-700{% endif %}">
-            {{ p.fit_label|title }}
-          </span>
-          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+        <td class="px-3 py-3" colspan="2">
+          {% include "partials/prospect_score_popover.html" %}
         </td>
         <td class="px-3 py-3 text-center">
           {% if p.is_independent %}<span class="text-green-600">&#10003;</span>

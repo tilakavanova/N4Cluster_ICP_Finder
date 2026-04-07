@@ -1,0 +1,53 @@
+{#
+  ICP score popover for leads — uses lead's enrichment fields directly.
+  Required context: lead (Lead model instance)
+#}
+{% if lead.icp_fit_label %}
+<div class="icp-popover-trigger relative inline-block cursor-help group">
+  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+    {% if lead.icp_fit_label == 'excellent' %}bg-green-100 text-green-700
+    {% elif lead.icp_fit_label == 'good' %}bg-blue-100 text-blue-700
+    {% elif lead.icp_fit_label == 'moderate' %}bg-yellow-100 text-yellow-700
+    {% else %}bg-red-100 text-red-700{% endif %}">
+    {{ lead.icp_fit_label|title }}
+    {% if lead.icp_total_score %}<span class="ml-1 opacity-70">{{ "%.0f"|format(lead.icp_total_score) }}</span>{% endif %}
+  </span>
+
+  <div class="icp-popover hidden group-hover:block absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-navy-950 text-white rounded-xl shadow-2xl border border-navy-800 p-4 text-xs"
+       style="pointer-events: auto;">
+    <div class="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-6 border-r-6 border-t-6 border-l-transparent border-r-transparent border-t-navy-950"></div>
+
+    <div class="flex items-center justify-between mb-3 pb-2 border-b border-navy-800">
+      <div>
+        <span class="text-lg font-bold">{{ "%.1f"|format(lead.icp_total_score or 0) }}</span>
+        <span class="ml-1 text-xs opacity-60">/ 100</span>
+      </div>
+      <span class="rounded-full px-2 py-0.5 text-xs font-semibold
+        {% if lead.icp_fit_label == 'excellent' %}bg-green-500/20 text-green-400
+        {% elif lead.icp_fit_label == 'good' %}bg-blue-500/20 text-blue-400
+        {% elif lead.icp_fit_label == 'moderate' %}bg-yellow-500/20 text-yellow-400
+        {% else %}bg-red-500/20 text-red-400{% endif %}">
+        {{ lead.icp_fit_label|title }}
+      </span>
+    </div>
+
+    <div class="space-y-1.5">
+      <div class="flex justify-between"><span class="text-slate-400">Independent</span><span>{{ "Yes" if lead.is_independent else "No" if lead.is_independent is not none else "—" }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-400">Delivery</span><span>{{ "Yes" if lead.has_delivery else "No" if lead.has_delivery is not none else "—" }}</span></div>
+      {% if lead.delivery_platforms %}<div class="flex flex-wrap gap-1">{% for p in lead.delivery_platforms %}<span class="bg-navy-800 px-1 py-0.5 rounded">{{ p }}</span>{% endfor %}</div>{% endif %}
+      <div class="flex justify-between"><span class="text-slate-400">POS</span><span>{{ lead.pos_provider or ("Yes" if lead.has_pos else "—") }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-400">Geo Density</span><span>{{ "%.0f"|format((lead.geo_density_score or 0) * 100) }}%</span></div>
+    </div>
+
+    {% if lead.matched_restaurant_name %}
+    <div class="mt-2 pt-2 border-t border-navy-800">
+      <div class="text-slate-400">Matched</div>
+      <div class="font-medium">{{ lead.matched_restaurant_name }}</div>
+      <div class="text-slate-500">{{ "%.0f"|format((lead.match_confidence or 0) * 100) }}% confidence</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<span class="text-xs text-slate-400">—</span>
+{% endif %}

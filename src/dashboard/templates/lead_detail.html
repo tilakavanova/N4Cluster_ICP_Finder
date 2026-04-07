@@ -143,6 +143,30 @@
         </div>
       </div>
     </div>
+
+    <!-- Activity / Audit Log -->
+    <div class="bg-white rounded-lg border border-slate-200 p-6">
+      <h3 class="text-sm font-semibold text-slate-700 mb-3">Activity Log</h3>
+      {% if audit_logs %}
+      <div class="space-y-2">
+        {% for log in audit_logs %}
+        <div class="flex items-start gap-2 text-xs">
+          <div class="w-1.5 h-1.5 rounded-full bg-cobalt-500 mt-1.5 flex-shrink-0"></div>
+          <div>
+            {% if log.action == 'lead_status_changed' %}
+            <span class="text-slate-700">Status changed: <strong>{{ log.details.get('old_status', '?') }}</strong> → <strong>{{ log.details.get('new_status', '?') }}</strong></span>
+            {% else %}
+            <span class="text-slate-700">{{ log.action|replace("_", " ")|title }}</span>
+            {% endif %}
+            <div class="text-slate-400">{{ log.created_at.strftime('%b %d, %Y %I:%M %p') }} · {{ log.performed_by }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-xs text-slate-500">No activity recorded yet.</p>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

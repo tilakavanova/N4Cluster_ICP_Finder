@@ -1,0 +1,39 @@
+{#
+  ICP score popover for prospect results (dict-based, not ORM).
+  Required context: p (prospect dict with icp_score, fit_label, etc.)
+#}
+{% if p.icp_score is not none %}
+<div class="icp-popover-trigger relative inline-block cursor-help group">
+  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+    {% if p.fit_label == 'excellent' %}bg-green-100 text-green-700
+    {% elif p.fit_label == 'good' %}bg-blue-100 text-blue-700
+    {% elif p.fit_label == 'moderate' %}bg-yellow-100 text-yellow-700
+    {% else %}bg-red-100 text-red-700{% endif %}">
+    {{ p.fit_label|title }} <span class="ml-1 opacity-70">{{ "%.0f"|format(p.icp_score) }}</span>
+  </span>
+
+  <div class="icp-popover hidden group-hover:block absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-navy-950 text-white rounded-xl shadow-2xl border border-navy-800 p-4 text-xs"
+       style="pointer-events: auto;">
+    <div class="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-6 border-r-6 border-t-6 border-l-transparent border-r-transparent border-t-navy-950"></div>
+
+    <div class="flex items-center justify-between mb-3 pb-2 border-b border-navy-800">
+      <span class="text-lg font-bold">{{ "%.1f"|format(p.icp_score) }}</span>
+      <span class="rounded-full px-2 py-0.5 text-xs font-semibold
+        {% if p.fit_label == 'excellent' %}bg-green-500/20 text-green-400
+        {% elif p.fit_label == 'good' %}bg-blue-500/20 text-blue-400
+        {% elif p.fit_label == 'moderate' %}bg-yellow-500/20 text-yellow-400
+        {% else %}bg-red-500/20 text-red-400{% endif %}">
+        {{ p.fit_label|title }}
+      </span>
+    </div>
+
+    <div class="space-y-1.5">
+      <div class="flex justify-between"><span class="text-slate-400">Independent</span><span>{{ "Yes" if p.is_independent else "No" if p.is_independent is not none else "—" }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-400">Delivery</span><span>{{ "Yes" if p.has_delivery else "No" }}</span></div>
+      {% if p.delivery_platforms %}<div class="flex flex-wrap gap-1">{% for d in p.delivery_platforms %}<span class="bg-navy-800 px-1 py-0.5 rounded">{{ d }}</span>{% endfor %}</div>{% endif %}
+      <div class="flex justify-between"><span class="text-slate-400">POS</span><span>{{ p.pos_provider or "—" }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-400">Distance</span><span>{{ "%.1f"|format(p.distance) }} mi</span></div>
+    </div>
+  </div>
+</div>
+{% else %}<span class="text-xs text-slate-400">—</span>{% endif %}

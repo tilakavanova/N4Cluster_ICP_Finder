@@ -161,8 +161,19 @@ async def lead_detail(
     if not lead:
         return HTMLResponse("<h1>Lead not found</h1>", status_code=404)
 
+    # Fetch audit logs for this lead
+    audit_result = await session.execute(
+        select(AuditLog)
+        .where(AuditLog.entity_type == "lead")
+        .where(AuditLog.details["lead_id"].astext == str(lead_id))
+        .order_by(AuditLog.created_at.desc())
+        .limit(20)
+    )
+    audit_logs = audit_result.scalars().all()
+
     html = templates.get_template("lead_detail.html").render(
         lead=lead,
+        audit_logs=audit_logs,
         active_tab="leads",
     )
     return HTMLResponse(html)
@@ -182,7 +193,19 @@ async def update_lead_status(
     lead = result.scalar_one_or_none()
     if not lead:
         return HTMLResponse("Not found", status_code=404)
+    old_status = lead.status
     lead.status = status
+
+    # Write audit log for status change
+    if old_status != status:
+        audit = AuditLog(
+            action="lead_status_changed",
+            entity_type="lead",
+            details={"lead_id": str(lead_id), "old_status": old_status, "new_status": status, "email": lead.email},
+            performed_by="dashboard",
+        )
+        session.add(audit)
+
     return HTMLResponse("", status_code=200)
 
 
