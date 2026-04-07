@@ -35,13 +35,16 @@ class Settings(BaseSettings):
     crawl_retry_backoff: float = 2.0
     rate_limit_per_second: float = 1.0
 
-    # Scoring weights (must sum to 100)
-    weight_independent: float = 30.0
-    weight_delivery: float = 25.0
-    weight_pos: float = 20.0
-    weight_density: float = 15.0
-    weight_reviews: float = 10.0
-    scoring_version: int = 1
+    # Scoring weights v2 (must sum to 100)
+    weight_independent: float = 15.0
+    weight_platform_dependency: float = 20.0
+    weight_pos: float = 12.0
+    weight_density: float = 12.0
+    weight_volume: float = 15.0
+    weight_cuisine_fit: float = 10.0
+    weight_price_point: float = 8.0
+    weight_engagement: float = 8.0
+    scoring_version: int = 2
 
     # Crawl execution mode
     use_celery: bool = False  # Set to true only if Celery workers are running

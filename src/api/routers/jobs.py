@@ -21,6 +21,32 @@ logger = get_logger("jobs")
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
+def _build_score_values(score: dict) -> dict:
+    """Build values dict for ICPScore upsert with all v2 fields."""
+    return {
+        "restaurant_id": score["restaurant_id"],
+        "is_independent": score["is_independent"],
+        "has_delivery": score["has_delivery"],
+        "delivery_platforms": score["delivery_platforms"],
+        "delivery_platform_count": score.get("delivery_platform_count", 0),
+        "has_pos": score["has_pos"],
+        "pos_provider": score["pos_provider"],
+        "geo_density_score": score["geo_density_score"],
+        "review_volume": score["review_volume"],
+        "rating_avg": score["rating_avg"],
+        "volume_proxy": score.get("volume_proxy", 0.0),
+        "cuisine_fit": score.get("cuisine_fit", 1.0),
+        "price_tier": score.get("price_tier"),
+        "price_point_fit": score.get("price_point_fit", 0.7),
+        "engagement_recency": score.get("engagement_recency", 0.3),
+        "disqualifier_penalty": score.get("disqualifier_penalty", 0.0),
+        "total_icp_score": score["total_icp_score"],
+        "fit_label": score["fit_label"],
+        "scoring_version": score["scoring_version"],
+        "scored_at": datetime.now(timezone.utc),
+    }
+
+
 async def _score_restaurants_inline(session: AsyncSession) -> int:
     """Score all unscored restaurants. Runs after crawl."""
     from src.scoring.icp_scorer import icp_scorer
@@ -59,33 +85,10 @@ async def _score_restaurants_inline(session: AsyncSession) -> int:
     scores = icp_scorer.score_batch(rest_dicts, sr_map, density_scores)
 
     for score in scores:
-        stmt = pg_insert(ICPScore).values(
-            restaurant_id=score["restaurant_id"],
-            is_independent=score["is_independent"],
-            has_delivery=score["has_delivery"],
-            delivery_platforms=score["delivery_platforms"],
-            has_pos=score["has_pos"],
-            pos_provider=score["pos_provider"],
-            geo_density_score=score["geo_density_score"],
-            review_volume=score["review_volume"],
-            rating_avg=score["rating_avg"],
-            total_icp_score=score["total_icp_score"],
-            fit_label=score["fit_label"],
-            scoring_version=score["scoring_version"],
-            scored_at=datetime.now(timezone.utc),
-        ).on_conflict_do_update(
+        values = _build_score_values(score)
+        stmt = pg_insert(ICPScore).values(**values).on_conflict_do_update(
             index_elements=["restaurant_id"],
-            set_={
-                "total_icp_score": score["total_icp_score"],
-                "fit_label": score["fit_label"],
-                "is_independent": score["is_independent"],
-                "has_delivery": score["has_delivery"],
-                "delivery_platforms": score["delivery_platforms"],
-                "has_pos": score["has_pos"],
-                "pos_provider": score["pos_provider"],
-                "geo_density_score": score["geo_density_score"],
-                "scored_at": datetime.now(timezone.utc),
-            },
+            set_={k: v for k, v in values.items() if k != "restaurant_id"},
         )
         await session.execute(stmt)
 

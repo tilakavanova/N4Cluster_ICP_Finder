@@ -101,7 +101,8 @@ async def recalculate_scores(
         })
 
     rest_dicts = [
-        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng, "review_count": 0, "rating": 0.0}
+        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng,
+         "cuisine_type": r.cuisine_type or [], "review_count": 0, "rating": 0.0}
         for r in restaurants
     ]
 
@@ -109,33 +110,31 @@ async def recalculate_scores(
     scores = icp_scorer.score_batch(rest_dicts, sr_map, density_scores)
 
     for score in scores:
-        stmt = pg_insert(ICPScore).values(
-            restaurant_id=score["restaurant_id"],
-            is_independent=score["is_independent"],
-            has_delivery=score["has_delivery"],
-            delivery_platforms=score["delivery_platforms"],
-            has_pos=score["has_pos"],
-            pos_provider=score["pos_provider"],
-            geo_density_score=score["geo_density_score"],
-            review_volume=score["review_volume"],
-            rating_avg=score["rating_avg"],
-            total_icp_score=score["total_icp_score"],
-            fit_label=score["fit_label"],
-            scoring_version=score["scoring_version"],
-            scored_at=datetime.now(timezone.utc),
-        ).on_conflict_do_update(
+        values = {
+            "restaurant_id": score["restaurant_id"],
+            "is_independent": score["is_independent"],
+            "has_delivery": score["has_delivery"],
+            "delivery_platforms": score["delivery_platforms"],
+            "delivery_platform_count": score.get("delivery_platform_count", 0),
+            "has_pos": score["has_pos"],
+            "pos_provider": score["pos_provider"],
+            "geo_density_score": score["geo_density_score"],
+            "review_volume": score["review_volume"],
+            "rating_avg": score["rating_avg"],
+            "volume_proxy": score.get("volume_proxy", 0.0),
+            "cuisine_fit": score.get("cuisine_fit", 1.0),
+            "price_tier": score.get("price_tier"),
+            "price_point_fit": score.get("price_point_fit", 0.7),
+            "engagement_recency": score.get("engagement_recency", 0.3),
+            "disqualifier_penalty": score.get("disqualifier_penalty", 0.0),
+            "total_icp_score": score["total_icp_score"],
+            "fit_label": score["fit_label"],
+            "scoring_version": score["scoring_version"],
+            "scored_at": datetime.now(timezone.utc),
+        }
+        stmt = pg_insert(ICPScore).values(**values).on_conflict_do_update(
             index_elements=["restaurant_id"],
-            set_={
-                "total_icp_score": score["total_icp_score"],
-                "fit_label": score["fit_label"],
-                "is_independent": score["is_independent"],
-                "has_delivery": score["has_delivery"],
-                "delivery_platforms": score["delivery_platforms"],
-                "has_pos": score["has_pos"],
-                "pos_provider": score["pos_provider"],
-                "geo_density_score": score["geo_density_score"],
-                "scored_at": datetime.now(timezone.utc),
-            },
+            set_={k: v for k, v in values.items() if k != "restaurant_id"},
         )
         await session.execute(stmt)
 

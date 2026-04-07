@@ -15,7 +15,11 @@ class TestConfig:
 
     def test_scoring_weights_sum_to_100(self):
         s = Settings(database_url="postgresql+asyncpg://localhost/test")
-        total = s.weight_independent + s.weight_delivery + s.weight_pos + s.weight_density + s.weight_reviews
+        total = (
+            s.weight_independent + s.weight_platform_dependency + s.weight_pos
+            + s.weight_density + s.weight_volume + s.weight_cuisine_fit
+            + s.weight_price_point + s.weight_engagement
+        )
         assert total == 100.0
 
     def test_async_database_url_conversion(self):

@@ -31,12 +31,14 @@ class TestICPScorer:
         assert result["is_chain"] is True
         assert result["total_icp_score"] < 70
 
-    def test_minimal_restaurant_gets_independence_score(self):
+    def test_minimal_restaurant_with_no_delivery_penalized(self):
+        """Independent restaurant with no delivery gets -20 penalty (no delivery disqualifier)."""
         restaurant = {"name": "Unknown Place", "review_count": 0, "rating": 0.0}
         result = self.scorer.score_restaurant(restaurant, [], density_score=0.0)
         assert result["is_independent"] is True
-        # Independence (30) + small review signal from normalize_review_signal(0, 0)
-        assert 29.0 <= result["total_icp_score"] <= 31.0
+        # No delivery = -20 penalty, low reviews (<10) = -10 penalty
+        assert result["disqualifier_penalty"] >= 20.0
+        assert result["total_icp_score"] < 30
         assert result["fit_label"] == "poor"
 
     def test_score_range_0_to_100(self):
