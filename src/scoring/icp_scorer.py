@@ -80,7 +80,7 @@ class ICPScorer:
 
         # Signal 8: Engagement/Recency (8%)
         latest_review = restaurant.get("latest_review_date")
-        engagement_signal = engagement_recency_score(latest_review)
+        engagement_signal = engagement_recency_score(review_count, rating, latest_review)
 
         # Weighted composite score (0-100)
         total_score = (

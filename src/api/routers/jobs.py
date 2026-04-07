@@ -235,8 +235,34 @@ async def create_crawl_job(
     job_id = str(job.id)
     await session.commit()
 
-    if settings.use_celery:
-        # Dispatch to Celery workers
+    if job_in.source == "all":
+        # Multi-source crawl: run google_maps, yelp, delivery sequentially
+        total_items = 0
+        async with async_session() as s:
+            j = await s.get(CrawlJob, job.id)
+            if j:
+                j.status = "running"
+                j.started_at = datetime.now(timezone.utc)
+                await s.commit()
+
+        for src in ["google_maps", "yelp", "delivery"]:
+            try:
+                await _run_crawl_inline(src, job_in.query, job_in.location, None)
+                logger.info("multi_source_step_complete", source=src, location=job_in.location)
+            except Exception as e:
+                logger.warning("multi_source_step_failed", source=src, error=str(e))
+
+        # Score after all sources complete
+        async with async_session() as s:
+            scored = await _score_restaurants_inline(s)
+            j = await s.get(CrawlJob, job.id)
+            if j:
+                j.status = "completed"
+                j.total_items = scored
+                j.finished_at = datetime.now(timezone.utc)
+                await s.commit()
+        logger.info("multi_source_crawl_complete", location=job_in.location, scored=scored)
+    elif settings.use_celery:
         try:
             from celery import chain
             from src.tasks.crawl_tasks import crawl_source
@@ -253,7 +279,6 @@ async def create_crawl_job(
         except Exception as e:
             logger.error("celery_dispatch_failed", error=str(e), job_id=job_id)
     else:
-        # Run crawl inline (synchronous, blocks until done)
         await _run_crawl_inline(job_in.source, job_in.query, job_in.location, job_id)
         logger.info("crawl_completed_inline", job_id=job_id)
 

@@ -220,27 +220,49 @@ def price_point_score(price_tier: str | None) -> float:
 # ── Signal 8: Engagement/Recency (8%) ────────────────────────
 
 
-def engagement_recency_score(latest_review_date: datetime | None = None) -> float:
-    """Score based on recency of activity. Recent activity = active business.
+def engagement_recency_score(
+    review_count: int = 0,
+    rating: float = 0.0,
+    latest_review_date: datetime | None = None,
+) -> float:
+    """Score based on engagement signals. Uses review velocity as primary proxy.
 
     ICP doc: "Strong neighborhood presence", "Repeat customer base".
+    Restaurants with high review counts are demonstrably active businesses.
+
+    Falls back to review date if available (future-proofing for Yelp data).
     """
-    if not latest_review_date:
-        return 0.3  # Unknown = low confidence
+    # If we have a review date, use it (future: Yelp review dates)
+    if latest_review_date:
+        now = datetime.now(timezone.utc)
+        if latest_review_date.tzinfo is None:
+            latest_review_date = latest_review_date.replace(tzinfo=timezone.utc)
+        days_ago = (now - latest_review_date).days
+        if days_ago <= 30:
+            return 1.0
+        elif days_ago <= 90:
+            return 0.7
+        elif days_ago <= 180:
+            return 0.4
+        return 0.1
 
-    now = datetime.now(timezone.utc)
-    if latest_review_date.tzinfo is None:
-        latest_review_date = latest_review_date.replace(tzinfo=timezone.utc)
+    # Primary: review velocity (count = proxy for ongoing activity)
+    if review_count >= 500:
+        score = 1.0
+    elif review_count >= 200:
+        score = 0.8
+    elif review_count >= 50:
+        score = 0.6
+    elif review_count >= 10:
+        score = 0.4
+    else:
+        return 0.1
 
-    days_ago = (now - latest_review_date).days
+    # Boost for high-rated active restaurants
+    if rating >= 4.5 and review_count >= 100:
+        score = min(score + 0.1, 1.0)
 
-    if days_ago <= 30:
-        return 1.0
-    elif days_ago <= 90:
-        return 0.7
-    elif days_ago <= 180:
-        return 0.4
-    return 0.1
+    return score
 
 
 # ── Disqualifiers ────────────────────────────────────────────

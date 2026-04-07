@@ -158,24 +158,35 @@ class TestPricePoint:
 
 
 class TestEngagementRecency:
-    def test_recent_review(self):
+    def test_high_review_count(self):
+        assert engagement_recency_score(review_count=1000) == 1.0
+
+    def test_medium_review_count(self):
+        assert engagement_recency_score(review_count=200) == 0.8
+
+    def test_low_review_count(self):
+        assert engagement_recency_score(review_count=50) == 0.6
+
+    def test_very_low_review_count(self):
+        assert engagement_recency_score(review_count=10) == 0.4
+
+    def test_no_reviews(self):
+        assert engagement_recency_score(review_count=0) == 0.1
+
+    def test_high_rating_boost(self):
+        """4.5+ rating with 100+ reviews gets +0.1 boost."""
+        base = engagement_recency_score(review_count=200, rating=4.0)
+        boosted = engagement_recency_score(review_count=200, rating=4.5)
+        assert boosted > base
+
+    def test_review_date_overrides_count(self):
+        """If review date is available, it takes precedence."""
         recent = datetime.now(timezone.utc) - timedelta(days=5)
-        assert engagement_recency_score(recent) == 1.0
+        assert engagement_recency_score(review_count=0, latest_review_date=recent) == 1.0
 
-    def test_review_60_days(self):
-        d = datetime.now(timezone.utc) - timedelta(days=60)
-        assert engagement_recency_score(d) == 0.7
-
-    def test_review_120_days(self):
-        d = datetime.now(timezone.utc) - timedelta(days=120)
-        assert engagement_recency_score(d) == 0.4
-
-    def test_old_review(self):
-        d = datetime.now(timezone.utc) - timedelta(days=365)
-        assert engagement_recency_score(d) == 0.1
-
-    def test_no_review_date(self):
-        assert engagement_recency_score(None) == 0.3
+    def test_old_review_date(self):
+        old = datetime.now(timezone.utc) - timedelta(days=365)
+        assert engagement_recency_score(review_count=1000, latest_review_date=old) == 0.1
 
 
 class TestDisqualifiers:

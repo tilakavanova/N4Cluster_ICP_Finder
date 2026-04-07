@@ -345,37 +345,49 @@ async def create_job_from_dashboard(
     job_id = str(job.id)
     await session.commit()
 
-    if settings.use_celery:
-        try:
-            from celery import chain
-            from src.tasks.crawl_tasks import crawl_source
-            from src.tasks.extract_tasks import extract_records
-            from src.tasks.score_tasks import score_restaurants
+    from src.api.routers.jobs import _run_crawl_inline, _score_restaurants_inline
+    from src.db.session import async_session as async_session_factory
 
-            pipeline = chain(
-                crawl_source.s(source, query, location, job_id),
-                extract_records.si(),
-                score_restaurants.si(),
-            )
-            pipeline.apply_async()
-        except Exception:
-            pass
+    if source == "all":
+        # Multi-source: run google_maps, yelp, delivery sequentially
+        job.status = "running"
+        job.started_at = datetime.now(timezone.utc)
+        await session.commit()
+
+        for src in ["google_maps", "yelp", "delivery"]:
+            try:
+                await _run_crawl_inline(src, query, location, None)
+            except Exception:
+                pass
+
+        # Final score
+        async with async_session_factory() as s:
+            scored = await _score_restaurants_inline(s)
+            j = await s.get(CrawlJob, job.id)
+            if j:
+                j.status = "completed"
+                j.total_items = scored
+                j.finished_at = datetime.now(timezone.utc)
+                await s.commit()
+            items = scored
+
+        return RedirectResponse(
+            url=f"/dashboard/jobs?message=Full crawl completed: {location} — {items} restaurants scored from 3 sources",
+            status_code=303,
+        )
     else:
-        from src.api.routers.jobs import _run_crawl_inline
         await _run_crawl_inline(source, query, location, job_id)
 
-    # Re-fetch job to get final status
-    from src.db.session import async_session as async_session_factory
-    async with async_session_factory() as fresh:
-        result = await fresh.execute(select(CrawlJob).where(CrawlJob.id == job.id))
-        final_job = result.scalar_one_or_none()
-        items = final_job.total_items if final_job else 0
-        status = final_job.status if final_job else "unknown"
+        async with async_session_factory() as fresh:
+            result = await fresh.execute(select(CrawlJob).where(CrawlJob.id == job.id))
+            final_job = result.scalar_one_or_none()
+            items = final_job.total_items if final_job else 0
+            status = final_job.status if final_job else "unknown"
 
-    return RedirectResponse(
-        url=f"/dashboard/jobs?message=Crawl completed: {source} in {location} — {items} restaurants found ({status})",
-        status_code=303,
-    )
+        return RedirectResponse(
+            url=f"/dashboard/jobs?message=Crawl completed: {source} in {location} — {items} restaurants found ({status})",
+            status_code=303,
+        )
 
 
 @router.post("/jobs/cleanup")
