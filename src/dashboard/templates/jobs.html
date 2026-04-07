@@ -44,6 +44,18 @@
       </div>
     </div>
 
+    <!-- Website Enrichment -->
+    <div class="bg-white rounded-lg border border-slate-200 p-6 mt-4">
+      <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Enrichment</h3>
+      <p class="text-xs text-slate-500 mb-3">Crawl restaurant websites to detect POS systems (Toast, Square, Clover etc.) and chain indicators.</p>
+      <form method="post" action="/dashboard/jobs/enrich-websites"
+        onsubmit="return confirm('Enrich up to 50 restaurant websites? This takes 1-2 minutes.')">
+        <button type="submit" class="w-full bg-teal-50 hover:bg-teal-100 text-teal-700 text-sm font-medium px-4 py-2 rounded-md border border-teal-200 transition-colors">
+          Enrich Websites (POS Detection)
+        </button>
+      </form>
+    </div>
+
     <!-- Cleanup -->
     <div class="bg-white rounded-lg border border-slate-200 p-6 mt-4">
       <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Maintenance</h3>

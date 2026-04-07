@@ -314,6 +314,18 @@ async def get_job(
     return job
 
 
+@router.post("/enrich-websites", dependencies=[Depends(require_api_key)])
+async def enrich_websites(
+    limit: int = Query(50, ge=1, le=200, description="Max restaurants to enrich"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Crawl restaurant websites to detect POS systems and chain indicators."""
+    from src.services.website_enrichment import WebsiteEnrichmentService
+    service = WebsiteEnrichmentService(session)
+    result = await service.enrich_batch(limit=limit)
+    return result
+
+
 @router.delete("/cleanup", dependencies=[Depends(require_api_key)])
 async def cleanup_old_jobs(
     max_age_days: int = Query(None, ge=1, le=365, description="Override retention period in days"),

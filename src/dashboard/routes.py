@@ -390,6 +390,29 @@ async def create_job_from_dashboard(
         )
 
 
+@router.post("/jobs/enrich-websites")
+async def enrich_websites_from_dashboard(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Run website enrichment for POS detection from dashboard."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+    from src.services.website_enrichment import WebsiteEnrichmentService
+    service = WebsiteEnrichmentService(session)
+    result = await service.enrich_batch(limit=50)
+    msg = (
+        f"Website enrichment complete: {result['enriched']} sites crawled, "
+        f"{result['pos_detected']} POS detected, "
+        f"{result['chains_detected']} chains detected, "
+        f"{result['errors']} errors"
+    )
+    return RedirectResponse(
+        url=f"/dashboard/jobs?message={msg}",
+        status_code=303,
+    )
+
+
 @router.post("/jobs/cleanup")
 async def cleanup_jobs_from_dashboard(
     request: Request,
