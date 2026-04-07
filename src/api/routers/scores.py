@@ -69,20 +69,78 @@ async def recalculate_scores(
     city: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
-    """Trigger ICP score recalculation for all or filtered restaurants."""
-    from src.tasks.score_tasks import score_restaurants
+    """Recalculate ICP scores inline (no Celery needed)."""
+    from datetime import datetime, timezone
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from src.db.models import SourceRecord
+    from src.scoring.icp_scorer import icp_scorer
+    from src.scoring.geo_density import compute_density_scores
 
-    query = select(Restaurant.id)
+    query = select(Restaurant)
     if city:
         query = query.where(Restaurant.city.ilike(f"%{city}%"))
 
     result = await session.execute(query)
-    ids = [str(r) for r in result.scalars().all()]
+    restaurants = result.scalars().all()
+    if not restaurants:
+        return {"message": "No restaurants found", "scored": 0}
 
-    if ids:
-        score_restaurants.delay(ids)
+    rest_ids = [r.id for r in restaurants]
+    sr_result = await session.execute(
+        select(SourceRecord).where(SourceRecord.restaurant_id.in_(rest_ids))
+    )
+    all_records = sr_result.scalars().all()
 
-    return {"message": f"Recalculation triggered for {len(ids)} restaurants"}
+    sr_map = {}
+    for sr in all_records:
+        rid = str(sr.restaurant_id)
+        sr_map.setdefault(rid, []).append({
+            "source": sr.source,
+            "raw_data": sr.raw_data,
+            "extracted_data": sr.extracted_data,
+        })
+
+    rest_dicts = [
+        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng, "review_count": 0, "rating": 0.0}
+        for r in restaurants
+    ]
+
+    density_scores = compute_density_scores(rest_dicts)
+    scores = icp_scorer.score_batch(rest_dicts, sr_map, density_scores)
+
+    for score in scores:
+        stmt = pg_insert(ICPScore).values(
+            restaurant_id=score["restaurant_id"],
+            is_independent=score["is_independent"],
+            has_delivery=score["has_delivery"],
+            delivery_platforms=score["delivery_platforms"],
+            has_pos=score["has_pos"],
+            pos_provider=score["pos_provider"],
+            geo_density_score=score["geo_density_score"],
+            review_volume=score["review_volume"],
+            rating_avg=score["rating_avg"],
+            total_icp_score=score["total_icp_score"],
+            fit_label=score["fit_label"],
+            scoring_version=score["scoring_version"],
+            scored_at=datetime.now(timezone.utc),
+        ).on_conflict_do_update(
+            index_elements=["restaurant_id"],
+            set_={
+                "total_icp_score": score["total_icp_score"],
+                "fit_label": score["fit_label"],
+                "is_independent": score["is_independent"],
+                "has_delivery": score["has_delivery"],
+                "delivery_platforms": score["delivery_platforms"],
+                "has_pos": score["has_pos"],
+                "pos_provider": score["pos_provider"],
+                "geo_density_score": score["geo_density_score"],
+                "scored_at": datetime.now(timezone.utc),
+            },
+        )
+        await session.execute(stmt)
+
+    await session.commit()
+    return {"message": f"Scored {len(scores)} restaurants", "scored": len(scores)}
 
 
 @router.get("/export", dependencies=[Depends(require_api_key)])
