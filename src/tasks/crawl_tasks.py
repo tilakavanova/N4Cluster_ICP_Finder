@@ -59,6 +59,10 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                     if not isinstance(cuisine, list):
                         cuisine = [record.get("cuisine")] if record.get("cuisine") else []
 
+                    rating = record.get("rating")
+                    review_count = record.get("review_count", 0) or 0
+                    price_tier = record.get("price_tier")
+
                     stmt = insert(Restaurant).values(
                         name=name,
                         address=address or None,
@@ -70,6 +74,9 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                         phone=record.get("phone"),
                         website=record.get("website"),
                         cuisine_type=cuisine,
+                        rating_avg=rating,
+                        review_count=review_count,
+                        price_tier=price_tier,
                     ).on_conflict_do_update(
                         constraint="uq_restaurant_name_address",
                         set_={
@@ -77,6 +84,10 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                             "lng": record.get("lng"),
                             "phone": record.get("phone"),
                             "website": record.get("website"),
+                            "cuisine_type": cuisine,
+                            "rating_avg": rating,
+                            "review_count": review_count,
+                            "price_tier": price_tier,
                             "updated_at": datetime.now(timezone.utc),
                         },
                     )

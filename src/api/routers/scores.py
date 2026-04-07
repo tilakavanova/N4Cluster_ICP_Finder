@@ -102,7 +102,8 @@ async def recalculate_scores(
 
     rest_dicts = [
         {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng,
-         "cuisine_type": r.cuisine_type or [], "review_count": 0, "rating": 0.0}
+         "cuisine_type": r.cuisine_type or [], "review_count": r.review_count or 0,
+         "rating": r.rating_avg or 0.0, "price_tier": r.price_tier}
         for r in restaurants
     ]
 

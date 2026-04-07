@@ -411,6 +411,7 @@ async def restaurants_dashboard(
     fit_label: str = Query(""),
     min_score: str = Query(""),
     q: str = Query(""),
+    message: str = Query(""),
     page: int = Query(1, ge=1),
     session: AsyncSession = Depends(get_session),
 ):
@@ -483,11 +484,64 @@ async def restaurants_dashboard(
         restaurants=restaurants,
         stats=stats,
         filters=filters,
+        message=message,
         page=page,
         total_pages=total_pages,
         active_tab="restaurants",
     )
     return HTMLResponse(html)
+
+
+@router.post("/restaurants/rescore")
+async def rescore_from_dashboard(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Rescore all restaurants from the dashboard."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.scoring.icp_scorer import icp_scorer
+    from src.scoring.geo_density import compute_density_scores
+    from src.db.models import SourceRecord as SR
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    result = await session.execute(select(Restaurant))
+    restaurants = result.scalars().all()
+
+    rest_ids = [r.id for r in restaurants]
+    sr_result = await session.execute(select(SR).where(SR.restaurant_id.in_(rest_ids)))
+    all_records = sr_result.scalars().all()
+    sr_map = {}
+    for sr in all_records:
+        sr_map.setdefault(str(sr.restaurant_id), []).append({
+            "source": sr.source, "raw_data": sr.raw_data, "extracted_data": sr.extracted_data,
+        })
+
+    rest_dicts = [
+        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng,
+         "cuisine_type": r.cuisine_type or [], "review_count": r.review_count or 0,
+         "rating": r.rating_avg or 0.0, "price_tier": r.price_tier}
+        for r in restaurants
+    ]
+
+    density_scores = compute_density_scores(rest_dicts)
+    scores = icp_scorer.score_batch(rest_dicts, sr_map, density_scores)
+
+    from src.api.routers.jobs import _build_score_values
+    for score in scores:
+        values = _build_score_values(score)
+        stmt = pg_insert(ICPScore).values(**values).on_conflict_do_update(
+            index_elements=["restaurant_id"],
+            set_={k: v for k, v in values.items() if k != "restaurant_id"},
+        )
+        await session.execute(stmt)
+    await session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/restaurants?message=Rescored {len(scores)} restaurants with v2 model",
+        status_code=303,
+    )
 
 
 # ── Analytics ───────────────────────────────────────────────────

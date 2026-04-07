@@ -77,7 +77,9 @@ async def _score_restaurants_inline(session: AsyncSession) -> int:
         })
 
     rest_dicts = [
-        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng, "review_count": 0, "rating": 0.0}
+        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng,
+         "cuisine_type": r.cuisine_type or [], "review_count": r.review_count or 0,
+         "rating": r.rating_avg or 0.0, "price_tier": r.price_tier}
         for r in unscored
     ]
 
@@ -134,6 +136,10 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                 if not isinstance(cuisine, list):
                     cuisine = [record.get("cuisine")] if record.get("cuisine") else []
 
+                rating = record.get("rating")
+                review_count = record.get("review_count", 0) or 0
+                price_tier = record.get("price_tier")
+
                 stmt = insert(Restaurant).values(
                     name=name,
                     address=address or None,
@@ -145,6 +151,9 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                     phone=record.get("phone"),
                     website=record.get("website"),
                     cuisine_type=cuisine,
+                    rating_avg=rating,
+                    review_count=review_count,
+                    price_tier=price_tier,
                 ).on_conflict_do_update(
                     constraint="uq_restaurant_name_address",
                     set_={
@@ -152,6 +161,10 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                         "lng": record.get("lng"),
                         "phone": record.get("phone"),
                         "website": record.get("website"),
+                        "cuisine_type": cuisine,
+                        "rating_avg": rating,
+                        "review_count": review_count,
+                        "price_tier": price_tier,
                         "updated_at": datetime.now(timezone.utc),
                     },
                 )

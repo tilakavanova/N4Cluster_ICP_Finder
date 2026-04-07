@@ -12,10 +12,19 @@ logger = get_logger("crawler.google_places")
 PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 FIELD_MASK = (
     "places.id,places.displayName,places.formattedAddress,"
-    "places.rating,places.userRatingCount,places.nationalPhoneNumber,"
+    "places.rating,places.userRatingCount,places.priceLevel,"
+    "places.nationalPhoneNumber,"
     "places.websiteUri,places.location,places.primaryType,"
     "places.types,nextPageToken"
 )
+
+PRICE_LEVEL_MAP = {
+    "PRICE_LEVEL_FREE": "$",
+    "PRICE_LEVEL_INEXPENSIVE": "$",
+    "PRICE_LEVEL_MODERATE": "$$",
+    "PRICE_LEVEL_EXPENSIVE": "$$$",
+    "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$",
+}
 
 
 class GoogleMapsCrawler(BaseCrawler):
@@ -91,6 +100,10 @@ class GoogleMapsCrawler(BaseCrawler):
             primary_type = place.get("primaryType", "")
             cuisine = self._types_to_cuisine(types, primary_type)
 
+            # Map price level
+            price_level = place.get("priceLevel", "")
+            price_tier = PRICE_LEVEL_MAP.get(price_level)
+
             return {
                 "name": display_name.get("text", ""),
                 "address": address,
@@ -103,6 +116,7 @@ class GoogleMapsCrawler(BaseCrawler):
                 "website": place.get("websiteUri", ""),
                 "rating": place.get("rating"),
                 "review_count": place.get("userRatingCount", 0),
+                "price_tier": price_tier,
                 "cuisine": cuisine,
                 "source": self.SOURCE,
                 "source_url": f"https://www.google.com/maps/place/?q=place_id:{place.get('id', '')}",
