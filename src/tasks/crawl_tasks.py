@@ -55,9 +55,12 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                         skipped += 1
                         continue
 
-                    cuisine = record.get("cuisine_type", [])
+                    cuisine = record.get("cuisine_type") or []
                     if not isinstance(cuisine, list):
-                        cuisine = [record.get("cuisine")] if record.get("cuisine") else []
+                        cuisine = [cuisine] if cuisine else []
+                    if not cuisine and record.get("cuisine"):
+                        c = record["cuisine"]
+                        cuisine = [c] if c and c != "Restaurant" else []
 
                     rating = record.get("rating")
                     review_count = record.get("review_count", 0) or 0
