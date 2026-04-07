@@ -27,6 +27,9 @@ class RestaurantResponse(RestaurantBase):
     id: UUID
     is_chain: bool = False
     chain_name: str | None = None
+    rating_avg: float | None = None
+    review_count: int | None = None
+    price_tier: str | None = None
     created_at: datetime
     updated_at: datetime
 
