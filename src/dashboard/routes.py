@@ -390,6 +390,49 @@ async def create_job_from_dashboard(
         )
 
 
+@router.post("/jobs/deep-crawl")
+async def deep_crawl_city(
+    request: Request,
+    city: str = Form(...),
+    state: str = Form(...),
+    session: AsyncSession = Depends(get_session),
+):
+    """Deep crawl a city by iterating through all its ZIP codes."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    # Create tracking job
+    job = CrawlJob(
+        source="google_maps",
+        query=f"deep_crawl:{city}",
+        location=f"{city}, {state}",
+        status="running",
+        started_at=datetime.now(timezone.utc),
+    )
+    session.add(job)
+    await session.flush()
+    job_id = str(job.id)
+    await session.commit()
+
+    from src.services.zipcode_crawl import ZipCodeCrawlService
+    service = ZipCodeCrawlService(session)
+    result = await service.crawl_city(city, state, job_id=job_id)
+
+    # Score all new restaurants
+    from src.api.routers.jobs import _score_restaurants_inline
+    from src.db.session import async_session as async_session_factory
+    async with async_session_factory() as s:
+        scored = await _score_restaurants_inline(s)
+
+    msg = (
+        f"Deep crawl complete: {city}, {state} — "
+        f"{result['zip_codes_processed']}/{result['zip_codes_total']} ZIPs, "
+        f"{result['new_restaurants_found']} new restaurants found "
+        f"(total: {result['restaurants_after']}), {scored} scored"
+    )
+    return RedirectResponse(url=f"/dashboard/jobs?message={msg}", status_code=303)
+
+
 @router.post("/jobs/enrich-websites")
 async def enrich_websites_from_dashboard(
     request: Request,

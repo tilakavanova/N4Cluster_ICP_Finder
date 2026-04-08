@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     google_places_api_key: str = ""
     yelp_fusion_api_key: str = ""
     serpapi_api_key: str = ""
-    google_places_max_pages: int = 3
+    google_places_max_pages: int = 5
 
     # Crawling
     proxy_list: str = ""
