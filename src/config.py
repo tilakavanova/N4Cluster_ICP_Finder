@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     hubspot_api_key: str = ""
     hubspot_pipeline_id: str = ""
 
+    # Lead notifications
+    slack_webhook_url: str = ""
+    alert_email: str = ""
+    hot_lead_threshold: float = 75.0   # ICP score >= this with multi-location = hot
+    warm_lead_threshold: float = 55.0  # ICP score >= this = warm
+
     # App
     secret_key: str = ""
     log_level: str = "INFO"
