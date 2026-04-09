@@ -12,6 +12,7 @@ from src.api.auth import require_api_key
 from src.db.models import Lead, Restaurant, ICPScore
 from src.db.session import get_session
 from src.services.lead_enrichment import LeadEnrichmentService
+from src.services.hubspot import HubSpotService
 from src.utils.logging import get_logger
 
 logger = get_logger("leads")
@@ -63,6 +64,13 @@ async def create_lead(request: Request, payload: LeadCreate, session: AsyncSessi
     enrichment = LeadEnrichmentService(session)
     await enrichment.match_and_enrich(lead)
 
+    # Sync to HubSpot CRM (if configured)
+    hubspot = HubSpotService()
+    hs_result = await hubspot.sync_lead(lead)
+    if hs_result:
+        lead.hubspot_contact_id = hs_result.get("hubspot_contact_id")
+        lead.hubspot_deal_id = hs_result.get("hubspot_deal_id")
+
     logger.info(
         "lead_created",
         lead_id=str(lead.id),
@@ -72,6 +80,7 @@ async def create_lead(request: Request, payload: LeadCreate, session: AsyncSessi
         icp_fit=lead.icp_fit_label,
         icp_score=lead.icp_total_score,
         confidence=lead.match_confidence,
+        hubspot_synced=hs_result is not None,
     )
     return lead
 

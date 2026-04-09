@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # LLM cost controls
     llm_daily_token_limit: int = 0  # 0 = unlimited. Set to e.g. 500000 for 500K tokens/day
 
+    # HubSpot CRM
+    hubspot_api_key: str = ""
+    hubspot_pipeline_id: str = ""
+
     # App
     secret_key: str = ""
     log_level: str = "INFO"
