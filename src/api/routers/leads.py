@@ -13,6 +13,7 @@ from src.db.models import Lead, Restaurant, ICPScore
 from src.db.session import get_session
 from src.services.lead_enrichment import LeadEnrichmentService
 from src.services.hubspot import HubSpotService
+from src.services.lead_notifications import route_lead
 from src.utils.logging import get_logger
 
 logger = get_logger("leads")
@@ -71,6 +72,9 @@ async def create_lead(request: Request, payload: LeadCreate, session: AsyncSessi
         lead.hubspot_contact_id = hs_result.get("hubspot_contact_id")
         lead.hubspot_deal_id = hs_result.get("hubspot_deal_id")
 
+    # Route lead to notification channels
+    routing = await route_lead(lead)
+
     logger.info(
         "lead_created",
         lead_id=str(lead.id),
@@ -81,6 +85,7 @@ async def create_lead(request: Request, payload: LeadCreate, session: AsyncSessi
         icp_score=lead.icp_total_score,
         confidence=lead.match_confidence,
         hubspot_synced=hs_result is not None,
+        routing_tier=routing["tier"],
     )
     return lead
 
