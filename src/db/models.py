@@ -252,6 +252,30 @@ class FollowUpTask(Base):
     lead = relationship("Lead", foreign_keys=[lead_id])
 
 
+class Neighborhood(Base):
+    """Normalized neighborhood boundary (NIF-118)."""
+    __tablename__ = "neighborhoods"
+    __table_args__ = (
+        UniqueConstraint("zip_code", name="uq_neighborhood_zip"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    zip_code = Column(String(10), nullable=False, index=True)
+    name = Column(Text)  # human-friendly name, e.g. "Midtown Manhattan"
+    city = Column(Text, index=True)
+    state = Column(String(2), index=True)
+    lat = Column(Float)  # centroid latitude
+    lng = Column(Float)  # centroid longitude
+    restaurant_count = Column(Integer, default=0)
+    avg_icp_score = Column(Float, default=0.0)
+    top_cuisines = Column(ARRAY(Text), default=list)
+    independent_ratio = Column(Float, default=0.0)
+    delivery_coverage = Column(Float, default=0.0)
+    opportunity_score = Column(Float, default=0.0, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
 class RestaurantChange(Base):
     __tablename__ = "restaurant_changes"
 
