@@ -121,6 +121,8 @@ class Lead(Base):
     utm_source = Column(Text)
     utm_medium = Column(Text)
     utm_campaign = Column(Text)
+    merged_into_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=True)
+    is_merged = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -196,6 +198,56 @@ class LeadAssignmentHistory(Base):
     to_owner = Column(Text, nullable=False)
     changed_by = Column(Text, default="system")
     changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+    lead = relationship("Lead", foreign_keys=[lead_id])
+
+
+class AccountHistory(Base):
+    """Track account field changes (NIF-70)."""
+    __tablename__ = "account_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False, index=True)
+    field_name = Column(String(50), nullable=False)
+    old_value = Column(Text)
+    new_value = Column(Text)
+    changed_by = Column(Text, default="system")
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+    account = relationship("Account", foreign_keys=[account_id])
+
+
+class ContactHistory(Base):
+    """Track contact field changes (NIF-71)."""
+    __tablename__ = "contact_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    contact_id = Column(UUID(as_uuid=True), ForeignKey("contacts.id"), nullable=False, index=True)
+    field_name = Column(String(50), nullable=False)
+    old_value = Column(Text)
+    new_value = Column(Text)
+    changed_by = Column(Text, default="system")
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+    contact = relationship("Contact", foreign_keys=[contact_id])
+
+
+class FollowUpTask(Base):
+    """Follow-up tasks linked to leads (NIF-112)."""
+    __tablename__ = "follow_up_tasks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False, index=True)
+    title = Column(Text, nullable=False)
+    description = Column(Text)
+    task_type = Column(String(30), nullable=False, default="follow_up")
+    priority = Column(String(10), nullable=False, default="medium")
+    status = Column(String(20), nullable=False, default="pending")
+    assigned_to = Column(Text)
+    due_date = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     lead = relationship("Lead", foreign_keys=[lead_id])
 
