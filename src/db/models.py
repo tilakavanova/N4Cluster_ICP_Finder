@@ -276,6 +276,40 @@ class Neighborhood(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
+class MerchantEntity(Base):
+    """Merchant graph entity node (NIF-122). Enriched view of a restaurant for graph queries."""
+    __tablename__ = "merchant_entities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), unique=True, nullable=False, index=True)
+    entity_type = Column(String(30), nullable=False, default="restaurant")  # restaurant, chain_group, market
+    tags = Column(ARRAY(Text), default=list)  # e.g. ["high-volume", "pizza", "independent"]
+    enrichment_data = Column(JSONB, default=dict)  # arbitrary enrichment metadata
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+
+
+class MerchantRelationship(Base):
+    """Edge between two merchant entities (NIF-123)."""
+    __tablename__ = "merchant_relationships"
+    __table_args__ = (
+        UniqueConstraint("source_entity_id", "target_entity_id", "relationship_type", name="uq_merchant_rel"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_entity_id = Column(UUID(as_uuid=True), ForeignKey("merchant_entities.id"), nullable=False, index=True)
+    target_entity_id = Column(UUID(as_uuid=True), ForeignKey("merchant_entities.id"), nullable=False, index=True)
+    relationship_type = Column(String(30), nullable=False)  # same_cuisine, same_neighborhood, same_chain, competitor, cluster_peer
+    strength = Column(Float, default=1.0)  # 0.0-1.0 edge weight
+    metadata_ = Column("metadata", JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    source = relationship("MerchantEntity", foreign_keys=[source_entity_id])
+    target = relationship("MerchantEntity", foreign_keys=[target_entity_id])
+
+
 class RestaurantChange(Base):
     __tablename__ = "restaurant_changes"
 
