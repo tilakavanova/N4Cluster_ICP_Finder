@@ -124,6 +124,21 @@ class Lead(Base):
     icp_score = relationship("ICPScore", foreign_keys=[icp_score_id])
 
 
+class RestaurantChange(Base):
+    __tablename__ = "restaurant_changes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
+    change_type = Column(String(30), nullable=False, index=True)  # new_restaurant, rating_change, delivery_change, field_update
+    field_name = Column(String(50))
+    old_value = Column(Text)
+    new_value = Column(Text)
+    source = Column(String(20))
+    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+
+
 class CrawlJob(Base):
     __tablename__ = "crawl_jobs"
 
