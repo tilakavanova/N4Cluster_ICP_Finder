@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from src.config import settings
 from src.utils.logging import setup_logging, get_logger
-from src.api.routers import restaurants, jobs, scores, seed, leads, changes
+from src.api.routers import restaurants, jobs, scores, seed, leads, changes, analytics
 from src.dashboard.routes import router as dashboard_router
 
 logger = get_logger("app")
@@ -91,6 +91,7 @@ app.include_router(scores.router, prefix="/api/v1")
 app.include_router(seed.router, prefix="/api/v1")
 app.include_router(leads.router, prefix="/api/v1")
 app.include_router(changes.router, prefix="/api/v1")
+app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(dashboard_router)
 
 
