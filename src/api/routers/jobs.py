@@ -274,7 +274,7 @@ async def create_crawl_job(
                 extract_records.si(),
                 score_restaurants.si(),
             )
-            pipeline.apply_async()
+            pipeline.apply_async(link_error=score_restaurants.si())
             logger.info("crawl_dispatched_celery", job_id=job_id)
         except Exception as e:
             logger.error("celery_dispatch_failed", error=str(e), job_id=job_id)

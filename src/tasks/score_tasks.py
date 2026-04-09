@@ -54,8 +54,8 @@ def score_restaurants(restaurant_ids: list[str] | None = None):
                     "address": r.address,
                     "lat": r.lat,
                     "lng": r.lng,
-                    "review_count": 0,
-                    "rating": 0.0,
+                    "review_count": r.review_count or 0,
+                    "rating": r.rating_avg or 0.0,
                 }
                 for r in restaurants
             ]
