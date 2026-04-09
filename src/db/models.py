@@ -100,6 +100,10 @@ class Lead(Base):
     message = Column(Text)
     source = Column(String(30), nullable=False, default="website_demo")
     status = Column(String(20), nullable=False, default="new", index=True)
+    lifecycle_stage = Column(String(30), nullable=False, default="new", index=True)
+    owner = Column(Text)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=True, index=True)
+    contact_id = Column(UUID(as_uuid=True), ForeignKey("contacts.id"), nullable=True)
     restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=True)
     icp_score_id = Column(UUID(as_uuid=True), ForeignKey("icp_scores.id"), nullable=True)
     icp_fit_label = Column(String(20))
@@ -122,6 +126,78 @@ class Lead(Base):
 
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
     icp_score = relationship("ICPScore", foreign_keys=[icp_score_id])
+    account = relationship("Account", foreign_keys=[account_id])
+    contact = relationship("Contact", foreign_keys=[contact_id])
+
+
+class Account(Base):
+    """Merchant business entity — groups leads and contacts."""
+    __tablename__ = "accounts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False, index=True)
+    business_type = Column(Text)
+    location_count = Column(Integer, default=1)
+    website = Column(Text)
+    phone = Column(Text)
+    city = Column(Text)
+    state = Column(String(2))
+    zip_code = Column(String(10))
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=True)
+    icp_score_id = Column(UUID(as_uuid=True), ForeignKey("icp_scores.id"), nullable=True)
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    contacts = relationship("Contact", back_populates="account", cascade="all, delete-orphan")
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+
+
+class Contact(Base):
+    """Person associated with an account/merchant."""
+    __tablename__ = "contacts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False, index=True)
+    first_name = Column(Text, nullable=False)
+    last_name = Column(Text, nullable=False)
+    email = Column(Text, index=True)
+    phone = Column(Text)
+    role = Column(String(50))  # owner, manager, chef, etc.
+    is_primary = Column(Boolean, default=False)
+    confidence = Column(Float)  # how confident are we in this contact info
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    account = relationship("Account", back_populates="contacts")
+
+
+class LeadStageHistory(Base):
+    """Track lead lifecycle stage transitions."""
+    __tablename__ = "lead_stage_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False, index=True)
+    from_stage = Column(String(30))
+    to_stage = Column(String(30), nullable=False)
+    changed_by = Column(Text, default="system")
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+    lead = relationship("Lead", foreign_keys=[lead_id])
+
+
+class LeadAssignmentHistory(Base):
+    """Track lead owner assignment changes."""
+    __tablename__ = "lead_assignment_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False, index=True)
+    from_owner = Column(Text)
+    to_owner = Column(Text, nullable=False)
+    changed_by = Column(Text, default="system")
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+    lead = relationship("Lead", foreign_keys=[lead_id])
 
 
 class RestaurantChange(Base):
