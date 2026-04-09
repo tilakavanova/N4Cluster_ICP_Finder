@@ -25,7 +25,7 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
 
     async def _crawl():
         from src.db.session import async_session
-        from src.db.models import CrawlJob, SourceRecord, Restaurant
+        from src.db.models import CrawlJob, SourceRecord, Restaurant, RestaurantChange
         from sqlalchemy import select
         from sqlalchemy.dialects.postgresql import insert
 
@@ -66,6 +66,13 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                     review_count = record.get("review_count", 0) or 0
                     price_tier = record.get("price_tier")
 
+                    # Check for existing restaurant to detect changes
+                    existing_query = select(Restaurant).where(
+                        Restaurant.name == name,
+                        Restaurant.address == (address or None),
+                    )
+                    existing = (await session.execute(existing_query)).scalar_one_or_none()
+
                     stmt = insert(Restaurant).values(
                         name=name,
                         address=address or None,
@@ -103,6 +110,59 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                         Restaurant.address == (address or None),
                     )
                     rest = (await session.execute(rest_query)).scalar_one_or_none()
+
+                    # --- Change Detection ---
+                    if rest and not existing:
+                        # New restaurant detected
+                        session.add(RestaurantChange(
+                            restaurant_id=rest.id,
+                            change_type="new_restaurant",
+                            source=record.get("source", source),
+                        ))
+                    elif rest and existing:
+                        src_name = record.get("source", source)
+                        # Rating change
+                        if rating is not None and existing.rating_avg is not None and abs((rating or 0) - (existing.rating_avg or 0)) >= 0.1:
+                            session.add(RestaurantChange(
+                                restaurant_id=rest.id,
+                                change_type="rating_change",
+                                field_name="rating_avg",
+                                old_value=str(existing.rating_avg),
+                                new_value=str(rating),
+                                source=src_name,
+                            ))
+                        # Review count change
+                        if review_count and existing.review_count and review_count != existing.review_count:
+                            session.add(RestaurantChange(
+                                restaurant_id=rest.id,
+                                change_type="field_update",
+                                field_name="review_count",
+                                old_value=str(existing.review_count),
+                                new_value=str(review_count),
+                                source=src_name,
+                            ))
+                        # Delivery/platform change (detected from source type)
+                        raw = record.get("raw_data", record) or record
+                        new_has_delivery = raw.get("has_delivery", False)
+                        new_platforms = raw.get("delivery_platforms") or raw.get("delivery_platform")
+                        if record.get("source", source) in ("doordash", "ubereats", "grubhub", "delivery"):
+                            session.add(RestaurantChange(
+                                restaurant_id=rest.id,
+                                change_type="delivery_change",
+                                field_name="delivery_source",
+                                new_value=record.get("source", source),
+                                source=src_name,
+                            ))
+                        # Price tier change
+                        if price_tier and existing.price_tier and price_tier != existing.price_tier:
+                            session.add(RestaurantChange(
+                                restaurant_id=rest.id,
+                                change_type="field_update",
+                                field_name="price_tier",
+                                old_value=existing.price_tier,
+                                new_value=price_tier,
+                                source=src_name,
+                            ))
 
                     if rest:
                         source_rec = SourceRecord(
