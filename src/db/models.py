@@ -604,6 +604,169 @@ class OutreachPerformance(Base):
     campaign = relationship("OutreachCampaign", back_populates="performance")
 
 
+class RepQueueItem(Base):
+    """Sales rep work queue item (NIF-145)."""
+    __tablename__ = "rep_queue_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rep_id = Column(Text, nullable=False, index=True)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=True, index=True)
+    priority_score = Column(Float, nullable=False, default=0.0, index=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, claimed, completed, skipped
+    reason = Column(Text)  # why this item is in the queue
+    context_data = Column(JSONB, default=dict)  # ICP score, fit label, last activity, etc.
+    claimed_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+    lead = relationship("Lead", foreign_keys=[lead_id])
+
+
+class RepQueueRanking(Base):
+    """Sales rep performance ranking (NIF-146)."""
+    __tablename__ = "rep_queue_rankings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rep_id = Column(Text, nullable=False, unique=True, index=True)
+    total_items = Column(Integer, default=0)
+    completed_today = Column(Integer, default=0)
+    avg_completion_time_mins = Column(Float, default=0.0)
+    active_items = Column(Integer, default=0)
+    last_activity_at = Column(DateTime(timezone=True))
+    ranking_score = Column(Float, default=0.0, index=True)  # performance ranking
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class ConversionEvent(Base):
+    """Conversion funnel event (NIF-148)."""
+    __tablename__ = "conversion_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=True, index=True)
+    event_type = Column(String(30), nullable=False, index=True)  # discovered, contacted, demo_scheduled, pilot_started, converted, churned
+    source = Column(Text)
+    metadata_ = Column("metadata", JSONB, default=dict)
+    occurred_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+    lead = relationship("Lead", foreign_keys=[lead_id])
+
+
+class ConversionFunnel(Base):
+    """Aggregated conversion funnel summary (NIF-149)."""
+    __tablename__ = "conversion_funnels"
+    __table_args__ = (
+        UniqueConstraint("period", "zip_code", name="uq_conversion_funnel_period_zip"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    period = Column(Text, nullable=False, index=True)  # e.g. "2026-W15", "2026-04"
+    zip_code = Column(String(10), nullable=True, index=True)
+    discovered = Column(Integer, default=0)
+    contacted = Column(Integer, default=0)
+    demo_scheduled = Column(Integer, default=0)
+    pilot_started = Column(Integer, default=0)
+    converted = Column(Integer, default=0)
+    churned = Column(Integer, default=0)
+    conversion_rate = Column(Float, default=0.0)
+    avg_days_to_convert = Column(Float, default=0.0)
+    last_calculated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MerchantCluster(Base):
+    """Cluster of nearby merchants (NIF-151)."""
+    __tablename__ = "merchant_clusters"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False, index=True)
+    cluster_type = Column(String(20), nullable=False, default="geographic")  # geographic, cuisine, chain
+    zip_codes = Column(ARRAY(Text), default=list)
+    center_lat = Column(Float)
+    center_lng = Column(Float)
+    radius_miles = Column(Float, default=1.0)
+    restaurant_count = Column(Integer, default=0)
+    avg_icp_score = Column(Float, default=0.0)
+    flywheel_score = Column(Float, default=0.0)
+    status = Column(String(20), nullable=False, default="detected", index=True)  # detected, active, expanding, mature
+    detection_params = Column(JSONB, default=dict)
+    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    members = relationship("ClusterMember", back_populates="cluster", cascade="all, delete-orphan")
+    expansion_plans = relationship("ClusterExpansionPlan", back_populates="cluster", cascade="all, delete-orphan")
+    history = relationship("ClusterHistory", back_populates="cluster", cascade="all, delete-orphan")
+    feedback = relationship("ClusterFeedback", back_populates="cluster", cascade="all, delete-orphan")
+
+
+class ClusterMember(Base):
+    """Member of a merchant cluster (NIF-152)."""
+    __tablename__ = "cluster_members"
+    __table_args__ = (
+        UniqueConstraint("cluster_id", "restaurant_id", name="uq_cluster_member"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("merchant_clusters.id"), nullable=False, index=True)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
+    role = Column(String(20), nullable=False, default="member")  # anchor, member, prospect
+    joined_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    icp_score_at_join = Column(Float, default=0.0)
+
+    cluster = relationship("MerchantCluster", back_populates="members")
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+
+
+class ClusterExpansionPlan(Base):
+    """Expansion plan for a cluster (NIF-153)."""
+    __tablename__ = "cluster_expansion_plans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("merchant_clusters.id"), nullable=False, index=True)
+    target_restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
+    sequence_order = Column(Integer, nullable=False, default=0)
+    strategy = Column(Text)
+    priority_score = Column(Float, default=0.0, index=True)
+    status = Column(String(20), nullable=False, default="planned", index=True)  # planned, in_progress, completed, skipped
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    cluster = relationship("MerchantCluster", back_populates="expansion_plans")
+    target_restaurant = relationship("Restaurant", foreign_keys=[target_restaurant_id])
+
+
+class ClusterHistory(Base):
+    """Cluster event history (NIF-158)."""
+    __tablename__ = "cluster_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("merchant_clusters.id"), nullable=False, index=True)
+    event_type = Column(String(30), nullable=False, index=True)  # detected, member_added, member_removed, recalculated, expanded, campaign_launched
+    details = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    cluster = relationship("MerchantCluster", back_populates="history")
+
+
+class ClusterFeedback(Base):
+    """Cluster feedback entry (NIF-159)."""
+    __tablename__ = "cluster_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("merchant_clusters.id"), nullable=False, index=True)
+    feedback_type = Column(String(30), nullable=False, index=True)  # expansion_success, expansion_failure, quality_rating
+    details = Column(JSONB, default=dict)
+    submitted_by = Column(Text, default="system")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    cluster = relationship("MerchantCluster", back_populates="feedback")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
