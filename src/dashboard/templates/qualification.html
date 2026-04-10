@@ -3,22 +3,23 @@
 
 {% block content %}
 <!-- Stats row -->
+{% set total_evaluated = (stats.qualified|default(0)) + (stats.not_qualified|default(0)) + (stats.needs_review|default(0)) %}
 <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Evaluated</div>
-    <div class="text-2xl font-bold text-navy-950 mt-1">{{ stats.total_evaluated }}</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ total_evaluated }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Qualified</div>
-    <div class="text-2xl font-bold text-green-600 mt-1">{{ stats.qualified }}</div>
+    <div class="text-2xl font-bold text-green-600 mt-1">{{ stats.qualified|default(0) }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Needs Review</div>
-    <div class="text-2xl font-bold text-yellow-600 mt-1">{{ stats.needs_review }}</div>
+    <div class="text-2xl font-bold text-yellow-600 mt-1">{{ stats.needs_review|default(0) }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Not Qualified</div>
-    <div class="text-2xl font-bold text-red-500 mt-1">{{ stats.not_qualified }}</div>
+    <div class="text-2xl font-bold text-red-500 mt-1">{{ stats.not_qualified|default(0) }}</div>
   </div>
 </div>
 
@@ -28,7 +29,7 @@
     <div class="bg-white rounded-lg border border-slate-200 p-6">
       <h2 class="text-sm font-semibold text-navy-950 mb-4">Batch Evaluate</h2>
       <p class="text-xs text-slate-500 mb-4">Run qualification scoring on restaurants matching these criteria.</p>
-      <form method="post" action="/dashboard/qualification/batch-evaluate" class="space-y-4">
+      <form method="post" action="/dashboard/qualification/batch" class="space-y-4">
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">City</label>
           <input type="text" name="city" placeholder="e.g. Boston" class="w-full rounded-md border border-slate-300 text-sm px-3 py-2">
@@ -57,10 +58,10 @@
     {% endif %}
 
     <!-- Pending Review -->
-    {% if pending_reviews %}
+    {% if pending and pending|length > 0 %}
     <div class="bg-white rounded-lg border border-slate-200 overflow-visible mb-6">
       <div class="px-5 py-3 border-b border-slate-200">
-        <h3 class="text-sm font-semibold text-navy-950">Pending Review ({{ pending_reviews|length }})</h3>
+        <h3 class="text-sm font-semibold text-navy-950">Pending Review ({{ pending|length }})</h3>
       </div>
       <table class="min-w-full divide-y divide-slate-200">
         <thead class="bg-slate-50">
@@ -73,45 +74,49 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          {% for r in pending_reviews %}
+          {% for r in pending %}
           <tr class="hover:bg-slate-50" id="review-item-{{ r.id }}">
             <td class="px-4 py-3">
-              <div class="text-sm font-medium text-navy-950">{{ r.restaurant_name }}</div>
-              {% if r.city %}<div class="text-xs text-slate-500">{{ r.city }}{% if r.state %}, {{ r.state }}{% endif %}</div>{% endif %}
+              <div class="text-sm font-medium text-navy-950">{{ r.restaurant.name if r.restaurant else r.restaurant_id }}</div>
+              {% if r.restaurant and r.restaurant.city %}<div class="text-xs text-slate-500">{{ r.restaurant.city }}{% if r.restaurant.state %}, {{ r.restaurant.state }}{% endif %}</div>{% endif %}
             </td>
             <td class="px-4 py-3">
               <div class="flex items-center gap-2">
+                {% set conf = (r.confidence_score * 100) if r.confidence_score is defined and r.confidence_score is not none and r.confidence_score <= 1 else (r.confidence_score|default(0)) %}
                 <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden max-w-[60px]">
-                  <div class="h-full rounded-full {% if r.confidence_score >= 80 %}bg-green-500{% elif r.confidence_score >= 60 %}bg-blue-500{% elif r.confidence_score >= 40 %}bg-yellow-500{% else %}bg-red-400{% endif %}" style="width: {{ r.confidence_score }}%"></div>
+                  <div class="h-full rounded-full {% if conf >= 80 %}bg-green-500{% elif conf >= 60 %}bg-blue-500{% elif conf >= 40 %}bg-yellow-500{% else %}bg-red-400{% endif %}" style="width: {{ conf }}%"></div>
                 </div>
-                <span class="text-xs font-medium text-slate-600">{{ "%.0f"|format(r.confidence_score) }}%</span>
+                <span class="text-xs font-medium text-slate-600">{{ "%.0f"|format(conf) }}%</span>
               </div>
             </td>
             <td class="px-4 py-3">
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-yellow-50 text-yellow-700">
-                Needs Review
+                {{ r.qualification_status|default('needs_review')|replace("_", " ")|title }}
               </span>
             </td>
             <td class="px-4 py-3">
-              {% if r.signals %}
+              {% if r.signals_summary %}
               <div class="flex flex-wrap gap-1">
-                {% for signal in r.signals[:3] %}
+                {% set signals = r.signals_summary if r.signals_summary is iterable and r.signals_summary is not string else [] %}
+                {% for signal in signals[:3] %}
                 <span class="bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded">{{ signal }}</span>
                 {% endfor %}
-                {% if r.signals|length > 3 %}<span class="text-xs text-slate-400">+{{ r.signals|length - 3 }}</span>{% endif %}
+                {% if signals|length > 3 %}<span class="text-xs text-slate-400">+{{ signals|length - 3 }}</span>{% endif %}
               </div>
-              {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+              {% else %}<span class="text-xs text-slate-400">&mdash;</span>{% endif %}
             </td>
             <td class="px-4 py-3">
               <div class="flex items-center gap-1">
                 <button class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
-                  hx-patch="/dashboard/qualification/{{ r.id }}/approve"
+                  hx-patch="/dashboard/qualification/{{ r.id }}/review"
+                  hx-vals='{"decision": "approved"}'
                   hx-target="#review-item-{{ r.id }}"
                   hx-swap="outerHTML">
                   Approve
                 </button>
                 <button class="bg-red-500 hover:bg-red-600 text-white text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
-                  hx-patch="/dashboard/qualification/{{ r.id }}/reject"
+                  hx-patch="/dashboard/qualification/{{ r.id }}/review"
+                  hx-vals='{"decision": "rejected"}'
                   hx-target="#review-item-{{ r.id }}"
                   hx-swap="outerHTML">
                   Reject
@@ -123,81 +128,9 @@
         </tbody>
       </table>
     </div>
-    {% endif %}
-
-    <!-- Evaluated Restaurants -->
-    <div class="bg-white rounded-lg border border-slate-200 overflow-visible">
-      <div class="px-5 py-3 border-b border-slate-200">
-        <h3 class="text-sm font-semibold text-navy-950">Evaluated Restaurants</h3>
-      </div>
-      <table class="min-w-full divide-y divide-slate-200">
-        <thead class="bg-slate-50">
-          <tr>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Restaurant</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Confidence</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Decision</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for r in evaluated %}
-          <tr class="hover:bg-slate-50">
-            <td class="px-4 py-3">
-              <div class="text-sm font-medium text-navy-950">{{ r.restaurant_name }}</div>
-              {% if r.city %}<div class="text-xs text-slate-500">{{ r.city }}{% if r.state %}, {{ r.state }}{% endif %}</div>{% endif %}
-            </td>
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-2">
-                <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden max-w-[60px]">
-                  <div class="h-full rounded-full {% if r.confidence_score >= 80 %}bg-green-500{% elif r.confidence_score >= 60 %}bg-blue-500{% elif r.confidence_score >= 40 %}bg-yellow-500{% else %}bg-red-400{% endif %}" style="width: {{ r.confidence_score }}%"></div>
-                </div>
-                <span class="text-xs font-medium text-slate-600">{{ "%.0f"|format(r.confidence_score) }}%</span>
-              </div>
-            </td>
-            <td class="px-4 py-3">
-              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-                {% if r.status == 'qualified' %}bg-green-50 text-green-700
-                {% elif r.status == 'not_qualified' %}bg-red-50 text-red-700
-                {% elif r.status == 'needs_review' %}bg-yellow-50 text-yellow-700
-                {% else %}bg-slate-100 text-slate-600{% endif %}">
-                {{ r.status|replace("_", " ")|title }}
-              </span>
-            </td>
-            <td class="px-4 py-3 text-sm text-slate-600">
-              {% if r.decision == 'approved' %}
-              <span class="text-green-600 font-medium">Approved</span>
-              {% elif r.decision == 'rejected' %}
-              <span class="text-red-500 font-medium">Rejected</span>
-              {% elif r.decision == 'auto_qualified' %}
-              <span class="text-blue-600 font-medium">Auto-Qualified</span>
-              {% elif r.decision == 'auto_rejected' %}
-              <span class="text-red-400 font-medium">Auto-Rejected</span>
-              {% else %}
-              <span class="text-slate-400">—</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="4" class="px-4 py-12 text-center text-sm text-slate-500">No evaluated restaurants yet. Run a batch evaluation to get started.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Pagination -->
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between mt-4">
-      <div class="text-sm text-slate-500">Page {{ page }} of {{ total_pages }} ({{ stats.total_evaluated }} evaluated)</div>
-      <div class="flex gap-1">
-        {% if page > 1 %}
-        <a href="?page={{ page - 1 }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Prev</a>
-        {% endif %}
-        {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Next</a>
-        {% endif %}
-      </div>
+    {% else %}
+    <div class="bg-white rounded-lg border border-slate-200 p-8 mb-6 text-center">
+      <p class="text-sm text-slate-500">No pending reviews. All qualification results have been reviewed.</p>
     </div>
     {% endif %}
   </div>

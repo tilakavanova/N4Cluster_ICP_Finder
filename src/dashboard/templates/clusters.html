@@ -6,19 +6,19 @@
 <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Clusters</div>
-    <div class="text-2xl font-bold text-navy-950 mt-1">{{ stats.total_clusters }}</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ stats.total_clusters|default(0) }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Clusters</div>
-    <div class="text-2xl font-bold text-green-600 mt-1">{{ stats.active_clusters }}</div>
+    <div class="text-2xl font-bold text-green-600 mt-1">{{ clusters|selectattr('status', 'equalto', 'active')|list|length }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg Flywheel Score</div>
-    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ "%.1f"|format(stats.avg_flywheel_score) if stats.avg_flywheel_score else "—" }}</div>
+    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ "%.1f"|format(stats.avg_flywheel) if stats.avg_flywheel else "&mdash;" }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
-    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Restaurants</div>
-    <div class="text-2xl font-bold text-teal-500 mt-1">{{ stats.total_restaurants_in_clusters }}</div>
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Members</div>
+    <div class="text-2xl font-bold text-teal-500 mt-1">{{ stats.total_members|default(0) }}</div>
   </div>
 </div>
 
@@ -76,11 +76,11 @@
             <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ cluster.name }}</td>
             <td class="px-4 py-3">
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-                {% if cluster.type == 'geographic' %}bg-cobalt-500/10 text-cobalt-600
-                {% elif cluster.type == 'cuisine' %}bg-teal-500/10 text-teal-600
-                {% elif cluster.type == 'delivery' %}bg-amber-500/10 text-amber-600
+                {% if cluster.cluster_type == 'geographic' %}bg-cobalt-500/10 text-cobalt-600
+                {% elif cluster.cluster_type == 'cuisine' %}bg-teal-500/10 text-teal-600
+                {% elif cluster.cluster_type == 'delivery' %}bg-amber-500/10 text-amber-600
                 {% else %}bg-slate-100 text-slate-600{% endif %}">
-                {{ cluster.type|title }}
+                {{ cluster.cluster_type|default('unknown')|title }}
               </span>
             </td>
             <td class="px-4 py-3">
@@ -90,17 +90,17 @@
                 {% elif cluster.status == 'campaign_launched' %}bg-blue-50 text-blue-700
                 {% elif cluster.status == 'completed' %}bg-slate-100 text-slate-600
                 {% else %}bg-slate-100 text-slate-600{% endif %}">
-                {{ cluster.status|replace("_", " ")|title }}
+                {{ cluster.status|default('unknown')|replace("_", " ")|title }}
               </span>
             </td>
-            <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ cluster.restaurant_count }}</td>
-            <td class="px-4 py-3 text-sm font-medium text-cobalt-500">{{ "%.1f"|format(cluster.avg_icp_score) if cluster.avg_icp_score else "—" }}</td>
+            <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ cluster.restaurant_count|default(0) }}</td>
+            <td class="px-4 py-3 text-sm font-medium text-cobalt-500">{{ "%.1f"|format(cluster.avg_icp_score) if cluster.avg_icp_score else "&mdash;" }}</td>
             <td class="px-4 py-3">
               <div class="flex items-center gap-2">
                 <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden max-w-[60px]">
-                  <div class="h-full rounded-full {% if cluster.flywheel_score >= 80 %}bg-green-500{% elif cluster.flywheel_score >= 60 %}bg-blue-500{% elif cluster.flywheel_score >= 40 %}bg-yellow-500{% else %}bg-red-400{% endif %}" style="width: {{ cluster.flywheel_score }}%"></div>
+                  <div class="h-full rounded-full {% if cluster.flywheel_score is defined and cluster.flywheel_score >= 80 %}bg-green-500{% elif cluster.flywheel_score is defined and cluster.flywheel_score >= 60 %}bg-blue-500{% elif cluster.flywheel_score is defined and cluster.flywheel_score >= 40 %}bg-yellow-500{% else %}bg-red-400{% endif %}" style="width: {{ cluster.flywheel_score|default(0) }}%"></div>
                 </div>
-                <span class="text-xs font-medium text-slate-600">{{ "%.0f"|format(cluster.flywheel_score) }}</span>
+                <span class="text-xs font-medium text-slate-600">{{ "%.0f"|format(cluster.flywheel_score) if cluster.flywheel_score else "&mdash;" }}</span>
               </div>
             </td>
             <td class="px-4 py-3">
@@ -111,7 +111,7 @@
                 {% endfor %}
                 {% if cluster.zip_codes|length > 3 %}<span class="text-xs text-slate-400">+{{ cluster.zip_codes|length - 3 }}</span>{% endif %}
               </div>
-              {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+              {% else %}<span class="text-xs text-slate-400">&mdash;</span>{% endif %}
             </td>
             <td class="px-4 py-3">
               <button class="text-xs text-cobalt-500 hover:text-cobalt-600 font-medium"
@@ -142,21 +142,6 @@
         </tbody>
       </table>
     </div>
-
-    <!-- Pagination -->
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between mt-4">
-      <div class="text-sm text-slate-500">Page {{ page }} of {{ total_pages }} ({{ stats.total_clusters }} clusters)</div>
-      <div class="flex gap-1">
-        {% if page > 1 %}
-        <a href="?page={{ page - 1 }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Prev</a>
-        {% endif %}
-        {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Next</a>
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
   </div>
 </div>
 {% endblock %}

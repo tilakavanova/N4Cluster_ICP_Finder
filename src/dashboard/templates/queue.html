@@ -6,32 +6,31 @@
 <div class="bg-white rounded-lg border border-slate-200 px-5 py-4 mb-6">
   <form method="get" action="/dashboard/queue" class="flex items-center gap-3">
     <label class="text-sm font-medium text-navy-950">Sales Rep:</label>
-    <select name="rep_id" class="rounded-md border border-slate-300 text-sm px-3 py-1.5" onchange="this.form.submit()">
-      <option value="">All Reps</option>
-      {% for rep in reps %}
-      <option value="{{ rep.id }}" {% if filters.rep_id == rep.id|string %}selected{% endif %}>{{ rep.name }}</option>
-      {% endfor %}
-    </select>
+    <input type="text" name="rep_id" value="{{ rep_id|default('', true) }}" placeholder="Enter rep ID" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-48">
+    <button type="submit" class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-sm font-medium px-4 py-1.5 rounded-md">Load Queue</button>
   </form>
 </div>
 
-<!-- Stats row -->
+<!-- Stats row (computed from items list) -->
+{% set pending_count = items|selectattr('status', 'equalto', 'pending')|list|length if items else 0 %}
+{% set claimed_count = items|selectattr('status', 'equalto', 'claimed')|list|length if items else 0 %}
+{% set completed_count = items|selectattr('status', 'equalto', 'completed')|list|length if items else 0 %}
 <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending Items</div>
-    <div class="text-2xl font-bold text-navy-950 mt-1">{{ stats.pending }}</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ pending_count }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Claimed Items</div>
-    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ stats.claimed }}</div>
+    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ claimed_count }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
-    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Completed Today</div>
-    <div class="text-2xl font-bold text-green-600 mt-1">{{ stats.completed_today }}</div>
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Completed</div>
+    <div class="text-2xl font-bold text-green-600 mt-1">{{ completed_count }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Ranking Score</div>
-    <div class="text-2xl font-bold text-teal-500 mt-1">{{ "%.0f"|format(stats.ranking_score) if stats.ranking_score else "—" }}</div>
+    <div class="text-2xl font-bold text-teal-500 mt-1">{% if ranking and ranking.score is defined %}{{ "%.0f"|format(ranking.score) }}{% else %}&mdash;{% endif %}</div>
   </div>
 </div>
 
@@ -57,22 +56,22 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          {% for item in queue_items %}
+          {% for item in items %}
           <tr class="hover:bg-slate-50" id="queue-item-{{ item.id }}">
             <td class="px-4 py-3">
               <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold
-                {% if item.priority_score >= 90 %}bg-red-100 text-red-700
-                {% elif item.priority_score >= 70 %}bg-orange-100 text-orange-700
-                {% elif item.priority_score >= 50 %}bg-yellow-100 text-yellow-700
+                {% if item.priority_score is defined and item.priority_score >= 90 %}bg-red-100 text-red-700
+                {% elif item.priority_score is defined and item.priority_score >= 70 %}bg-orange-100 text-orange-700
+                {% elif item.priority_score is defined and item.priority_score >= 50 %}bg-yellow-100 text-yellow-700
                 {% else %}bg-slate-100 text-slate-600{% endif %}">
-                {{ item.priority_score }}
+                {{ item.priority_score|default(0) }}
               </span>
             </td>
             <td class="px-4 py-3">
-              <div class="text-sm font-medium text-navy-950">{{ item.restaurant_name }}</div>
-              {% if item.city %}<div class="text-xs text-slate-500">{{ item.city }}{% if item.state %}, {{ item.state }}{% endif %}</div>{% endif %}
+              <div class="text-sm font-medium text-navy-950">{{ item.restaurant_name|default('Unknown') }}</div>
+              {% if item.city is defined and item.city %}<div class="text-xs text-slate-500">{{ item.city }}{% if item.state is defined and item.state %}, {{ item.state }}{% endif %}</div>{% endif %}
             </td>
-            <td class="px-4 py-3 text-sm text-slate-600">{{ item.reason or "—" }}</td>
+            <td class="px-4 py-3 text-sm text-slate-600">{{ item.reason|default('&mdash;') }}</td>
             <td class="px-4 py-3">
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
                 {% if item.status == 'pending' %}bg-yellow-50 text-yellow-700
@@ -80,12 +79,12 @@
                 {% elif item.status == 'completed' %}bg-green-50 text-green-700
                 {% elif item.status == 'skipped' %}bg-slate-100 text-slate-600
                 {% else %}bg-slate-100 text-slate-600{% endif %}">
-                {{ item.status|title }}
+                {{ item.status|default('unknown')|title }}
               </span>
             </td>
             <td class="px-4 py-3">
-              <div class="text-xs text-slate-600">ICP: <span class="font-medium text-cobalt-500">{{ "%.0f"|format(item.icp_score) if item.icp_score else "—" }}</span></div>
-              {% if item.fit_label %}
+              <div class="text-xs text-slate-600">ICP: <span class="font-medium text-cobalt-500">{{ "%.0f"|format(item.icp_score) if item.icp_score is defined and item.icp_score else "&mdash;" }}</span></div>
+              {% if item.fit_label is defined and item.fit_label %}
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium mt-0.5
                 {% if item.fit_label == 'excellent' %}bg-green-50 text-green-700
                 {% elif item.fit_label == 'good' %}bg-blue-50 text-blue-700
@@ -99,59 +98,46 @@
               <div class="flex items-center gap-1">
                 {% if item.status == 'pending' %}
                 <button class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
-                  hx-patch="/dashboard/queue/{{ item.id }}/claim"
+                  hx-patch="/dashboard/queue/items/{{ item.id }}/claim"
                   hx-target="#queue-item-{{ item.id }}"
                   hx-swap="outerHTML">
                   Claim
                 </button>
                 <button class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
-                  hx-patch="/dashboard/queue/{{ item.id }}/skip"
+                  hx-patch="/dashboard/queue/items/{{ item.id }}/skip"
                   hx-target="#queue-item-{{ item.id }}"
                   hx-swap="outerHTML">
                   Skip
                 </button>
                 {% elif item.status == 'claimed' %}
                 <button class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
-                  hx-patch="/dashboard/queue/{{ item.id }}/complete"
+                  hx-patch="/dashboard/queue/items/{{ item.id }}/complete"
                   hx-target="#queue-item-{{ item.id }}"
                   hx-swap="outerHTML">
                   Complete
                 </button>
                 <button class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
-                  hx-patch="/dashboard/queue/{{ item.id }}/skip"
+                  hx-patch="/dashboard/queue/items/{{ item.id }}/skip"
                   hx-target="#queue-item-{{ item.id }}"
                   hx-swap="outerHTML">
                   Skip
                 </button>
                 {% else %}
-                <span class="text-xs text-slate-400">—</span>
+                <span class="text-xs text-slate-400">&mdash;</span>
                 {% endif %}
               </div>
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="6" class="px-4 py-12 text-center text-sm text-slate-500">Queue is empty. Use Auto-Populate to add items based on ICP scores.</td>
+            <td colspan="6" class="px-4 py-12 text-center text-sm text-slate-500">
+              {% if rep_id %}Queue is empty for this rep. Use Auto-Populate to add items based on ICP scores.{% else %}Enter a rep ID above to load their queue.{% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-
-    <!-- Pagination -->
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between mt-4">
-      <div class="text-sm text-slate-500">Page {{ page }} of {{ total_pages }}</div>
-      <div class="flex gap-1">
-        {% if page > 1 %}
-        <a href="?page={{ page - 1 }}&rep_id={{ filters.rep_id or '' }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Prev</a>
-        {% endif %}
-        {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}&rep_id={{ filters.rep_id or '' }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Next</a>
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
   </div>
 
   <!-- Sidebar -->
@@ -159,7 +145,11 @@
     <!-- Auto-Populate -->
     <div class="bg-white rounded-lg border border-slate-200 p-6">
       <h2 class="text-sm font-semibold text-navy-950 mb-4">Auto-Populate Queue</h2>
-      <form method="post" action="/dashboard/queue/auto-populate" class="space-y-4">
+      <form method="post" action="/dashboard/queue/populate" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Rep ID</label>
+          <input type="text" name="rep_id" value="{{ rep_id|default('', true) }}" required placeholder="Rep ID" class="w-full rounded-md border border-slate-300 text-sm px-3 py-2">
+        </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Min ICP Score</label>
           <input type="number" name="min_icp_score" value="60" min="0" max="100" class="w-full rounded-md border border-slate-300 text-sm px-3 py-2">
@@ -178,23 +168,22 @@
       </form>
     </div>
 
-    <!-- Rep Rankings -->
+    <!-- Rep Ranking -->
     <div class="bg-white rounded-lg border border-slate-200 p-6 mt-4">
-      <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Rep Rankings</h3>
+      <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Rep Ranking</h3>
+      {% if ranking %}
       <div class="space-y-3">
-        {% for rep in rep_rankings %}
         <div class="flex items-center gap-3">
-          <span class="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-xs font-bold text-slate-600">{{ loop.index }}</span>
           <div class="flex-1">
-            <div class="text-sm font-medium text-navy-950">{{ rep.name }}</div>
-            <div class="text-xs text-slate-500">{{ rep.completed_count }} completed</div>
+            <div class="text-sm font-medium text-navy-950">{{ ranking.rep_id|default(rep_id) }}</div>
+            <div class="text-xs text-slate-500">{{ ranking.completed_count|default(0) }} completed</div>
           </div>
-          <span class="text-sm font-bold {% if loop.index <= 3 %}text-teal-500{% else %}text-slate-600{% endif %}">{{ "%.0f"|format(rep.score) }}</span>
+          <span class="text-sm font-bold text-teal-500">{{ "%.0f"|format(ranking.score) if ranking.score is defined and ranking.score else "&mdash;" }}</span>
         </div>
-        {% else %}
-        <div class="text-sm text-slate-500">No rep data available.</div>
-        {% endfor %}
       </div>
+      {% else %}
+      <div class="text-sm text-slate-500">No rep data available.</div>
+      {% endif %}
     </div>
   </div>
 </div>

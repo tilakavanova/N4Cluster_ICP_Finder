@@ -2,19 +2,21 @@
 {% block title %}Neighborhoods{% endblock %}
 
 {% block content %}
-<!-- Stats row -->
+<!-- Stats row (computed from neighborhoods list) -->
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Neighborhoods</div>
-    <div class="text-2xl font-bold text-navy-950 mt-1">{{ stats.total }}</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ neighborhoods|length }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg Opportunity Score</div>
-    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ "%.1f"|format(stats.avg_opportunity_score) if stats.avg_opportunity_score else "—" }}</div>
+    <div class="text-2xl font-bold text-cobalt-500 mt-1">
+      {% if neighborhoods %}{{ "%.1f"|format(neighborhoods|map(attribute='opportunity_score')|select('number')|list|sum / neighborhoods|length) }}{% else %}&mdash;{% endif %}
+    </div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Top Neighborhood</div>
-    <div class="text-2xl font-bold text-teal-500 mt-1">{{ stats.top_neighborhood or "—" }}</div>
+    <div class="text-2xl font-bold text-teal-500 mt-1">{{ neighborhoods[0].name if neighborhoods else "&mdash;" }}</div>
   </div>
 </div>
 
@@ -23,20 +25,15 @@
   <form method="get" action="/dashboard/neighborhoods" class="flex flex-wrap items-end gap-3">
     <div>
       <label class="block text-xs font-medium text-slate-600 mb-1">State</label>
-      <select name="state" class="rounded-md border border-slate-300 text-sm px-3 py-1.5">
-        <option value="">All</option>
-        {% for s in states %}
-        <option value="{{ s }}" {% if filters.state == s %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-      </select>
+      <input type="text" name="state" value="{{ filters.state|default('', true) }}" placeholder="e.g. MA" maxlength="2" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-20">
     </div>
     <div>
       <label class="block text-xs font-medium text-slate-600 mb-1">City</label>
-      <input type="text" name="city" value="{{ filters.city or '' }}" placeholder="e.g. Boston" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-32">
+      <input type="text" name="city" value="{{ filters.city|default('', true) }}" placeholder="e.g. Boston" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-32">
     </div>
     <div>
       <label class="block text-xs font-medium text-slate-600 mb-1">Min Restaurants</label>
-      <input type="number" name="min_restaurants" value="{{ filters.min_restaurants or '' }}" placeholder="0" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-20" min="0">
+      <input type="number" name="min_restaurants" value="{{ filters.min_restaurants|default('', true) }}" placeholder="0" class="rounded-md border border-slate-300 text-sm px-3 py-1.5 w-20" min="0">
     </div>
     <button type="submit" class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-sm font-medium px-4 py-1.5 rounded-md">Filter</button>
     <a href="/dashboard/neighborhoods" class="text-sm text-slate-500 hover:text-slate-700 px-2 py-1.5">Clear</a>
@@ -85,7 +82,7 @@
           {% if n.city %}<div class="text-xs text-slate-500">{{ n.city }}{% if n.state %}, {{ n.state }}{% endif %}</div>{% endif %}
         </td>
         <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ n.restaurant_count }}</td>
-        <td class="px-4 py-3 text-sm font-medium text-cobalt-500">{{ "%.1f"|format(n.avg_icp_score) if n.avg_icp_score else "—" }}</td>
+        <td class="px-4 py-3 text-sm font-medium text-cobalt-500">{{ "%.1f"|format(n.avg_icp_score) if n.avg_icp_score else "&mdash;" }}</td>
         <td class="px-4 py-3">
           <div class="flex items-center gap-2">
             <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden max-w-[80px]">
@@ -94,8 +91,8 @@
             <span class="text-sm font-medium {% if n.opportunity_score >= 80 %}text-green-600{% elif n.opportunity_score >= 60 %}text-blue-600{% elif n.opportunity_score >= 40 %}text-yellow-600{% else %}text-red-500{% endif %}">{{ "%.0f"|format(n.opportunity_score) }}</span>
           </div>
         </td>
-        <td class="px-4 py-3 text-sm text-slate-600">{{ "%.0f"|format(n.independent_ratio * 100) if n.independent_ratio else "—" }}%</td>
-        <td class="px-4 py-3 text-sm text-slate-600">{{ "%.0f"|format(n.delivery_coverage * 100) if n.delivery_coverage else "—" }}%</td>
+        <td class="px-4 py-3 text-sm text-slate-600">{{ "%.0f"|format(n.independent_ratio * 100) if n.independent_ratio else "&mdash;" }}%</td>
+        <td class="px-4 py-3 text-sm text-slate-600">{{ "%.0f"|format(n.delivery_coverage * 100) if n.delivery_coverage else "&mdash;" }}%</td>
         <td class="px-4 py-3">
           {% if n.top_cuisines %}
           <div class="flex flex-wrap gap-1">
@@ -104,7 +101,7 @@
             {% endfor %}
             {% if n.top_cuisines|length > 3 %}<span class="text-xs text-slate-400">+{{ n.top_cuisines|length - 3 }}</span>{% endif %}
           </div>
-          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+          {% else %}<span class="text-xs text-slate-400">&mdash;</span>{% endif %}
         </td>
       </tr>
       {% else %}
@@ -117,15 +114,15 @@
 </div>
 
 <!-- Pagination -->
-{% if total_pages > 1 %}
+{% if total_pages|default(1) > 1 %}
 <div class="flex items-center justify-between mt-4">
-  <div class="text-sm text-slate-500">Page {{ page }} of {{ total_pages }} ({{ stats.total }} neighborhoods)</div>
+  <div class="text-sm text-slate-500">Page {{ page }} of {{ total_pages }} ({{ neighborhoods|length }} shown)</div>
   <div class="flex gap-1">
     {% if page > 1 %}
-    <a href="?page={{ page - 1 }}&state={{ filters.state or '' }}&city={{ filters.city or '' }}&min_restaurants={{ filters.min_restaurants or '' }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Prev</a>
+    <a href="?page={{ page - 1 }}&state={{ filters.state|default('', true) }}&city={{ filters.city|default('', true) }}&min_restaurants={{ filters.min_restaurants|default('', true) }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Prev</a>
     {% endif %}
     {% if page < total_pages %}
-    <a href="?page={{ page + 1 }}&state={{ filters.state or '' }}&city={{ filters.city or '' }}&min_restaurants={{ filters.min_restaurants or '' }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Next</a>
+    <a href="?page={{ page + 1 }}&state={{ filters.state|default('', true) }}&city={{ filters.city|default('', true) }}&min_restaurants={{ filters.min_restaurants|default('', true) }}" class="px-3 py-1.5 rounded-md border border-slate-300 text-sm hover:bg-slate-50">Next</a>
     {% endif %}
   </div>
 </div>
@@ -136,33 +133,14 @@
   <h2 class="text-sm font-semibold text-navy-950 mb-4">Compare Neighborhoods</h2>
   <form class="flex flex-wrap items-end gap-3" hx-post="/dashboard/neighborhoods/compare" hx-target="#comparison-results" hx-swap="innerHTML">
     <div class="flex-1 min-w-[200px]">
-      <label class="block text-xs font-medium text-slate-600 mb-1">ZIP Codes (select multiple)</label>
-      <select name="zip_codes" multiple class="w-full rounded-md border border-slate-300 text-sm px-3 py-1.5 h-24">
-        {% for n in neighborhoods %}
-        <option value="{{ n.zip_code }}">{{ n.zip_code }} — {{ n.name }}</option>
-        {% endfor %}
-      </select>
-      <div class="text-xs text-slate-400 mt-1">Hold Ctrl/Cmd to select multiple</div>
+      <label class="block text-xs font-medium text-slate-600 mb-1">ZIP Codes (comma separated)</label>
+      <input type="text" name="zip_codes" placeholder="e.g. 02115, 02116, 02118" class="w-full rounded-md border border-slate-300 text-sm px-3 py-1.5">
+      <div class="text-xs text-slate-400 mt-1">Enter comma-separated ZIP codes to compare</div>
     </div>
     <button type="submit" class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-sm font-medium px-4 py-1.5 rounded-md">Compare</button>
   </form>
   <div id="comparison-results" class="mt-4">
-    {% if comparisons %}
-    <div class="grid grid-cols-1 sm:grid-cols-{{ comparisons|length }} gap-4">
-      {% for c in comparisons %}
-      <div class="rounded-lg border border-slate-200 p-4">
-        <div class="text-sm font-bold text-navy-950 mb-2">{{ c.zip_code }} — {{ c.name }}</div>
-        <div class="space-y-2 text-sm">
-          <div class="flex justify-between"><span class="text-slate-600">Restaurants</span><span class="font-medium text-navy-950">{{ c.restaurant_count }}</span></div>
-          <div class="flex justify-between"><span class="text-slate-600">Avg ICP</span><span class="font-medium text-cobalt-500">{{ "%.1f"|format(c.avg_icp_score) }}</span></div>
-          <div class="flex justify-between"><span class="text-slate-600">Opportunity</span><span class="font-medium {% if c.opportunity_score >= 70 %}text-green-600{% else %}text-yellow-600{% endif %}">{{ "%.0f"|format(c.opportunity_score) }}</span></div>
-          <div class="flex justify-between"><span class="text-slate-600">Indep. Ratio</span><span class="font-medium text-navy-950">{{ "%.0f"|format(c.independent_ratio * 100) }}%</span></div>
-          <div class="flex justify-between"><span class="text-slate-600">Delivery</span><span class="font-medium text-navy-950">{{ "%.0f"|format(c.delivery_coverage * 100) }}%</span></div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
+    {# Comparison results loaded via HTMX #}
   </div>
 </div>
 {% endblock %}

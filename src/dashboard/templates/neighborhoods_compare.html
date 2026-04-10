@@ -1,0 +1,20 @@
+{# Partial template for neighborhood comparison results (loaded via HTMX) #}
+{% set items = comparison.neighborhoods if comparison.neighborhoods is defined else comparison %}
+{% if items %}
+<div class="grid grid-cols-1 sm:grid-cols-{{ items|length }} gap-4">
+  {% for c in items %}
+  <div class="rounded-lg border border-slate-200 p-4">
+    <div class="text-sm font-bold text-navy-950 mb-2">{{ c.zip_code|default('') }} &mdash; {{ c.name|default('Unknown') }}</div>
+    <div class="space-y-2 text-sm">
+      <div class="flex justify-between"><span class="text-slate-600">Restaurants</span><span class="font-medium text-navy-950">{{ c.restaurant_count|default(0) }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-600">Avg ICP</span><span class="font-medium text-cobalt-500">{{ "%.1f"|format(c.avg_icp_score) if c.avg_icp_score else "&mdash;" }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-600">Opportunity</span><span class="font-medium {% if c.opportunity_score is defined and c.opportunity_score >= 70 %}text-green-600{% else %}text-yellow-600{% endif %}">{{ "%.0f"|format(c.opportunity_score) if c.opportunity_score else "&mdash;" }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-600">Indep. Ratio</span><span class="font-medium text-navy-950">{{ "%.0f"|format(c.independent_ratio * 100) if c.independent_ratio else "&mdash;" }}%</span></div>
+      <div class="flex justify-between"><span class="text-slate-600">Delivery</span><span class="font-medium text-navy-950">{{ "%.0f"|format(c.delivery_coverage * 100) if c.delivery_coverage else "&mdash;" }}%</span></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-sm text-slate-500">No comparison data available. Select ZIP codes and try again.</p>
+{% endif %}

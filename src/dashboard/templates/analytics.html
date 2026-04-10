@@ -8,19 +8,19 @@
 <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Leads</div>
-    <div class="text-2xl font-bold text-navy-950 mt-1">{{ overview.total_leads }}</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ overview.total_leads|default(0) }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Restaurants</div>
-    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ overview.total_restaurants }}</div>
+    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ overview.total_restaurants|default(0) }}</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Conversion Rate</div>
-    <div class="text-2xl font-bold text-teal-500 mt-1">{{ "%.1f"|format(overview.conversion_rate) }}%</div>
+    <div class="text-2xl font-bold text-teal-500 mt-1">{{ "%.1f"|format(overview.conversion_rate|default(0)) }}%</div>
   </div>
   <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
     <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Crawl Jobs Run</div>
-    <div class="text-2xl font-bold text-navy-950 mt-1">{{ overview.total_jobs }}</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ overview.total_jobs|default(0) }}</div>
   </div>
 </div>
 
@@ -28,31 +28,127 @@
   <!-- Leads by Source -->
   <div class="bg-white rounded-lg border border-slate-200 p-6">
     <h3 class="text-sm font-semibold text-navy-950 mb-4">Leads by Source</h3>
+    {% if by_source is defined and by_source %}
     <canvas id="sourceChart" height="200"></canvas>
+    {% else %}
+    <p class="text-sm text-slate-500">No source data available yet.</p>
+    {% endif %}
   </div>
 
   <!-- ICP Fit Distribution -->
   <div class="bg-white rounded-lg border border-slate-200 p-6">
     <h3 class="text-sm font-semibold text-navy-950 mb-4">ICP Fit Distribution</h3>
+    {% if by_fit is defined and by_fit %}
     <canvas id="fitChart" height="200"></canvas>
+    {% else %}
+    <p class="text-sm text-slate-500">No fit data available yet.</p>
+    {% endif %}
   </div>
 
   <!-- Lead Pipeline Funnel -->
   <div class="bg-white rounded-lg border border-slate-200 p-6">
     <h3 class="text-sm font-semibold text-navy-950 mb-4">Lead Pipeline</h3>
+    {% if by_status is defined and by_status %}
     <canvas id="funnelChart" height="200"></canvas>
+    {% else %}
+    <p class="text-sm text-slate-500">No pipeline data available yet.</p>
+    {% endif %}
   </div>
 
   <!-- Leads Over Time (last 30 days) -->
   <div class="bg-white rounded-lg border border-slate-200 p-6">
     <h3 class="text-sm font-semibold text-navy-950 mb-4">Leads Over Time (30 days)</h3>
+    {% if over_time is defined and over_time %}
     <canvas id="timeChart" height="200"></canvas>
+    {% else %}
+    <p class="text-sm text-slate-500">No time series data available yet.</p>
+    {% endif %}
   </div>
+
+  <!-- Conversion Funnel (NIF-208) -->
+  {% if funnel %}
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h3 class="text-sm font-semibold text-navy-950 mb-4">Conversion Funnel{% if funnel.period %} ({{ funnel.period }}){% endif %}</h3>
+    <div class="space-y-3">
+      {% set funnel_stages = [
+        ('Discovered', funnel.discovered|default(0)),
+        ('Contacted', funnel.contacted|default(0)),
+        ('Demo Scheduled', funnel.demo_scheduled|default(0)),
+        ('Pilot Started', funnel.pilot_started|default(0)),
+        ('Converted', funnel.converted|default(0)),
+      ] %}
+      {% set max_val = funnel.discovered|default(1) if funnel.discovered else 1 %}
+      {% for label, value in funnel_stages %}
+      <div>
+        <div class="flex justify-between text-xs text-slate-600 mb-1">
+          <span>{{ label }}</span>
+          <span class="font-medium">{{ value }}</span>
+        </div>
+        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div class="h-full bg-cobalt-500 rounded-full" style="width: {{ (value / max_val * 100) if max_val > 0 else 0 }}%"></div>
+        </div>
+      </div>
+      {% endfor %}
+      {% if funnel.churned is defined %}
+      <div class="flex justify-between text-xs mt-2 pt-2 border-t border-slate-100">
+        <span class="text-slate-600">Churned</span>
+        <span class="font-medium text-red-500">{{ funnel.churned|default(0) }}</span>
+      </div>
+      {% endif %}
+      {% if funnel.conversion_rate is defined %}
+      <div class="flex justify-between text-xs">
+        <span class="text-slate-600">Conversion Rate</span>
+        <span class="font-medium text-green-600">{{ "%.1f"|format(funnel.conversion_rate|default(0)) }}%</span>
+      </div>
+      {% endif %}
+      {% if funnel.avg_days_to_convert is defined and funnel.avg_days_to_convert %}
+      <div class="flex justify-between text-xs">
+        <span class="text-slate-600">Avg Days to Convert</span>
+        <span class="font-medium text-cobalt-500">{{ "%.0f"|format(funnel.avg_days_to_convert) }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Top Neighborhoods (NIF-208) -->
+  {% if top_neighborhoods is defined and top_neighborhoods %}
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h3 class="text-sm font-semibold text-navy-950 mb-4">Top Neighborhoods by Opportunity</h3>
+    <div class="space-y-2">
+      {% for n in top_neighborhoods %}
+      <div class="flex items-center gap-3">
+        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-xs font-bold text-slate-600">{{ loop.index }}</span>
+        <div class="flex-1">
+          <div class="text-sm font-medium text-navy-950">{{ n.zip_code|default('') }} &mdash; {{ n.name|default('Unknown') }}</div>
+          <div class="text-xs text-slate-500">{{ n.restaurant_count|default(0) }} restaurants</div>
+        </div>
+        <span class="text-sm font-bold {% if n.opportunity_score is defined and n.opportunity_score >= 70 %}text-green-600{% else %}text-cobalt-500{% endif %}">{{ "%.0f"|format(n.opportunity_score) if n.opportunity_score else "&mdash;" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Cluster Stats (NIF-208) -->
+  {% if cluster_stats is defined and cluster_stats %}
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h3 class="text-sm font-semibold text-navy-950 mb-4">Clusters by Status</h3>
+    <div class="grid grid-cols-2 gap-3">
+      {% for status, count in cluster_stats.items() %}
+      <div class="rounded-lg bg-slate-50 px-4 py-3 text-center">
+        <div class="text-lg font-bold text-navy-950">{{ count }}</div>
+        <div class="text-xs text-slate-600">{{ status|replace("_", " ")|title }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Top Cities -->
   <div class="bg-white rounded-lg border border-slate-200 p-6 lg:col-span-2">
     <h3 class="text-sm font-semibold text-navy-950 mb-4">Top Cities by Lead Volume</h3>
-    {% if top_cities %}
+    {% if top_cities is defined and top_cities %}
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
       {% for city in top_cities %}
       <div class="rounded-lg bg-slate-50 px-4 py-3 text-center">
@@ -74,6 +170,7 @@
     slate: '#64748b', amber: '#f59e0b',
   };
 
+  {% if by_source is defined and by_source %}
   // Leads by Source
   new Chart(document.getElementById('sourceChart'), {
     type: 'bar',
@@ -87,7 +184,9 @@
     },
     options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
   });
+  {% endif %}
 
+  {% if by_fit is defined and by_fit %}
   // ICP Fit Distribution
   new Chart(document.getElementById('fitChart'), {
     type: 'doughnut',
@@ -100,7 +199,9 @@
     },
     options: { plugins: { legend: { position: 'bottom' } } }
   });
+  {% endif %}
 
+  {% if by_status is defined and by_status %}
   // Lead Pipeline
   new Chart(document.getElementById('funnelChart'), {
     type: 'bar',
@@ -114,7 +215,9 @@
     },
     options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
   });
+  {% endif %}
 
+  {% if over_time is defined and over_time %}
   // Leads Over Time
   new Chart(document.getElementById('timeChart'), {
     type: 'line',
@@ -131,5 +234,6 @@
     },
     options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
   });
+  {% endif %}
 </script>
 {% endblock %}
