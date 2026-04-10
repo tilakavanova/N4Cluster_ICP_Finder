@@ -438,6 +438,78 @@ class ScoreRecalcJob(Base):
     profile = relationship("ScoringProfile", foreign_keys=[profile_id])
 
 
+
+class OutreachCampaign(Base):
+    """Outreach campaign definition (NIF-133)."""
+    __tablename__ = "outreach_campaigns"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False, index=True)
+    campaign_type = Column(String(20), nullable=False, default="email")  # email, call, sms, multi
+    status = Column(String(20), nullable=False, default="draft", index=True)  # draft, active, paused, completed
+    target_criteria = Column(JSONB, default=dict)
+    start_date = Column(DateTime(timezone=True))
+    end_date = Column(DateTime(timezone=True))
+    created_by = Column(Text, default="system")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    targets = relationship("OutreachTarget", back_populates="campaign", cascade="all, delete-orphan")
+    performance = relationship("OutreachPerformance", back_populates="campaign", uselist=False, cascade="all, delete-orphan")
+
+
+class OutreachTarget(Base):
+    """Individual outreach target within a campaign (NIF-134)."""
+    __tablename__ = "outreach_targets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("outreach_campaigns.id"), nullable=False, index=True)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=True, index=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, contacted, responded, converted, skipped
+    priority = Column(Integer, default=0)
+    assigned_to = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    campaign = relationship("OutreachCampaign", back_populates="targets")
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+    lead = relationship("Lead", foreign_keys=[lead_id])
+    activities = relationship("OutreachActivity", back_populates="target", cascade="all, delete-orphan")
+
+
+class OutreachActivity(Base):
+    """Activity log entry for an outreach target (NIF-135)."""
+    __tablename__ = "outreach_activities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    target_id = Column(UUID(as_uuid=True), ForeignKey("outreach_targets.id"), nullable=False, index=True)
+    activity_type = Column(String(30), nullable=False)  # email_sent, call_made, sms_sent, meeting, note
+    outcome = Column(String(30))  # no_answer, interested, not_interested, callback, converted
+    notes = Column(Text)
+    performed_by = Column(Text, default="system")
+    performed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    target = relationship("OutreachTarget", back_populates="activities")
+
+
+class OutreachPerformance(Base):
+    """Aggregated performance summary for a campaign (NIF-136)."""
+    __tablename__ = "outreach_performance"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("outreach_campaigns.id"), unique=True, nullable=False, index=True)
+    total_targets = Column(Integer, default=0)
+    contacted = Column(Integer, default=0)
+    responded = Column(Integer, default=0)
+    converted = Column(Integer, default=0)
+    response_rate = Column(Float, default=0.0)
+    conversion_rate = Column(Float, default=0.0)
+    last_calculated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    campaign = relationship("OutreachCampaign", back_populates="performance")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
