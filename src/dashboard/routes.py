@@ -14,7 +14,16 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.db.models import Lead, CrawlJob, Restaurant, ICPScore, AuditLog
+from src.db.models import (
+    Lead, CrawlJob, Restaurant, ICPScore, AuditLog,
+    Neighborhood,
+    OutreachCampaign, OutreachTarget, OutreachActivity, OutreachPerformance,
+    RepQueueItem, RepQueueRanking,
+    QualificationResult, QualificationExplanation,
+    MerchantCluster, ClusterMember, ClusterExpansionPlan,
+    FollowUpTask, LeadStageHistory, LeadAssignmentHistory, Account, Contact,
+    ConversionFunnel, ConversionEvent,
+)
 from src.db.session import get_session
 from src.services.cleanup import CleanupService
 from src.utils.geo import haversine_miles, bounding_box
@@ -171,9 +180,46 @@ async def lead_detail(
     )
     audit_logs = audit_result.scalars().all()
 
+    # NIF-207: Follow-up tasks
+    tasks_result = await session.execute(
+        select(FollowUpTask)
+        .where(FollowUpTask.lead_id == lead_id)
+        .order_by(FollowUpTask.created_at.desc())
+    )
+    tasks = tasks_result.scalars().all()
+
+    # NIF-207: Stage history
+    stage_history_result = await session.execute(
+        select(LeadStageHistory)
+        .where(LeadStageHistory.lead_id == lead_id)
+        .order_by(LeadStageHistory.changed_at.desc())
+    )
+    stage_history = stage_history_result.scalars().all()
+
+    # NIF-207: Assignment history
+    assignment_history_result = await session.execute(
+        select(LeadAssignmentHistory)
+        .where(LeadAssignmentHistory.lead_id == lead_id)
+        .order_by(LeadAssignmentHistory.changed_at.desc())
+    )
+    assignment_history = assignment_history_result.scalars().all()
+
+    # NIF-207: Account and contact from relationships
+    account = None
+    contact = None
+    if lead.account_id:
+        account = await session.get(Account, lead.account_id)
+    if lead.contact_id:
+        contact = await session.get(Contact, lead.contact_id)
+
     html = templates.get_template("lead_detail.html").render(
         lead=lead,
         audit_logs=audit_logs,
+        tasks=tasks,
+        stage_history=stage_history,
+        assignment_history=assignment_history,
+        account=account,
+        contact=contact,
         active_tab="leads",
     )
     return HTMLResponse(html)
@@ -713,6 +759,61 @@ async def analytics_dashboard(
     )
     top_cities = [{"city": r[0], "count": r[1]} for r in city_rows.all()]
 
+    # NIF-208: Conversion funnel — latest period
+    funnel = None
+    try:
+        funnel_result = await session.execute(
+            select(ConversionFunnel)
+            .order_by(ConversionFunnel.last_calculated_at.desc())
+            .limit(1)
+        )
+        funnel_row = funnel_result.scalar_one_or_none()
+        if funnel_row:
+            funnel = {
+                "period": funnel_row.period,
+                "discovered": funnel_row.discovered,
+                "contacted": funnel_row.contacted,
+                "demo_scheduled": funnel_row.demo_scheduled,
+                "pilot_started": funnel_row.pilot_started,
+                "converted": funnel_row.converted,
+                "churned": funnel_row.churned,
+                "conversion_rate": funnel_row.conversion_rate,
+                "avg_days_to_convert": funnel_row.avg_days_to_convert,
+            }
+    except Exception:
+        funnel = None
+
+    # NIF-208: Top neighborhoods by opportunity score
+    top_neighborhoods = []
+    try:
+        neighborhood_rows = await session.execute(
+            select(Neighborhood)
+            .order_by(Neighborhood.opportunity_score.desc())
+            .limit(5)
+        )
+        top_neighborhoods = [
+            {
+                "zip_code": n.zip_code,
+                "name": n.name,
+                "opportunity_score": n.opportunity_score,
+                "restaurant_count": n.restaurant_count,
+            }
+            for n in neighborhood_rows.scalars().all()
+        ]
+    except Exception:
+        top_neighborhoods = []
+
+    # NIF-208: Cluster stats by status
+    cluster_stats = {}
+    try:
+        cluster_status_rows = await session.execute(
+            select(MerchantCluster.status, func.count(MerchantCluster.id))
+            .group_by(MerchantCluster.status)
+        )
+        cluster_stats = {r[0]: r[1] for r in cluster_status_rows.all()}
+    except Exception:
+        cluster_stats = {}
+
     html = templates.get_template("analytics.html").render(
         overview=overview,
         by_source=by_source,
@@ -720,6 +821,9 @@ async def analytics_dashboard(
         by_status=by_status,
         over_time=over_time,
         top_cities=top_cities,
+        funnel=funnel,
+        top_neighborhoods=top_neighborhoods,
+        cluster_stats=cluster_stats,
         active_tab="analytics",
     )
     return HTMLResponse(html)
@@ -925,4 +1029,914 @@ async def export_prospects_csv(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ── Neighborhoods (NIF-202) ───────────────────────────────────
+
+
+@router.get("/neighborhoods", response_class=HTMLResponse)
+async def neighborhoods_dashboard(
+    request: Request,
+    state: str = Query(""),
+    city: str = Query(""),
+    min_restaurants: int = Query(3, ge=1),
+    page: int = Query(1, ge=1),
+    message: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Neighborhood ranking page with filters and pagination."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.neighborhoods import rank_neighborhoods
+
+    filters = {"state": state, "city": city, "min_restaurants": min_restaurants}
+    offset = (page - 1) * PAGE_SIZE
+
+    try:
+        neighborhoods = await rank_neighborhoods(
+            session,
+            state=state or None,
+            city=city or None,
+            min_restaurants=min_restaurants,
+            limit=PAGE_SIZE,
+            offset=offset,
+        )
+    except Exception as exc:
+        neighborhoods = []
+        message = message or f"Error loading neighborhoods: {exc}"
+
+    # Total count for pagination
+    count_query = select(func.count(Neighborhood.id)).where(
+        Neighborhood.restaurant_count >= min_restaurants
+    )
+    if state:
+        count_query = count_query.where(Neighborhood.state == state.upper())
+    if city:
+        count_query = count_query.where(Neighborhood.city.ilike(f"%{city}%"))
+    total = await session.scalar(count_query) or 0
+    total_pages = max(1, math.ceil(total / PAGE_SIZE))
+
+    html = templates.get_template("neighborhoods.html").render(
+        neighborhoods=neighborhoods,
+        filters=filters,
+        page=page,
+        total_pages=total_pages,
+        message=message,
+        active_tab="neighborhoods",
+    )
+    return HTMLResponse(html)
+
+
+@router.post("/neighborhoods/refresh-all")
+async def refresh_all_neighborhoods_route(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Trigger a refresh of all neighborhood scores."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.neighborhoods import refresh_all_neighborhoods
+
+    try:
+        count = await refresh_all_neighborhoods(session)
+        await session.commit()
+        msg = f"Refreshed {count} neighborhoods"
+    except Exception as exc:
+        msg = f"Error refreshing neighborhoods: {exc}"
+
+    return RedirectResponse(
+        url=f"/dashboard/neighborhoods?message={msg}",
+        status_code=303,
+    )
+
+
+@router.post("/neighborhoods/compare", response_class=HTMLResponse)
+async def compare_neighborhoods_route(
+    request: Request,
+    zip_codes: str = Form(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX partial — compare selected neighborhoods side by side."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.neighborhoods import compare_neighborhoods
+
+    zips = [z.strip() for z in zip_codes.split(",") if z.strip()]
+    if not zips:
+        return HTMLResponse("<p>Please provide comma-separated ZIP codes.</p>")
+
+    try:
+        comparison = await compare_neighborhoods(session, zips)
+        html = templates.get_template("neighborhoods_compare.html").render(
+            comparison=comparison,
+        )
+        return HTMLResponse(html)
+    except Exception as exc:
+        return HTMLResponse(f"<p>Error comparing neighborhoods: {exc}</p>")
+
+
+# ── Outreach (NIF-203) ────────────────────────────────────────
+
+
+@router.get("/outreach", response_class=HTMLResponse)
+async def outreach_dashboard(
+    request: Request,
+    message: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Outreach campaign list with stats."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.outreach import list_campaigns, calculate_performance
+
+    try:
+        campaigns = await list_campaigns(session)
+        # Calculate performance for each campaign
+        campaign_stats = []
+        for campaign in campaigns:
+            try:
+                perf = await calculate_performance(session, campaign.id)
+                campaign_stats.append({"campaign": campaign, "performance": perf})
+            except Exception:
+                campaign_stats.append({"campaign": campaign, "performance": None})
+    except Exception as exc:
+        campaigns = []
+        campaign_stats = []
+        message = message or f"Error loading campaigns: {exc}"
+
+    html = templates.get_template("outreach.html").render(
+        campaigns=campaigns,
+        campaign_stats=campaign_stats,
+        message=message,
+        active_tab="outreach",
+    )
+    return HTMLResponse(html)
+
+
+@router.post("/outreach/campaigns")
+async def create_campaign_route(
+    request: Request,
+    name: str = Form(...),
+    campaign_type: str = Form("email"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a new outreach campaign from the dashboard form."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.outreach import create_campaign
+
+    try:
+        campaign = await create_campaign(
+            session,
+            name=name,
+            campaign_type=campaign_type,
+            created_by="dashboard",
+        )
+        await session.commit()
+        msg = f"Campaign '{name}' created successfully"
+    except Exception as exc:
+        msg = f"Error creating campaign: {exc}"
+
+    return RedirectResponse(
+        url=f"/dashboard/outreach?message={msg}",
+        status_code=303,
+    )
+
+
+@router.get("/outreach/campaigns/{campaign_id}", response_class=HTMLResponse)
+async def campaign_detail_partial(
+    request: Request,
+    campaign_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX partial — campaign detail with targets and activities."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.outreach import get_campaign, list_targets, calculate_performance
+
+    try:
+        campaign = await get_campaign(session, campaign_id)
+        if not campaign:
+            return HTMLResponse("<p>Campaign not found</p>", status_code=404)
+
+        targets = await list_targets(session, campaign_id)
+        perf = await calculate_performance(session, campaign_id)
+
+        html = templates.get_template("campaign_detail.html").render(
+            campaign=campaign,
+            targets=targets,
+            performance=perf,
+        )
+        return HTMLResponse(html)
+    except Exception as exc:
+        return HTMLResponse(f"<p>Error loading campaign: {exc}</p>")
+
+
+@router.patch("/outreach/campaigns/{campaign_id}/status", response_class=HTMLResponse)
+async def update_campaign_status_route(
+    request: Request,
+    campaign_id: UUID,
+    status: str = Form(...),
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX endpoint — update campaign status inline."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.outreach import update_campaign
+
+    try:
+        campaign = await update_campaign(session, campaign_id, status=status)
+        await session.commit()
+        return HTMLResponse(
+            f'<span class="badge badge-{status}">{status}</span>'
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
+
+
+@router.post("/outreach/campaigns/{campaign_id}/activity", response_class=HTMLResponse)
+async def log_campaign_activity_route(
+    request: Request,
+    campaign_id: UUID,
+    target_id: str = Form(...),
+    activity_type: str = Form(...),
+    outcome: str = Form(""),
+    notes: str = Form(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX endpoint — log an outreach activity against a target."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.outreach import log_activity
+
+    try:
+        activity = await log_activity(
+            session,
+            target_id=UUID(target_id),
+            activity_type=activity_type,
+            outcome=outcome or None,
+            notes=notes or None,
+            performed_by="dashboard",
+        )
+        await session.commit()
+        return HTMLResponse(
+            f'<div class="activity-logged">Activity logged: {activity_type}'
+            f'{" — " + outcome if outcome else ""}</div>'
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
+
+
+# ── Sales Queue (NIF-204) ─────────────────────────────────────
+
+
+@router.get("/queue", response_class=HTMLResponse)
+async def queue_dashboard(
+    request: Request,
+    rep_id: str = Query(""),
+    message: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Sales rep work queue page."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.rep_queue import get_queue, get_rep_ranking
+
+    items = []
+    ranking = None
+    if rep_id:
+        try:
+            items = await get_queue(session, rep_id)
+            ranking = await get_rep_ranking(session, rep_id)
+        except Exception as exc:
+            message = message or f"Error loading queue: {exc}"
+
+    html = templates.get_template("queue.html").render(
+        items=items,
+        ranking=ranking,
+        rep_id=rep_id,
+        message=message,
+        active_tab="queue",
+    )
+    return HTMLResponse(html)
+
+
+@router.patch("/queue/items/{item_id}/claim", response_class=HTMLResponse)
+async def claim_queue_item_route(
+    request: Request,
+    item_id: UUID,
+    rep_id: str = Form(...),
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX endpoint — claim a queue item."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.rep_queue import claim_item
+
+    try:
+        item = await claim_item(session, item_id, rep_id)
+        await session.commit()
+        return HTMLResponse(
+            f'<span class="badge badge-claimed">claimed</span>'
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
+
+
+@router.patch("/queue/items/{item_id}/complete", response_class=HTMLResponse)
+async def complete_queue_item_route(
+    request: Request,
+    item_id: UUID,
+    outcome: str = Form(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX endpoint — complete a queue item."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.rep_queue import complete_item
+
+    try:
+        item = await complete_item(session, item_id, outcome=outcome or None)
+        await session.commit()
+        return HTMLResponse(
+            f'<span class="badge badge-completed">completed</span>'
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
+
+
+@router.patch("/queue/items/{item_id}/skip", response_class=HTMLResponse)
+async def skip_queue_item_route(
+    request: Request,
+    item_id: UUID,
+    reason: str = Form(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX endpoint — skip a queue item."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.rep_queue import skip_item
+
+    try:
+        item = await skip_item(session, item_id, reason=reason or None)
+        await session.commit()
+        return HTMLResponse(
+            f'<span class="badge badge-skipped">skipped</span>'
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
+
+
+@router.post("/queue/populate")
+async def populate_queue_route(
+    request: Request,
+    rep_id: str = Form(...),
+    city: str = Form(""),
+    state: str = Form(""),
+    zip_code: str = Form(""),
+    min_icp_score: str = Form(""),
+    fit_label: str = Form(""),
+    limit: int = Form(50),
+    session: AsyncSession = Depends(get_session),
+):
+    """Auto-populate a rep's queue from restaurant filters."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.rep_queue import populate_queue
+
+    filters = {}
+    if city:
+        filters["city"] = city
+    if state:
+        filters["state"] = state
+    if zip_code:
+        filters["zip_code"] = zip_code
+    if min_icp_score:
+        try:
+            filters["min_icp_score"] = float(min_icp_score)
+        except ValueError:
+            pass
+    if fit_label:
+        filters["fit_label"] = fit_label
+
+    try:
+        result = await populate_queue(session, rep_id, filters=filters or None, limit=limit)
+        await session.commit()
+        msg = f"Added {result['added']} items to {rep_id}'s queue"
+    except Exception as exc:
+        msg = f"Error populating queue: {exc}"
+
+    return RedirectResponse(
+        url=f"/dashboard/queue?rep_id={rep_id}&message={msg}",
+        status_code=303,
+    )
+
+
+# ── Qualification (NIF-205) ───────────────────────────────────
+
+
+@router.get("/qualification", response_class=HTMLResponse)
+async def qualification_dashboard(
+    request: Request,
+    message: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Qualification review page — pending reviews and stats."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.qualification import list_pending_review
+
+    try:
+        pending = await list_pending_review(session)
+    except Exception as exc:
+        pending = []
+        message = message or f"Error loading qualifications: {exc}"
+
+    # Stats
+    total_qualified = await session.scalar(
+        select(func.count(QualificationResult.id)).where(
+            QualificationResult.qualification_status == "qualified"
+        )
+    ) or 0
+    total_not_qualified = await session.scalar(
+        select(func.count(QualificationResult.id)).where(
+            QualificationResult.qualification_status == "not_qualified"
+        )
+    ) or 0
+    total_needs_review = await session.scalar(
+        select(func.count(QualificationResult.id)).where(
+            QualificationResult.qualification_status == "needs_review"
+        )
+    ) or 0
+
+    stats = {
+        "qualified": total_qualified,
+        "not_qualified": total_not_qualified,
+        "needs_review": total_needs_review,
+    }
+
+    html = templates.get_template("qualification.html").render(
+        pending=pending,
+        stats=stats,
+        message=message,
+        active_tab="qualification",
+    )
+    return HTMLResponse(html)
+
+
+@router.post("/qualification/evaluate/{restaurant_id}", response_class=HTMLResponse)
+async def evaluate_restaurant_route(
+    request: Request,
+    restaurant_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX endpoint — trigger qualification evaluation for a restaurant."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.qualification import qualify_restaurant
+
+    try:
+        result = await qualify_restaurant(session, restaurant_id)
+        await session.commit()
+        return HTMLResponse(
+            f'<div class="qualification-result">'
+            f'<span class="badge badge-{result.qualification_status}">'
+            f'{result.qualification_status}</span> '
+            f'(confidence: {result.confidence_score:.2%})</div>'
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
+
+
+@router.patch("/qualification/{result_id}/review", response_class=HTMLResponse)
+async def review_qualification_route(
+    request: Request,
+    result_id: UUID,
+    decision: str = Form(...),
+    notes: str = Form(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX endpoint — approve or reject a qualification result."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.qualification import review_qualification
+
+    try:
+        result = await review_qualification(
+            session,
+            result_id=result_id,
+            decision=decision,
+            reviewed_by="dashboard",
+            notes=notes or None,
+        )
+        await session.commit()
+        return HTMLResponse(
+            f'<span class="badge badge-{result.qualification_status}">'
+            f'{result.qualification_status}</span> '
+            f'(reviewed: {decision})'
+        )
+    except Exception as exc:
+        return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
+
+
+@router.post("/qualification/batch")
+async def batch_qualify_route(
+    request: Request,
+    city: str = Form(""),
+    state: str = Form(""),
+    zip_code: str = Form(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Batch evaluate restaurants from filters."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.qualification import batch_qualify
+
+    filters = {}
+    if city:
+        filters["city"] = city
+    if state:
+        filters["state"] = state
+    if zip_code:
+        filters["zip_code"] = zip_code
+
+    try:
+        result = await batch_qualify(session, filters=filters or None)
+        await session.commit()
+        msg = (
+            f"Batch qualification complete: {result['total']} evaluated — "
+            f"{result['qualified']} qualified, "
+            f"{result['not_qualified']} not qualified, "
+            f"{result['needs_review']} need review"
+        )
+    except Exception as exc:
+        msg = f"Error in batch qualification: {exc}"
+
+    return RedirectResponse(
+        url=f"/dashboard/qualification?message={msg}",
+        status_code=303,
+    )
+
+
+# ── Clusters (NIF-206) ────────────────────────────────────────
+
+
+@router.get("/clusters", response_class=HTMLResponse)
+async def clusters_dashboard(
+    request: Request,
+    message: str = Query(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Cluster list with stats."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.cluster_engine import list_clusters
+
+    try:
+        clusters = await list_clusters(session)
+    except Exception as exc:
+        clusters = []
+        message = message or f"Error loading clusters: {exc}"
+
+    # Stats
+    total_clusters = await session.scalar(
+        select(func.count(MerchantCluster.id))
+    ) or 0
+    total_members = await session.scalar(
+        select(func.count(ClusterMember.id)).where(
+            ClusterMember.role.in_(["anchor", "member"])
+        )
+    ) or 0
+    avg_flywheel = await session.scalar(
+        select(func.avg(MerchantCluster.flywheel_score))
+    )
+
+    stats = {
+        "total_clusters": total_clusters,
+        "total_members": total_members,
+        "avg_flywheel": round(float(avg_flywheel), 2) if avg_flywheel else None,
+    }
+
+    html = templates.get_template("clusters.html").render(
+        clusters=clusters,
+        stats=stats,
+        message=message,
+        active_tab="clusters",
+    )
+    return HTMLResponse(html)
+
+
+@router.post("/clusters/detect")
+async def detect_clusters_route(
+    request: Request,
+    zip_code: str = Form(""),
+    min_size: int = Form(3),
+    radius_miles: float = Form(1.0),
+    session: AsyncSession = Depends(get_session),
+):
+    """Detect merchant clusters from the dashboard form."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.cluster_engine import detect_clusters
+
+    try:
+        clusters = await detect_clusters(
+            session,
+            zip_code=zip_code or None,
+            min_size=min_size,
+            radius_miles=radius_miles,
+        )
+        await session.commit()
+        msg = f"Detected {len(clusters)} clusters"
+    except Exception as exc:
+        msg = f"Error detecting clusters: {exc}"
+
+    return RedirectResponse(
+        url=f"/dashboard/clusters?message={msg}",
+        status_code=303,
+    )
+
+
+@router.get("/clusters/{cluster_id}", response_class=HTMLResponse)
+async def cluster_detail_partial(
+    request: Request,
+    cluster_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX partial — cluster detail with members and history."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.cluster_engine import get_cluster_detail, get_cluster_history
+
+    try:
+        cluster = await get_cluster_detail(session, cluster_id)
+        if not cluster:
+            return HTMLResponse("<p>Cluster not found</p>", status_code=404)
+
+        history = await get_cluster_history(session, cluster_id)
+
+        html = templates.get_template("cluster_detail.html").render(
+            cluster=cluster,
+            history=history,
+        )
+        return HTMLResponse(html)
+    except Exception as exc:
+        return HTMLResponse(f"<p>Error loading cluster: {exc}</p>")
+
+
+@router.post("/clusters/{cluster_id}/expansion-plan")
+async def create_expansion_plan_route(
+    request: Request,
+    cluster_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    """Create an expansion plan for a cluster."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.cluster_engine import plan_expansion
+
+    try:
+        plans = await plan_expansion(session, cluster_id)
+        await session.commit()
+        msg = f"Created expansion plan with {len(plans)} targets"
+    except Exception as exc:
+        msg = f"Error creating expansion plan: {exc}"
+
+    return RedirectResponse(
+        url=f"/dashboard/clusters?message={msg}",
+        status_code=303,
+    )
+
+
+@router.post("/clusters/{cluster_id}/launch-campaign")
+async def launch_cluster_campaign_route(
+    request: Request,
+    cluster_id: UUID,
+    campaign_type: str = Form("email"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Launch an outreach campaign from a cluster's expansion plan."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.cluster_engine import launch_campaign
+
+    try:
+        campaign = await launch_campaign(session, cluster_id, campaign_type=campaign_type)
+        await session.commit()
+        msg = f"Campaign '{campaign.name}' launched"
+    except Exception as exc:
+        msg = f"Error launching campaign: {exc}"
+
+    return RedirectResponse(
+        url=f"/dashboard/clusters?message={msg}",
+        status_code=303,
+    )
+
+
+@router.post("/clusters/{cluster_id}/recalculate")
+async def recalculate_cluster_route(
+    request: Request,
+    cluster_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    """Recalculate cluster scores and stats."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    from src.services.cluster_engine import recalculate_cluster
+
+    try:
+        cluster = await recalculate_cluster(session, cluster_id)
+        await session.commit()
+        msg = (
+            f"Cluster '{cluster.name}' recalculated: "
+            f"{cluster.restaurant_count} members, "
+            f"ICP avg {cluster.avg_icp_score:.1f}, "
+            f"flywheel {cluster.flywheel_score:.1f}"
+        )
+    except Exception as exc:
+        msg = f"Error recalculating cluster: {exc}"
+
+    return RedirectResponse(
+        url=f"/dashboard/clusters?message={msg}",
+        status_code=303,
+    )
+
+
+# ── Lead Detail Enhancements (NIF-207) ────────────────────────
+
+
+@router.post("/leads/{lead_id}/tasks")
+async def create_lead_task_route(
+    request: Request,
+    lead_id: UUID,
+    title: str = Form(...),
+    description: str = Form(""),
+    task_type: str = Form("follow_up"),
+    priority: str = Form("medium"),
+    assigned_to: str = Form(""),
+    due_date: str = Form(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a follow-up task for a lead."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    # Verify lead exists
+    result = await session.execute(select(Lead).where(Lead.id == lead_id))
+    lead = result.scalar_one_or_none()
+    if not lead:
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    task = FollowUpTask(
+        lead_id=lead_id,
+        title=title,
+        description=description or None,
+        task_type=task_type,
+        priority=priority,
+        status="pending",
+        assigned_to=assigned_to or None,
+    )
+
+    if due_date:
+        try:
+            task.due_date = datetime.fromisoformat(due_date).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+
+    session.add(task)
+    await session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/leads/{lead_id}",
+        status_code=303,
+    )
+
+
+@router.patch("/leads/tasks/{task_id}/complete", response_class=HTMLResponse)
+async def complete_lead_task_route(
+    request: Request,
+    task_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX endpoint — mark a follow-up task as completed."""
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    task = await session.get(FollowUpTask, task_id)
+    if not task:
+        return HTMLResponse("Task not found", status_code=404)
+
+    task.status = "completed"
+    task.completed_at = datetime.now(timezone.utc)
+    await session.commit()
+
+    return HTMLResponse(
+        f'<span class="badge badge-completed">completed</span>'
+    )
+
+
+@router.post("/leads/{lead_id}/merge")
+async def merge_lead_route(
+    request: Request,
+    lead_id: UUID,
+    source_lead_id: str = Form(...),
+    session: AsyncSession = Depends(get_session),
+):
+    """Merge another lead into this one."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    target_result = await session.execute(select(Lead).where(Lead.id == lead_id))
+    target_lead = target_result.scalar_one_or_none()
+    if not target_lead:
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    try:
+        source_id = UUID(source_lead_id)
+    except ValueError:
+        return RedirectResponse(
+            url=f"/dashboard/leads/{lead_id}",
+            status_code=303,
+        )
+
+    source_result = await session.execute(select(Lead).where(Lead.id == source_id))
+    source_lead = source_result.scalar_one_or_none()
+    if not source_lead:
+        return RedirectResponse(
+            url=f"/dashboard/leads/{lead_id}",
+            status_code=303,
+        )
+
+    # Merge: move tasks, stage history, and assignment history to target lead
+    await session.execute(
+        select(FollowUpTask).where(FollowUpTask.lead_id == source_id)
+    )
+    tasks_result = await session.execute(
+        select(FollowUpTask).where(FollowUpTask.lead_id == source_id)
+    )
+    for task in tasks_result.scalars().all():
+        task.lead_id = lead_id
+
+    stage_result = await session.execute(
+        select(LeadStageHistory).where(LeadStageHistory.lead_id == source_id)
+    )
+    for entry in stage_result.scalars().all():
+        entry.lead_id = lead_id
+
+    assignment_result = await session.execute(
+        select(LeadAssignmentHistory).where(LeadAssignmentHistory.lead_id == source_id)
+    )
+    for entry in assignment_result.scalars().all():
+        entry.lead_id = lead_id
+
+    # Fill in empty fields from source
+    for field in ["company", "business_type", "phone", "interest", "restaurant_id", "account_id", "contact_id"]:
+        if not getattr(target_lead, field) and getattr(source_lead, field):
+            setattr(target_lead, field, getattr(source_lead, field))
+
+    # Record audit log
+    audit = AuditLog(
+        action="lead_merged",
+        entity_type="lead",
+        details={
+            "lead_id": str(lead_id),
+            "source_lead_id": str(source_id),
+            "source_email": source_lead.email,
+        },
+        performed_by="dashboard",
+    )
+    session.add(audit)
+
+    # Mark source as merged
+    source_lead.status = "merged"
+
+    await session.commit()
+
+    return RedirectResponse(
+        url=f"/dashboard/leads/{lead_id}",
+        status_code=303,
     )

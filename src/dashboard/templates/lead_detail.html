@@ -144,6 +144,74 @@
       </div>
     </div>
 
+    <!-- Follow-up Tasks (NIF-207) -->
+    <div class="bg-white rounded-lg border border-slate-200 p-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold text-slate-700">Follow-up Tasks</h3>
+      </div>
+      <form hx-post="/dashboard/leads/{{ lead.id }}/tasks" hx-target="#tasks-list" hx-swap="beforeend" class="flex gap-2 mb-3">
+        <input type="text" name="title" placeholder="Add task..." class="flex-1 rounded border border-slate-200 text-xs px-2 py-1.5" required>
+        <select name="task_type" class="rounded border border-slate-200 text-xs px-2 py-1">
+          <option value="follow_up">Follow Up</option>
+          <option value="call">Call</option>
+          <option value="email">Email</option>
+          <option value="demo">Demo</option>
+        </select>
+        <button type="submit" class="bg-cobalt-500 text-white text-xs px-3 py-1.5 rounded hover:bg-cobalt-600">Add</button>
+      </form>
+      <div id="tasks-list" class="space-y-2">
+        {% if tasks %}
+        {% for task in tasks %}
+        <div class="flex items-center justify-between text-xs p-2 rounded {% if task.status == 'completed' %}bg-green-50{% elif task.status == 'cancelled' %}bg-slate-50 opacity-60{% else %}bg-slate-50{% endif %}" id="task-{{ task.id }}">
+          <div class="flex items-center gap-2">
+            <span class="rounded-full px-2 py-0.5 text-[10px] font-medium {% if task.task_type == 'call' %}bg-blue-100 text-blue-700{% elif task.task_type == 'email' %}bg-purple-100 text-purple-700{% elif task.task_type == 'demo' %}bg-teal-100 text-teal-700{% else %}bg-slate-100 text-slate-700{% endif %}">{{ task.task_type }}</span>
+            <span class="{% if task.status == 'completed' %}line-through text-slate-400{% else %}text-slate-700{% endif %}">{{ task.title }}</span>
+          </div>
+          {% if task.status == 'pending' or task.status == 'in_progress' %}
+          <button hx-patch="/dashboard/leads/tasks/{{ task.id }}/complete" hx-target="#task-{{ task.id }}" hx-swap="outerHTML" class="text-green-600 hover:text-green-700 font-medium">Done</button>
+          {% else %}
+          <span class="text-green-600 font-medium">&#10003;</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-xs text-slate-500">No tasks yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Stage & Assignment History (NIF-207) -->
+    <div class="bg-white rounded-lg border border-slate-200 p-6">
+      <h3 class="text-sm font-semibold text-slate-700 mb-3">Lifecycle History</h3>
+      <div class="space-y-2">
+        {% if stage_history %}
+        {% for h in stage_history %}
+        <div class="flex items-start gap-2 text-xs">
+          <div class="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0"></div>
+          <div>
+            <span class="text-slate-700">Stage: <strong>{{ h.from_stage or '—' }}</strong> &rarr; <strong>{{ h.to_stage }}</strong></span>
+            <div class="text-slate-400">{{ h.changed_at.strftime('%b %d, %Y %I:%M %p') if h.changed_at else '' }} &middot; {{ h.changed_by }}</div>
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% if assignment_history %}
+        {% for h in assignment_history %}
+        <div class="flex items-start gap-2 text-xs">
+          <div class="w-1.5 h-1.5 rounded-full bg-yellow-500 mt-1.5 flex-shrink-0"></div>
+          <div>
+            <span class="text-slate-700">Owner: <strong>{{ h.from_owner or '—' }}</strong> &rarr; <strong>{{ h.to_owner }}</strong></span>
+            <div class="text-slate-400">{{ h.changed_at.strftime('%b %d, %Y %I:%M %p') if h.changed_at else '' }} &middot; {{ h.changed_by }}</div>
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% if not stage_history and not assignment_history %}
+        <p class="text-xs text-slate-500">No lifecycle changes recorded.</p>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- Activity / Audit Log -->
     <div class="bg-white rounded-lg border border-slate-200 p-6">
       <h3 class="text-sm font-semibold text-slate-700 mb-3">Activity Log</h3>
