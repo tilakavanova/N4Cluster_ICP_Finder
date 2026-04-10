@@ -57,3 +57,4 @@ alembic/versions/__pycache__/
 *.xlsx
 !data/sample_restaurants.json
 .claude/
+test.db
