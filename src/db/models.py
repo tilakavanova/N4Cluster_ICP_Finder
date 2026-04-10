@@ -340,6 +340,104 @@ class CrawlJob(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
+class ScoringProfile(Base):
+    """Configurable scoring profile (NIF-125)."""
+    __tablename__ = "scoring_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False, unique=True, index=True)
+    version = Column(Integer, nullable=False, default=1)
+    description = Column(Text)
+    signals = Column(JSONB, nullable=False, default=list)  # [{name, weight, type, enabled}]
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    rules = relationship("ScoringRule", back_populates="profile", cascade="all, delete-orphan")
+    score_versions = relationship("ScoreVersion", back_populates="profile", cascade="all, delete-orphan")
+    config_links = relationship("ScoringConfigLink", back_populates="profile", cascade="all, delete-orphan")
+
+
+class ScoringRule(Base):
+    """Rule within a scoring profile (NIF-126)."""
+    __tablename__ = "scoring_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profile_id = Column(UUID(as_uuid=True), ForeignKey("scoring_profiles.id"), nullable=False, index=True)
+    signal_name = Column(String(50), nullable=False)
+    rule_type = Column(String(20), nullable=False)  # threshold, range, boolean, custom
+    condition = Column(JSONB, nullable=False, default=dict)  # e.g. {"min": 50, "max": 200}
+    points = Column(Float, nullable=False, default=0.0)
+    description = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    profile = relationship("ScoringProfile", back_populates="rules")
+
+
+class ScoreExplanation(Base):
+    """Detailed score breakdown for a restaurant (NIF-127, NIF-131)."""
+    __tablename__ = "score_explanations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
+    profile_id = Column(UUID(as_uuid=True), ForeignKey("scoring_profiles.id"), nullable=False, index=True)
+    signal_breakdown = Column(JSONB, nullable=False, default=list)  # [{signal, raw_value, weighted_value, explanation}]
+    total_score = Column(Float, nullable=False, default=0.0, index=True)
+    fit_label = Column(String(20), nullable=False, default="unknown")
+    explanation_text = Column(Text)
+    scored_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+    profile = relationship("ScoringProfile", foreign_keys=[profile_id])
+
+
+class ScoreVersion(Base):
+    """Version history for scoring profiles (NIF-129)."""
+    __tablename__ = "score_versions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profile_id = Column(UUID(as_uuid=True), ForeignKey("scoring_profiles.id"), nullable=False, index=True)
+    version_number = Column(Integer, nullable=False)
+    changes = Column(JSONB, nullable=False, default=dict)  # {field: {old, new}}
+    created_by = Column(Text, default="system")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    profile = relationship("ScoringProfile", back_populates="score_versions")
+
+
+class ScoringConfigLink(Base):
+    """Link a scoring profile to a market/cuisine/chain_group (NIF-130)."""
+    __tablename__ = "scoring_config_links"
+    __table_args__ = (
+        UniqueConstraint("profile_id", "entity_type", "entity_value", name="uq_scoring_config_link"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profile_id = Column(UUID(as_uuid=True), ForeignKey("scoring_profiles.id"), nullable=False, index=True)
+    entity_type = Column(String(30), nullable=False)  # market, cuisine, chain_group
+    entity_value = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    profile = relationship("ScoringProfile", back_populates="config_links")
+
+
+class ScoreRecalcJob(Base):
+    """Batch score recalculation job (NIF-132)."""
+    __tablename__ = "score_recalc_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profile_id = Column(UUID(as_uuid=True), ForeignKey("scoring_profiles.id"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, running, completed, failed
+    total_items = Column(Integer, default=0)
+    processed_items = Column(Integer, default=0)
+    error_message = Column(Text)
+    started_at = Column(DateTime(timezone=True))
+    finished_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    profile = relationship("ScoringProfile", foreign_keys=[profile_id])
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
