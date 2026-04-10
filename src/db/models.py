@@ -438,6 +438,101 @@ class ScoreRecalcJob(Base):
     profile = relationship("ScoringProfile", foreign_keys=[profile_id])
 
 
+class QualificationResult(Base):
+    """AI merchant qualification result (NIF-142)."""
+    __tablename__ = "qualification_results"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
+    qualification_status = Column(String(20), nullable=False, default="pending", index=True)  # qualified, not_qualified, needs_review, pending
+    confidence_score = Column(Float, nullable=False, default=0.0)  # 0.0-1.0
+    signals_summary = Column(JSONB, nullable=False, default=list)  # array of evaluated signals
+    qualified_at = Column(DateTime(timezone=True))
+    expires_at = Column(DateTime(timezone=True))
+    model_version = Column(String(20), nullable=False, default="v1")
+    reviewed_by = Column(Text)
+    reviewed_at = Column(DateTime(timezone=True))
+    review_decision = Column(String(20))  # approved, rejected
+    review_notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
+    explanations = relationship("QualificationExplanation", back_populates="result", cascade="all, delete-orphan")
+
+
+class QualificationExplanation(Base):
+    """Qualification factor explanation (NIF-143)."""
+    __tablename__ = "qualification_explanations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    result_id = Column(UUID(as_uuid=True), ForeignKey("qualification_results.id"), nullable=False, index=True)
+    factor_name = Column(String(50), nullable=False)
+    factor_value = Column(Text)
+    impact = Column(String(10), nullable=False, default="neutral")  # positive, negative, neutral
+    weight = Column(Float, nullable=False, default=0.0)
+    explanation_text = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    result = relationship("QualificationResult", back_populates="explanations")
+
+
+class ConfigRegistry(Base):
+    """Configuration registry entry (NIF-137)."""
+    __tablename__ = "config_registry"
+    __table_args__ = (
+        UniqueConstraint("namespace", "key", name="uq_config_namespace_key"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    namespace = Column(String(50), nullable=False, index=True)
+    key = Column(String(100), nullable=False, index=True)
+    value = Column(JSONB, nullable=False, default=dict)
+    description = Column(Text)
+    data_type = Column(String(20), nullable=False, default="string")  # string, int, float, bool, json
+    is_secret = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    versions = relationship("ConfigVersion", back_populates="config", cascade="all, delete-orphan")
+    overrides = relationship("ConfigOverride", back_populates="config", cascade="all, delete-orphan")
+
+
+class ConfigVersion(Base):
+    """Configuration version history (NIF-138)."""
+    __tablename__ = "config_versions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    config_id = Column(UUID(as_uuid=True), ForeignKey("config_registry.id"), nullable=False, index=True)
+    version_number = Column(Integer, nullable=False)
+    old_value = Column(JSONB)
+    new_value = Column(JSONB, nullable=False)
+    changed_by = Column(Text, default="system")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    config = relationship("ConfigRegistry", back_populates="versions")
+
+
+class ConfigOverride(Base):
+    """Market/scope-specific configuration override (NIF-139)."""
+    __tablename__ = "config_overrides"
+    __table_args__ = (
+        UniqueConstraint("config_id", "scope_type", "scope_value", name="uq_config_override_scope"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    config_id = Column(UUID(as_uuid=True), ForeignKey("config_registry.id"), nullable=False, index=True)
+    scope_type = Column(String(30), nullable=False)  # market, cuisine, region
+    scope_value = Column(Text, nullable=False)
+    override_value = Column(JSONB, nullable=False)
+    priority = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    config = relationship("ConfigRegistry", back_populates="overrides")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
