@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ subject | default('Still thinking of you — ' ~ restaurant_name) }}</title>
+  <style>
+    body { font-family: Georgia, 'Times New Roman', serif; font-size: 16px; color: #222; line-height: 1.7; margin: 0; padding: 0; background: #f8f8f6; }
+    .wrapper { max-width: 600px; margin: 0 auto; background: #fff; padding: 40px 48px; }
+    .greeting { font-size: 1.05rem; }
+    .body-text { margin: 20px 0; }
+    .stats-row { display: flex; gap: 16px; margin: 28px 0; font-family: sans-serif; }
+    .stat-box { flex: 1; text-align: center; background: #f0f5f0; padding: 16px; border-radius: 6px; }
+    .stat-box .number { font-size: 1.6rem; font-weight: bold; color: #2c5f2e; }
+    .stat-box .label { font-size: 0.8rem; color: #666; }
+    .cta { margin: 32px 0; }
+    .cta a { display: inline-block; background: #2c5f2e; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 4px; font-family: sans-serif; font-size: 0.95rem; }
+    .opt-out-line { margin-top: 24px; font-family: sans-serif; font-size: 0.9rem; color: #666; }
+    .signature { margin-top: 36px; font-size: 0.95rem; color: #444; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-family: sans-serif; font-size: 0.75rem; color: #999; }
+    .footer a { color: #999; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <p class="greeting">Hi {% if owner_name %}{{ owner_name }}{% else %}there{% endif %},</p>
+
+    <p class="body-text">
+      It's been a while since I last reached out about N4Cluster and <strong>{{ restaurant_name }}</strong>.
+      I don't want to be a nuisance — but I did want to share some things that have changed since we
+      last spoke.
+    </p>
+
+    <p class="body-text">
+      Over the past {% if months_since | int > 1 %}{{ months_since }} months{% else %}few months{% endif %},
+      we've expanded our network in your area significantly. Here's what restaurants like yours
+      have seen:
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="number">+34%</div>
+        <div class="label">Avg. neighborhood visibility</div>
+      </div>
+      <div class="stat-box">
+        <div class="number">200+</div>
+        <div class="label">New customers per quarter</div>
+      </div>
+      <div class="stat-box">
+        <div class="number">$0</div>
+        <div class="label">Upfront cost</div>
+      </div>
+    </div>
+
+    <p class="body-text">
+      If circumstances have changed since we last spoke, I'd love to reconnect.
+      {% if cuisine_type %}{{ cuisine_type | capitalize }} restaurants{% else %}Independent restaurants{% endif %}
+      in your cluster are seeing strong results right now — and {{ restaurant_name }} would be a natural fit.
+    </p>
+
+    {% if cta_url %}
+    <div class="cta">
+      <a href="{{ cta_url }}">Let's Reconnect — Book 15 Minutes</a>
+    </div>
+    {% endif %}
+
+    <p class="opt-out-line">
+      If you'd prefer not to hear from us again, I completely understand —
+      just <a href="{{ unsubscribe_url | default('#') }}">click here to unsubscribe</a> and I'll make
+      sure we don't reach out again.
+    </p>
+
+    <div class="signature">
+      <p>
+        Warmly,<br>
+        <strong>{{ sender_name | default('Alex') }}</strong><br>
+        {{ sender_title | default('Partnership Manager') }}, N4Cluster
+      </p>
+    </div>
+
+    <div class="footer">
+      <p>
+        You're receiving this because {{ restaurant_name }} was previously part of our outreach program.
+        <a href="{{ unsubscribe_url | default('#') }}">Unsubscribe</a> at any time.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

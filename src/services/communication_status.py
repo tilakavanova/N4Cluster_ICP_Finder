@@ -314,3 +314,13 @@ async def mark_as_opted_out(
     return await transition_status(
         session, target_id, CommunicationStatus.OPTED_OUT, channel
     )
+
+
+async def mark_as_replied(
+    session: AsyncSession,
+    target_id: UUID,
+    channel: str,
+) -> bool:
+    return await transition_status(
+        session, target_id, CommunicationStatus.REPLIED, channel
+    )

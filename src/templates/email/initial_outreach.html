@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ subject | default('A partnership opportunity for ' ~ restaurant_name) }}</title>
+  <style>
+    body { font-family: Georgia, 'Times New Roman', serif; font-size: 16px; color: #222; line-height: 1.7; margin: 0; padding: 0; background: #f8f8f6; }
+    .wrapper { max-width: 600px; margin: 0 auto; background: #fff; padding: 40px 48px; }
+    .greeting { font-size: 1.05rem; }
+    .body-text { margin: 20px 0; }
+    .cta { margin: 32px 0; }
+    .cta a { display: inline-block; background: #2c5f2e; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 4px; font-family: sans-serif; font-size: 0.95rem; }
+    .signature { margin-top: 36px; font-size: 0.95rem; color: #444; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-family: sans-serif; font-size: 0.75rem; color: #999; }
+    .footer a { color: #999; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <p class="greeting">Dear {% if owner_name %}{{ owner_name }}{% else %}Owner{% endif %},</p>
+
+    <p class="body-text">
+      My name is {{ sender_name | default('Alex') }} from <strong>N4Cluster</strong>, a platform that
+      helps independent {% if cuisine_type %}{{ cuisine_type }}{% else %}restaurant{% endif %} owners
+      like yourself connect with local business networks and grow their customer base.
+    </p>
+
+    <p class="body-text">
+      I came across <strong>{{ restaurant_name }}</strong> and was impressed by what you've built.
+      We've helped restaurants in your area increase their neighborhood visibility by an average of
+      <strong>34%</strong> within the first three months — without any upfront cost.
+    </p>
+
+    <p class="body-text">
+      I'd love to share how we could do the same for {{ restaurant_name }}. Would you be open to
+      a quick 15-minute call this week?
+    </p>
+
+    {% if cta_url %}
+    <div class="cta">
+      <a href="{{ cta_url }}">Schedule a 15-Minute Call</a>
+    </div>
+    {% endif %}
+
+    <p class="body-text">
+      If you're not the right person to speak with, I'd appreciate any direction to the right contact.
+    </p>
+
+    <div class="signature">
+      <p>
+        Warm regards,<br>
+        <strong>{{ sender_name | default('Alex') }}</strong><br>
+        {{ sender_title | default('Partnership Manager') }}, N4Cluster<br>
+        {% if sender_phone %}<a href="tel:{{ sender_phone }}">{{ sender_phone }}</a>{% endif %}
+      </p>
+    </div>
+
+    <div class="footer">
+      <p>
+        You're receiving this because {{ restaurant_name }} is part of our local business network.
+        <a href="{{ unsubscribe_url | default('#') }}">Unsubscribe</a> at any time.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

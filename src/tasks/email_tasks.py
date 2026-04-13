@@ -1,4 +1,4 @@
-"""Celery tasks for email sending and SendGrid event processing (NIF-226, NIF-225)."""
+"""Celery tasks for email sending and SendGrid event processing (NIF-226, NIF-225, NIF-228)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from src.tasks.celery_app import celery_app
 from src.tasks.crawl_tasks import run_async
 from src.utils.logging import get_logger
+from src.services.reply_detection import detect_reply, process_inbound_reply
 
 logger = get_logger("tasks.email")
 
@@ -194,6 +195,21 @@ def process_sendgrid_events(self, events: list[dict]):
                     metadata["apple_mpp"] = True
                     logger.info("apple_mpp_detected", sg_message_id=sg_message_id)
 
+                # NIF-228: classify bounce type (hard vs soft)
+                # SendGrid bounce events carry a `type` field: "bounce" = hard, "blocked" = soft
+                bounce_classification: str = "hard"
+                is_soft_bounce = False
+                if sg_event_type == "bounce":
+                    sg_bounce_type = event.get("type", "bounce")
+                    # "blocked" or type containing "soft" → soft bounce
+                    if sg_bounce_type in ("blocked", "soft") or "soft" in sg_bounce_type.lower():
+                        is_soft_bounce = True
+                        bounce_classification = "soft"
+                        metadata["bounce_classification"] = "soft"
+                    else:
+                        metadata["bounce_classification"] = "hard"
+                        metadata["bounce_type"] = sg_bounce_type
+
                 # Apply status transition if we have a target
                 if target_id is not None:
                     handler_name = _SG_EVENT_HANDLER.get(sg_event_type)
@@ -202,7 +218,16 @@ def process_sendgrid_events(self, events: list[dict]):
                         if handler:
                             try:
                                 if sg_event_type == "bounce":
-                                    await handler(session, target_id, "email", bounce_type="hard")
+                                    if not is_soft_bounce:
+                                        # Hard bounce: transition to BOUNCED
+                                        await handler(session, target_id, "email", bounce_type="hard")
+                                    else:
+                                        # Soft bounce: log only, no status transition
+                                        logger.info(
+                                            "sendgrid_soft_bounce_skipped",
+                                            target_id=str(target_id),
+                                            sg_bounce_type=event.get("type"),
+                                        )
                                 elif sg_event_type == "dropped":
                                     await handler(session, target_id, "email", error_reason="dropped")
                                 else:
@@ -215,7 +240,14 @@ def process_sendgrid_events(self, events: list[dict]):
                                     error=str(exc),
                                 )
 
-                    # Handle spam/unsubscribe: also set email_opt_out on Lead
+                    # NIF-228: Hard bounce → opt out Lead
+                    if sg_event_type == "bounce" and not is_soft_bounce and lead_id:
+                        lead = await session.get(Lead, lead_id)
+                        if lead:
+                            lead.email_opt_out = True
+                            logger.info("lead_hard_bounce_opt_out", lead_id=str(lead_id))
+
+                    # NIF-228: Spam/complaint → opt out Lead
                     if sg_event_type in ("spamreport", "unsubscribe") and lead_id:
                         lead = await session.get(Lead, lead_id)
                         if lead:
@@ -263,6 +295,47 @@ def process_sendgrid_events(self, events: list[dict]):
         return run_async(_process())
     except Exception as exc:
         logger.error("process_sendgrid_events_failed", error=str(exc))
+        raise self.retry(exc=exc)
+
+
+# ── process_inbound_reply_task ───────────────────────────────────────────────
+
+
+@celery_app.task(
+    name="src.tasks.email_tasks.process_inbound_reply_task",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+)
+def process_inbound_reply_task(self, inbound_data: dict):
+    """Process a SendGrid Inbound Parse payload to detect and record email replies (NIF-229).
+
+    Args:
+        inbound_data: Dict of inbound email fields from the SendGrid Inbound Parse webhook.
+    """
+    async def _process():
+        from src.db.session import async_session
+
+        reply_data = detect_reply(inbound_data)
+
+        if not reply_data["is_likely_reply"]:
+            logger.info(
+                "inbound_email_not_reply",
+                from_email=reply_data.get("from_email"),
+                subject=reply_data.get("subject"),
+            )
+            return {"matched": False, "reason": "not_a_reply"}
+
+        async with async_session() as session:
+            result = await process_inbound_reply(session, reply_data)
+            await session.commit()
+
+        return result
+
+    try:
+        return run_async(_process())
+    except Exception as exc:
+        logger.error("process_inbound_reply_task_failed", error=str(exc))
         raise self.retry(exc=exc)
 
 

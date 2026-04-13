@@ -1,7 +1,8 @@
-"""SendGrid Event Webhook endpoint (NIF-225).
+"""SendGrid Event and Inbound Parse webhook endpoints (NIF-225, NIF-229).
 
 Receives SendGrid Event Webhook POST requests, verifies the ECDSA signature,
 and queues a Celery task to process the event batch asynchronously.
+Also handles SendGrid Inbound Parse for reply detection (NIF-229).
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from src.config import settings
-from src.tasks.email_tasks import process_sendgrid_events
+from src.tasks.email_tasks import process_sendgrid_events, process_inbound_reply_task
 from src.utils.logging import get_logger
 from src.utils.webhook_verification import verify_sendgrid_signature
 
@@ -70,4 +71,35 @@ async def receive_sendgrid_events(request: Request) -> Response:
         logger.error("sendgrid_webhook_queue_failed", error=str(exc))
 
     logger.info("sendgrid_webhook_received", event_count=len(events))
+    return Response(content='{"received": true}', media_type="application/json")
+
+
+@router.post("/sendgrid/inbound", status_code=200, include_in_schema=True)
+async def receive_sendgrid_inbound(request: Request) -> Response:
+    """Receive a SendGrid Inbound Parse webhook for reply detection (NIF-229).
+
+    SendGrid POSTs multipart/form-data containing the raw email fields.
+    We extract the form data and queue a Celery task for async processing.
+    """
+    try:
+        form = await request.form()
+        inbound_data = {
+            "headers": form.get("headers", ""),
+            "from": form.get("from", ""),
+            "to": form.get("to", ""),
+            "subject": form.get("subject", ""),
+            "text": form.get("text", ""),
+            "html": form.get("html", ""),
+            "envelope": form.get("envelope", ""),
+        }
+    except Exception as exc:
+        logger.warning("sendgrid_inbound_parse_failed", error=str(exc))
+        raise HTTPException(status_code=400, detail="Failed to parse inbound email data")
+
+    try:
+        process_inbound_reply_task.delay(inbound_data)  # type: ignore[attr-defined]
+    except Exception as exc:
+        logger.error("sendgrid_inbound_queue_failed", error=str(exc))
+
+    logger.info("sendgrid_inbound_received", from_email=inbound_data.get("from"))
     return Response(content='{"received": true}', media_type="application/json")
