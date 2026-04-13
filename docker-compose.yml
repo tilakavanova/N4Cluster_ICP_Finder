@@ -38,6 +38,7 @@ services:
     volumes:
       - .:/app
 
+  # Celery worker — runs all queues including email_tasks and tracking_tasks
   worker:
     build: .
     command: celery -A src.tasks.celery_app worker --loglevel=info --concurrency=4
@@ -50,9 +51,10 @@ services:
     volumes:
       - .:/app
 
+  # Celery Beat scheduler — daily crawl 2AM, weekly rescore Sun 4AM, daily cleanup 3AM
   beat:
     build: .
-    command: celery -A src.tasks.celery_app beat --loglevel=info
+    command: celery -A src.tasks.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
     env_file: .env
     depends_on:
       redis:
