@@ -123,6 +123,8 @@ class Lead(Base):
     utm_campaign = Column(Text)
     merged_into_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=True)
     is_merged = Column(Boolean, default=False)
+    email_opt_out = Column(Boolean, nullable=False, default=False)
+    sms_opt_out = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -583,6 +585,8 @@ class OutreachActivity(Base):
     notes = Column(Text)
     performed_by = Column(Text, default="system")
     performed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    external_message_id = Column(Text)
+    channel = Column(Text)  # email|sms|whatsapp
 
     target = relationship("OutreachTarget", back_populates="activities")
 
@@ -776,3 +780,28 @@ class AuditLog(Base):
     details = Column(JSONB, default=dict)
     performed_by = Column(Text, default="system")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class TrackerEvent(Base):
+    """Communication delivery/engagement event from provider webhooks (NIF-221).
+
+    Tracks opens, clicks, bounces, opt-outs etc. for email/SMS/WhatsApp.
+    provider_event_id is UNIQUE to deduplicate webhook retries.
+    """
+    __tablename__ = "tracker_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    token = Column(Text)
+    event_type = Column(Text, nullable=False)  # open|click|delivery|read|bounce|complaint|unsubscribe|stop
+    channel = Column(Text, nullable=False)  # email|sms|whatsapp
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id", ondelete="SET NULL"), nullable=True, index=True)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("outreach_campaigns.id", ondelete="SET NULL"), nullable=True, index=True)
+    target_id = Column(UUID(as_uuid=True), ForeignKey("outreach_targets.id", ondelete="SET NULL"), nullable=True, index=True)
+    provider = Column(Text)  # sendgrid|mailgun|plivo|twilio|meta
+    provider_event_id = Column(Text, unique=True)
+    event_metadata = Column(JSONB)
+    occurred_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    lead = relationship("Lead", foreign_keys=[lead_id])
+    campaign = relationship("OutreachCampaign", foreign_keys=[campaign_id])
+    target = relationship("OutreachTarget", foreign_keys=[target_id])
