@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     tracking_base_url: str = "https://n4cluster.com"
     tracking_fallback_url: str = "https://n4cluster.com"
 
+    # SendGrid (NIF-219)
+    sendgrid_api_key: str = ""
+    sendgrid_from_email: str = ""
+    sendgrid_from_name: str = "N4Cluster"
+    sendgrid_webhook_signing_key: str = ""
+
     @property
     def async_database_url(self) -> str:
         """Convert Render's postgres:// URL to asyncpg-compatible format."""
