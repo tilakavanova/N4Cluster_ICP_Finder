@@ -322,7 +322,10 @@ async def list_pending_review(
     result = await session.execute(
         select(QualificationResult)
         .where(QualificationResult.qualification_status == "needs_review")
-        .options(selectinload(QualificationResult.explanations))
+        .options(
+            selectinload(QualificationResult.explanations),
+            selectinload(QualificationResult.restaurant),
+        )
         .order_by(QualificationResult.confidence_score.desc())
         .limit(limit)
         .offset(offset)

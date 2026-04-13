@@ -9,8 +9,8 @@
       <div class="flex justify-between"><span class="text-slate-600">Restaurants</span><span class="font-medium text-navy-950">{{ c.restaurant_count|default(0) }}</span></div>
       <div class="flex justify-between"><span class="text-slate-600">Avg ICP</span><span class="font-medium text-cobalt-500">{{ "%.1f"|format(c.avg_icp_score) if c.avg_icp_score else "&mdash;" }}</span></div>
       <div class="flex justify-between"><span class="text-slate-600">Opportunity</span><span class="font-medium {% if c.opportunity_score is defined and c.opportunity_score >= 70 %}text-green-600{% else %}text-yellow-600{% endif %}">{{ "%.0f"|format(c.opportunity_score) if c.opportunity_score else "&mdash;" }}</span></div>
-      <div class="flex justify-between"><span class="text-slate-600">Indep. Ratio</span><span class="font-medium text-navy-950">{{ "%.0f"|format(c.independent_ratio * 100) if c.independent_ratio else "&mdash;" }}%</span></div>
-      <div class="flex justify-between"><span class="text-slate-600">Delivery</span><span class="font-medium text-navy-950">{{ "%.0f"|format(c.delivery_coverage * 100) if c.delivery_coverage else "&mdash;" }}%</span></div>
+      <div class="flex justify-between"><span class="text-slate-600">Indep. Ratio</span><span class="font-medium text-navy-950">{% if c.independent_ratio is not none %}{{ "%.0f"|format(c.independent_ratio * 100) }}%{% else %}&mdash;{% endif %}</span></div>
+      <div class="flex justify-between"><span class="text-slate-600">Delivery</span><span class="font-medium text-navy-950">{% if c.delivery_coverage is not none %}{{ "%.0f"|format(c.delivery_coverage * 100) }}%{% else %}&mdash;{% endif %}</span></div>
     </div>
   </div>
   {% endfor %}

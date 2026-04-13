@@ -103,10 +103,21 @@
           </div>
           {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
         </td>
-        <td class="px-4 py-3" colspan="2">
+        <td class="px-4 py-3">
           {% if r.icp_score %}
             {% set score_obj = r.icp_score %}
             {% include "partials/score_popover.html" %}
+          {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3">
+          {% if r.icp_score and r.icp_score.fit_label %}
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+            {% if r.icp_score.fit_label == 'excellent' %}bg-green-50 text-green-700
+            {% elif r.icp_score.fit_label == 'good' %}bg-blue-50 text-blue-700
+            {% elif r.icp_score.fit_label == 'moderate' %}bg-yellow-50 text-yellow-700
+            {% else %}bg-red-50 text-red-700{% endif %}">
+            {{ r.icp_score.fit_label|title }}
+          </span>
           {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
         </td>
         <td class="px-4 py-3 text-center">
