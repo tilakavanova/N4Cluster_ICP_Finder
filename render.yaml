@@ -6,12 +6,14 @@ databases:
     postgresMajorVersion: "16"
 
 services:
+  # ── Web API ──────────────────────────────────────────────────────────────────
   - type: web
     name: icp-finder-api
     runtime: python
     plan: free
     buildCommand: chmod +x scripts/build.sh && ./scripts/build.sh
     startCommand: chmod +x scripts/start.sh && ./scripts/start.sh
+    healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -50,8 +52,93 @@ services:
         sync: false
       - key: SERPAPI_API_KEY
         sync: false
-    healthCheckPath: /health
+      # ── SendGrid — Lead Communication Tracking Phase 1 ──────────────────────
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM_EMAIL
+        sync: false
+      - key: SENDGRID_FROM_NAME
+        value: "N4Cluster"
+      - key: SENDGRID_WEBHOOK_SIGNING_KEY
+        sync: false
+      # ── Email tracking pixel / click redirect ───────────────────────────────
+      # Set TRACKING_BASE_URL to your deployed web service URL after first deploy,
+      # e.g. https://icp-finder-api.onrender.com
+      - key: TRACKING_BASE_URL
+        sync: false
+      - key: TRACKING_FALLBACK_URL
+        sync: false
 
+  # ── Celery Worker ────────────────────────────────────────────────────────────
+  # Runs all task queues: crawl, extract, score, cleanup, tracking, email
+  - type: worker
+    name: icp-finder-worker
+    runtime: python
+    plan: free
+    buildCommand: chmod +x scripts/build.sh && ./scripts/build.sh
+    startCommand: celery -A src.tasks.celery_app worker --loglevel=info --concurrency=4
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: icp-finder-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: icp-finder-redis
+          type: redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: YELP_FUSION_API_KEY
+        sync: false
+      - key: SERPAPI_API_KEY
+        sync: false
+      # SendGrid (worker sends emails and processes webhook events)
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM_EMAIL
+        sync: false
+      - key: SENDGRID_FROM_NAME
+        value: "N4Cluster"
+      # Tracking (worker embeds tracking URLs in outgoing email HTML)
+      - key: TRACKING_BASE_URL
+        sync: false
+      - key: TRACKING_FALLBACK_URL
+        sync: false
+
+  # ── Celery Beat (scheduler) ──────────────────────────────────────────────────
+  # Dispatches scheduled tasks:
+  #   • Daily incremental crawl — 2 AM UTC
+  #   • Weekly full rescore     — Sunday 4 AM UTC
+  #   • Daily cleanup           — 3 AM UTC
+  - type: worker
+    name: icp-finder-beat
+    runtime: python
+    plan: free
+    buildCommand: chmod +x scripts/build.sh && ./scripts/build.sh
+    startCommand: celery -A src.tasks.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: icp-finder-redis
+          type: redis
+          property: connectionString
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
   - type: redis
     name: icp-finder-redis
     plan: free
