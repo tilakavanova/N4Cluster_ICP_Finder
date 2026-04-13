@@ -13,6 +13,7 @@ celery_app = Celery(
         "src.tasks.extract_tasks",
         "src.tasks.score_tasks",
         "src.tasks.cleanup_tasks",
+        "src.tasks.tracking_tasks",
     ],
 )
 
