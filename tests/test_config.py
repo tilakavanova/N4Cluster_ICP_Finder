@@ -47,3 +47,24 @@ class TestConfig:
         assert s.openai_api_key == ""
         assert s.yelp_fusion_api_key == ""
         assert s.google_places_api_key == ""
+
+    # NIF-219 SendGrid config
+    def test_sendgrid_defaults(self):
+        s = Settings(database_url="postgresql+asyncpg://localhost/test")
+        assert s.sendgrid_api_key == ""
+        assert s.sendgrid_from_email == ""
+        assert s.sendgrid_from_name == "N4Cluster"
+        assert s.sendgrid_webhook_signing_key == ""
+
+    def test_sendgrid_values_from_env(self):
+        s = Settings(
+            database_url="postgresql+asyncpg://localhost/test",
+            sendgrid_api_key="SG.test_key_123",
+            sendgrid_from_email="hello@n4cluster.com",
+            sendgrid_from_name="N4Cluster Outreach",
+            sendgrid_webhook_signing_key="MFkwEwYHKoZIzj0CAQY=",
+        )
+        assert s.sendgrid_api_key == "SG.test_key_123"
+        assert s.sendgrid_from_email == "hello@n4cluster.com"
+        assert s.sendgrid_from_name == "N4Cluster Outreach"
+        assert s.sendgrid_webhook_signing_key == "MFkwEwYHKoZIzj0CAQY="
