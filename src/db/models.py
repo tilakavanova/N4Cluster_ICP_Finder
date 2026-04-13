@@ -563,6 +563,7 @@ class OutreachTarget(Base):
     restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
     lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=True, index=True)
     status = Column(String(20), nullable=False, default="pending", index=True)
+    communication_status = Column(String(20), nullable=False, default="queued", index=True)
     priority = Column(Integer, default=0)
     assigned_to = Column(Text)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
