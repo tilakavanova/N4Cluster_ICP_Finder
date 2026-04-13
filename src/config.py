@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     dashboard_username: str = "admin"
     dashboard_password: str = ""  # Must be set via env var for dashboard access
 
+    # Tracking service (NIF-223)
+    tracking_base_url: str = "https://n4cluster.com"
+    tracking_fallback_url: str = "https://n4cluster.com"
+
     @property
     def async_database_url(self) -> str:
         """Convert Render's postgres:// URL to asyncpg-compatible format."""
