@@ -91,8 +91,8 @@
             <span class="text-sm font-medium {% if n.opportunity_score >= 80 %}text-green-600{% elif n.opportunity_score >= 60 %}text-blue-600{% elif n.opportunity_score >= 40 %}text-yellow-600{% else %}text-red-500{% endif %}">{{ "%.0f"|format(n.opportunity_score) }}</span>
           </div>
         </td>
-        <td class="px-4 py-3 text-sm text-slate-600">{{ "%.0f"|format(n.independent_ratio * 100) if n.independent_ratio else "&mdash;" }}%</td>
-        <td class="px-4 py-3 text-sm text-slate-600">{{ "%.0f"|format(n.delivery_coverage * 100) if n.delivery_coverage else "&mdash;" }}%</td>
+        <td class="px-4 py-3 text-sm text-slate-600">{% if n.independent_ratio is not none %}{{ "%.0f"|format(n.independent_ratio * 100) }}%{% else %}&mdash;{% endif %}</td>
+        <td class="px-4 py-3 text-sm text-slate-600">{% if n.delivery_coverage is not none %}{{ "%.0f"|format(n.delivery_coverage * 100) }}%{% else %}&mdash;{% endif %}</td>
         <td class="px-4 py-3">
           {% if n.top_cuisines %}
           <div class="flex flex-wrap gap-1">

@@ -377,63 +377,65 @@ async def create_job_from_dashboard(
     query: str = Form("restaurants"),
     session: AsyncSession = Depends(get_session),
 ):
-    """Create a crawl job from the dashboard form. Runs synchronously."""
+    """Create a crawl job and run it in the background. Redirects immediately so the
+    HTMX polling (every 5s) shows the job in running status."""
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    import asyncio
+
     job = CrawlJob(
         source=source,
         query=query,
         location=location,
-        status="pending",
+        status="running",
+        started_at=datetime.now(timezone.utc),
     )
     session.add(job)
     await session.flush()
     job_id = str(job.id)
     await session.commit()
 
-    from src.api.routers.jobs import _run_crawl_inline, _score_restaurants_inline
-    from src.db.session import async_session as async_session_factory
+    async def _run_crawl_background(job_id: str, source: str, query: str, location: str):
+        """Run crawl in background task so the dashboard can show running status."""
+        from src.api.routers.jobs import _run_crawl_inline, _score_restaurants_inline
+        from src.db.session import async_session as async_session_factory
 
-    if source == "all":
-        # Multi-source: run google_maps, yelp, delivery sequentially
-        job.status = "running"
-        job.started_at = datetime.now(timezone.utc)
-        await session.commit()
+        try:
+            if source == "all":
+                for src_name in ["google_maps", "yelp", "delivery"]:
+                    try:
+                        await _run_crawl_inline(src_name, query, location, None)
+                    except Exception:
+                        pass
+            else:
+                await _run_crawl_inline(source, query, location, job_id)
 
-        for src in ["google_maps", "yelp", "delivery"]:
-            try:
-                await _run_crawl_inline(src, query, location, None)
-            except Exception:
-                pass
+            # Score and finalize
+            async with async_session_factory() as s:
+                scored = await _score_restaurants_inline(s)
+                j = await s.get(CrawlJob, job.id)
+                if j:
+                    j.status = "completed"
+                    j.total_items = scored
+                    j.finished_at = datetime.now(timezone.utc)
+                    await s.commit()
+        except Exception as exc:
+            async with async_session_factory() as s:
+                j = await s.get(CrawlJob, job.id)
+                if j:
+                    j.status = "failed"
+                    j.error_message = str(exc)[:500]
+                    j.finished_at = datetime.now(timezone.utc)
+                    await s.commit()
 
-        # Final score
-        async with async_session_factory() as s:
-            scored = await _score_restaurants_inline(s)
-            j = await s.get(CrawlJob, job.id)
-            if j:
-                j.status = "completed"
-                j.total_items = scored
-                j.finished_at = datetime.now(timezone.utc)
-                await s.commit()
-            items = scored
+    # Launch background task and redirect immediately
+    asyncio.create_task(_run_crawl_background(job_id, source, query, location))
 
-        return RedirectResponse(
-            url=f"/dashboard/jobs?message=Full crawl completed: {location} — {items} restaurants scored from 3 sources",
-            status_code=303,
-        )
-    else:
-        await _run_crawl_inline(source, query, location, job_id)
-
-        async with async_session_factory() as fresh:
-            result = await fresh.execute(select(CrawlJob).where(CrawlJob.id == job.id))
-            final_job = result.scalar_one_or_none()
-            items = final_job.total_items if final_job else 0
-            status = final_job.status if final_job else "unknown"
-
-        return RedirectResponse(
-            url=f"/dashboard/jobs?message=Crawl completed: {source} in {location} — {items} restaurants found ({status})",
-            status_code=303,
-        )
+    return RedirectResponse(
+        url=f"/dashboard/jobs?message=Crawl started: {source} in {location} — watch the table for progress",
+        status_code=303,
+    )
 
 
 @router.post("/jobs/deep-crawl")
@@ -581,19 +583,48 @@ async def restaurants_dashboard(
     result = await session.execute(query)
     restaurants = result.unique().scalars().all()
 
-    # Stats
-    total_all = await session.scalar(select(func.count(Restaurant.id))) or 0
+    # Stats — filtered to match the current query (NIF-210 fix)
+    def _apply_restaurant_filters(base_query):
+        """Apply the same filters to stats queries so metrics match the table."""
+        q = base_query.outerjoin(ICPScore, ICPScore.restaurant_id == Restaurant.id)
+        if city:
+            q = q.where(Restaurant.city.ilike(f"%{city}%"))
+        if state:
+            q = q.where(Restaurant.state == state.upper())
+        if fit_label:
+            q = q.where(ICPScore.fit_label == fit_label)
+        if min_score:
+            try:
+                q = q.where(ICPScore.total_icp_score >= float(min_score))
+            except ValueError:
+                pass
+        if q_filter_text:
+            q = q.where(Restaurant.name.ilike(f"%{q_filter_text}%"))
+        return q
+
+    q_filter_text = q  # preserve the search text variable name
+    total_all = await session.scalar(
+        _apply_restaurant_filters(select(func.count(Restaurant.id)))
+    ) or 0
     independent = await session.scalar(
-        select(func.count(ICPScore.id)).where(ICPScore.is_independent == True)
+        _apply_restaurant_filters(
+            select(func.count(Restaurant.id)).where(Restaurant.is_chain == False)  # noqa: E712
+        )
     ) or 0
     has_delivery = await session.scalar(
-        select(func.count(ICPScore.id)).where(ICPScore.has_delivery == True)
+        _apply_restaurant_filters(
+            select(func.count(Restaurant.id))
+        ).where(ICPScore.has_delivery == True)  # noqa: E712
     ) or 0
     has_pos = await session.scalar(
-        select(func.count(ICPScore.id)).where(ICPScore.has_pos == True)
+        _apply_restaurant_filters(
+            select(func.count(Restaurant.id))
+        ).where(ICPScore.has_pos == True)  # noqa: E712
     ) or 0
     avg_score = await session.scalar(
-        select(func.avg(ICPScore.total_icp_score))
+        _apply_restaurant_filters(
+            select(func.avg(ICPScore.total_icp_score))
+        )
     )
 
     stats = {
