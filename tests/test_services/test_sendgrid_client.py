@@ -410,3 +410,93 @@ class TestUnsubscribeHeader:
         headers = self._header_dict(msg)
         assert "List-Unsubscribe-Post" in headers
         assert "One-Click" in headers["List-Unsubscribe-Post"]
+
+
+# ---------------------------------------------------------------------------
+# Edge cases: empty body, long subject, special characters, tel: links
+# ---------------------------------------------------------------------------
+
+class TestSendEmailEdgeCases:
+    def _client_with_mock(self, response=None):
+        client = _make_client()
+        client._client = MagicMock()
+        client._client.send.return_value = response or _mock_success_response()
+        return client
+
+    def test_empty_html_body_succeeds(self):
+        """send_email should succeed even with an empty HTML body."""
+        client = self._client_with_mock()
+        success, message_id, error = client.send_email(
+            "user@example.com", "Subject", ""
+        )
+        assert success is True
+
+    def test_empty_html_body_does_not_inject_pixel_without_tracking(self):
+        """Empty body with no tracking data: pixel not injected."""
+        client = _make_client()
+        result = client._inject_pixel("", {})
+        assert result == ""
+
+    def test_very_long_subject_line(self):
+        """A subject line of 998 chars should still be sent without error."""
+        client = self._client_with_mock()
+        long_subject = "A" * 998
+        success, _, error = client.send_email(
+            "user@example.com", long_subject, SIMPLE_HTML
+        )
+        assert success is True
+        assert error is None
+
+    def test_special_characters_in_html_body(self):
+        """HTML with special characters (emoji, accented chars) should send successfully."""
+        client = self._client_with_mock()
+        special_html = "<html><body><p>Héllo Wörld 🎉 & <Specials></p></body></html>"
+        success, _, error = client.send_email(
+            "user@example.com", "Special", special_html
+        )
+        assert success is True
+
+    def test_tel_links_not_wrapped(self):
+        """tel: links must not be passed to wrap_url."""
+        client = _make_client()
+        html = '<a href="tel:+15551234567">Call us</a>'
+        with patch("src.services.sendgrid_client.wrap_url") as mock_wrap:
+            result = client._wrap_links(html, TRACKING)
+        mock_wrap.assert_not_called()
+        assert "tel:+15551234567" in result
+
+    def test_single_quote_href_preserved(self):
+        """href attributes using single quotes should preserve single quotes after wrapping."""
+        client = _make_client()
+        html = "<a href='https://example.com'>X</a>"
+        with patch("src.services.sendgrid_client.wrap_url", return_value="https://track/t/tok") as mock_wrap:
+            result = client._wrap_links(html, TRACKING)
+        assert "href='https://track/t/tok'" in result
+
+    def test_category_assignment_single(self):
+        """A single category should be attached to the outgoing message."""
+        client = _make_client(categories=["nif-249"])
+        client._client = MagicMock()
+        client._client.send.return_value = _mock_success_response()
+        with patch.object(client, "_process_html", side_effect=lambda h, t: h):
+            client.send_email("u@example.com", "S", SIMPLE_HTML)
+        msg = client._client.send.call_args[0][0]
+        cat_names = [c.name for c in (msg.categories or [])]
+        assert "nif-249" in cat_names
+
+    def test_html_body_without_body_tag_pixel_appended(self):
+        """When there's no </body> tag, pixel is appended to end of content."""
+        client = _make_client()
+        with patch("src.services.sendgrid_client.generate_pixel_url", return_value="https://track/px/x.gif"):
+            result = client._inject_pixel("<p>No body tag</p>", TRACKING)
+        assert result.endswith('<img src="https://track/px/x.gif" width="1" height="1" alt="" style="display:none" />')
+
+    def test_pixel_img_tag_attributes(self):
+        """Injected pixel must have width=1, height=1, display:none, empty alt."""
+        client = _make_client()
+        with patch("src.services.sendgrid_client.generate_pixel_url", return_value="https://track/px/z.gif"):
+            result = client._inject_pixel("<html><body></body></html>", TRACKING)
+        assert 'width="1"' in result
+        assert 'height="1"' in result
+        assert 'alt=""' in result
+        assert "display:none" in result

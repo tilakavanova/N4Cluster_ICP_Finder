@@ -223,3 +223,106 @@ class TestReviewSignalLegacy:
     def test_zero_reviews(self):
         score = normalize_review_signal(0, 0.0)
         assert score >= 0.0
+
+
+# ── Coverage gap tests ────────────────────────────────────────────────────────
+
+class TestDeliveryDetectionEdgeCases:
+    def test_unknown_platform_name_preserved(self):
+        """A delivery platform that isn't doordash/uber/grubhub is kept as-is."""
+        records = [{"source": "yelp", "has_delivery": True, "delivery_platform": "caviar"}]
+        has_delivery, platforms, count = detect_delivery(records)
+        assert has_delivery is True
+        assert "caviar" in platforms
+        assert count == 1
+
+    def test_extracted_data_delivery_platforms(self):
+        """delivery_platforms list inside extracted_data is also scanned."""
+        records = [
+            {
+                "source": "google_maps",
+                "extracted_data": {"delivery_platforms": ["doordash", "grubhub"]},
+            }
+        ]
+        has_delivery, platforms, count = detect_delivery(records)
+        assert has_delivery is True
+        assert "doordash" in platforms
+        assert "grubhub" in platforms
+        assert count == 2
+
+
+class TestPOSDetectionEdgeCases:
+    def test_has_pos_flag_in_extracted_data(self):
+        """detect_pos returns True when extracted_data.has_pos is set."""
+        has_pos, provider = detect_pos("", {"has_pos": True, "pos_provider": "Toast"})
+        assert has_pos is True
+        assert provider == "Toast"
+
+    def test_pos_indicators_in_extracted_data(self):
+        """POS detected via pos_indicators list in extracted_data."""
+        has_pos, provider = detect_pos("", {"pos_indicators": ["square terminal"]})
+        assert has_pos is True
+        assert provider == "Square"
+
+    def test_pos_indicators_empty_list(self):
+        """Empty pos_indicators list yields no POS detection."""
+        has_pos, provider = detect_pos("", {"pos_indicators": []})
+        assert has_pos is False
+
+    def test_pos_via_extracted_has_pos_no_provider(self):
+        """has_pos=True with no provider returns (True, None)."""
+        has_pos, provider = detect_pos("", {"has_pos": True})
+        assert has_pos is True
+        assert provider is None
+
+
+class TestPricePointEdgeCases:
+    def test_non_dollar_string_returns_default(self):
+        """A price_tier string with no '$' chars falls through to the 0.7 default."""
+        assert price_point_score("moderate") == 0.7
+
+    def test_empty_string_returns_default(self):
+        """An empty price string is falsy → 0.7."""
+        assert price_point_score("") == 0.7
+
+
+class TestEngagementRecencyEdgeCases:
+    def test_naive_datetime_handled(self):
+        """Naive datetime (no tzinfo) should be treated as UTC and not crash."""
+        recent_naive = datetime.now() - timedelta(days=10)
+        score = engagement_recency_score(review_count=0, latest_review_date=recent_naive)
+        assert score == 1.0
+
+    def test_review_date_60_days_ago(self):
+        """31-90 days → 0.7."""
+        date_60 = datetime.now(timezone.utc) - timedelta(days=60)
+        assert engagement_recency_score(latest_review_date=date_60) == 0.7
+
+    def test_review_date_120_days_ago(self):
+        """91-180 days → 0.4."""
+        date_120 = datetime.now(timezone.utc) - timedelta(days=120)
+        assert engagement_recency_score(latest_review_date=date_120) == 0.4
+
+    def test_review_date_exactly_30_days(self):
+        """Exactly 30 days old → 1.0 (boundary)."""
+        date_30 = datetime.now(timezone.utc) - timedelta(days=30)
+        assert engagement_recency_score(latest_review_date=date_30) == 1.0
+
+    def test_review_date_exactly_90_days(self):
+        """Exactly 90 days old → 0.7 (boundary)."""
+        date_90 = datetime.now(timezone.utc) - timedelta(days=90)
+        assert engagement_recency_score(latest_review_date=date_90) == 0.7
+
+    def test_review_date_exactly_180_days(self):
+        """Exactly 180 days old → 0.4 (boundary)."""
+        date_180 = datetime.now(timezone.utc) - timedelta(days=180)
+        assert engagement_recency_score(latest_review_date=date_180) == 0.4
+
+    def test_review_count_below_10_with_no_date(self):
+        """review_count < 10 with no date → 0.1."""
+        assert engagement_recency_score(review_count=9) == 0.1
+
+    def test_review_count_500_with_high_rating_capped_at_one(self):
+        """500+ reviews + 4.5 rating: boost applies but caps at 1.0."""
+        score = engagement_recency_score(review_count=500, rating=4.5)
+        assert score == 1.0

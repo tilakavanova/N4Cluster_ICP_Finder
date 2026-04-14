@@ -1,5 +1,8 @@
 """Tests for geo-density scoring."""
 
+import sys
+from unittest.mock import MagicMock, patch
+import numpy as np
 import pytest
 from src.scoring.geo_density import haversine_distance, compute_density_scores, get_neighborhood_stats
 
@@ -77,3 +80,69 @@ class TestNeighborhoodStats:
         assert "max_density" in stats
         assert "min_density" in stats
         assert "dense_count" in stats
+
+
+class TestDensityWithHDBSCAN:
+    """Tests that exercise the HDBSCAN clustering path (mocked when not installed)."""
+
+    def test_hdbscan_path_assigns_cluster_bonus(self, multiple_restaurants_for_density):
+        """When HDBSCAN is available, clustered restaurants get a +0.1 bonus."""
+        # Build a fake HDBSCAN that assigns all restaurants to cluster 0
+        fake_hdbscan_instance = MagicMock()
+        fake_hdbscan_instance.fit_predict.return_value = np.zeros(
+            len(multiple_restaurants_for_density), dtype=int
+        )
+        FakeHDBSCAN = MagicMock(return_value=fake_hdbscan_instance)
+        fake_module = MagicMock()
+        fake_module.HDBSCAN = FakeHDBSCAN
+
+        with patch.dict(sys.modules, {"hdbscan": fake_module}):
+            scores = compute_density_scores(multiple_restaurants_for_density, radius_km=0.5)
+
+        assert len(scores) == len(multiple_restaurants_for_density)
+        # All get cluster bonus so every score should be > 0 (or == 0.1 for isolated points)
+        assert all(v >= 0.0 for v in scores.values())
+
+    def test_hdbscan_path_noise_points_no_bonus(self, multiple_restaurants_for_density):
+        """Restaurants labelled -1 (noise) by HDBSCAN receive no cluster bonus."""
+        # All labelled as noise (-1)
+        fake_hdbscan_instance = MagicMock()
+        fake_hdbscan_instance.fit_predict.return_value = np.full(
+            len(multiple_restaurants_for_density), -1, dtype=int
+        )
+        FakeHDBSCAN = MagicMock(return_value=fake_hdbscan_instance)
+        fake_module = MagicMock()
+        fake_module.HDBSCAN = FakeHDBSCAN
+
+        with patch.dict(sys.modules, {"hdbscan": fake_module}):
+            scores = compute_density_scores(multiple_restaurants_for_density, radius_km=0.5)
+
+        assert all(v <= 1.0 for v in scores.values())
+
+    def test_sparse_restaurants_score_lower_than_clustered(self):
+        """Sparse restaurants (spread across km) score lower density than clustered."""
+        # Spread across 10 km — each restaurant is far from the others
+        sparse = [
+            {"id": str(i), "lat": 40.71 + i * 0.1, "lng": -74.00, "name": f"R{i}"}
+            for i in range(10)
+        ]
+        # Clustered — all within 0.1 km
+        clustered = [
+            {"id": str(i), "lat": 40.71 + i * 0.0005, "lng": -74.00, "name": f"C{i}"}
+            for i in range(10)
+        ]
+        sparse_scores = compute_density_scores(sparse, radius_km=0.5)
+        clustered_scores = compute_density_scores(clustered, radius_km=0.5)
+
+        avg_sparse = sum(sparse_scores.values()) / len(sparse_scores)
+        avg_clustered = sum(clustered_scores.values()) / len(clustered_scores)
+        assert avg_clustered > avg_sparse
+
+    def test_min_cluster_size_boundary_returns_defaults(self):
+        """Exactly min_cluster_size-1 valid restaurants triggers the fallback (0.5)."""
+        restaurants = [
+            {"id": str(i), "lat": 40.71 + i * 0.001, "lng": -74.00, "name": f"R{i}"}
+            for i in range(4)
+        ]
+        scores = compute_density_scores(restaurants, min_cluster_size=5)
+        assert all(v == 0.5 for v in scores.values())

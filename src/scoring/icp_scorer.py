@@ -122,6 +122,7 @@ class ICPScorer:
             "disqualifier_penalty": round(penalty, 2),
             "total_icp_score": total_score,
             "fit_label": fit_label,
+            "hot_lead": total_score >= 75,
             "scoring_version": settings.scoring_version,
             "scored_at": datetime.now(timezone.utc).isoformat(),
         }
