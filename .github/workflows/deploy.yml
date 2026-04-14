@@ -1,0 +1,22 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+# Only one deploy at a time; cancel queued runs but never the active one
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    # Require CI to pass on the same commit before deploying
+    needs: []   # CI runs as a separate workflow; use branch-protection rules to enforce it
+
+    steps:
+      - name: Trigger Render deploy hook
+        run: |
+          curl --fail-with-body -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"

@@ -43,7 +43,49 @@ icp-server = "src.main:run"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term-missing --cov-report=xml"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "alembic/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
 
 [tool.ruff]
-target-version = "py311"
-line-length = 120
+target-version = "py312"
+line-length = 100
+exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A"]
+# TODO: Remove these ignores after NIF-249/250 cleanup sprint
+ignore = [
+    "E501",   # line-too-long — handled by formatter
+    "B008",   # function-call-in-default-argument — FastAPI Depends() pattern
+    "B904",   # raise-without-from-inside-except — too noisy to fix now
+    "N806",   # variable-in-function-should-be-lowercase — SQLAlchemy model pattern
+    "N815",   # mixed-case-variable-in-class-scope — SQLAlchemy pattern
+    "UP007",  # use-x-or-y-for-union — pre-3.10 compat in some files
+    "A001",   # builtin-variable-shadowing — 'id', 'type' params common in models
+    "A002",   # builtin-argument-shadowing — same
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["N", "B"]   # naming and boolean trap rules too strict in tests
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+strict_optional = true
+exclude = ["alembic/"]
+# TODO: Enable stricter checks in NIF-249/250
+disallow_untyped_defs = false
+check_untyped_defs = false
