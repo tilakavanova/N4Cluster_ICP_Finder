@@ -30,6 +30,7 @@ from src.services.communication_status import (
     mark_as_failed,
     mark_as_opened,
     mark_as_opted_out,
+    mark_as_replied,
     mark_as_sent,
     transition_status,
 )
@@ -494,6 +495,54 @@ class TestMarkAsHelpers:
         assert result is False
 
     @pytest.mark.asyncio
+    async def test_mark_as_replied_valid_from_opened(self):
+        target = _make_target(communication_status="opened")
+        session = _make_session(target=target)
+        result = await mark_as_replied(session, target.id, "email")
+        assert result is True
+        assert target.communication_status == "replied"
+
+    @pytest.mark.asyncio
+    async def test_mark_as_replied_valid_from_clicked(self):
+        target = _make_target(communication_status="clicked")
+        session = _make_session(target=target)
+        result = await mark_as_replied(session, target.id, "email")
+        assert result is True
+        assert target.communication_status == "replied"
+
+    @pytest.mark.asyncio
+    async def test_mark_as_replied_invalid_from_queued(self):
+        target = _make_target(communication_status="queued")
+        session = _make_session(target=target)
+        result = await mark_as_replied(session, target.id, "email")
+        assert result is False
+        assert target.communication_status == "queued"
+
+    @pytest.mark.asyncio
+    async def test_mark_as_replied_invalid_from_sent(self):
+        target = _make_target(communication_status="sent")
+        session = _make_session(target=target)
+        result = await mark_as_replied(session, target.id, "email")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_mark_as_replied_invalid_from_bounced(self):
+        target = _make_target(communication_status="bounced")
+        session = _make_session(target=target)
+        result = await mark_as_replied(session, target.id, "email")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_mark_as_replied_creates_read_event(self):
+        target = _make_target(communication_status="opened")
+        session = _make_session(target=target)
+        await mark_as_replied(session, target.id, "email")
+        ev = session.add.call_args[0][0]
+        from src.db.models import TrackerEvent
+        assert isinstance(ev, TrackerEvent)
+        assert ev.event_type == "read"
+
+    @pytest.mark.asyncio
     async def test_all_helpers_return_false_for_missing_target(self):
         session = _make_session(target=None)
         tid = uuid.uuid4()
@@ -504,6 +553,7 @@ class TestMarkAsHelpers:
         assert await mark_as_bounced(session, tid, "email") is False
         assert await mark_as_failed(session, tid, "email") is False
         assert await mark_as_opted_out(session, tid, "email") is False
+        assert await mark_as_replied(session, tid, "email") is False
 
 
 # ---------------------------------------------------------------------------
