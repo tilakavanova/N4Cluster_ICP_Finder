@@ -29,6 +29,8 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown."""
     setup_logging()
     logger.info("application_starting", debug=settings.debug)
+    if settings.allow_seed_routes:
+        logger.warning("seed_routes_enabled", message="Seed routes are ENABLED — disable in production!")
     yield
     logger.info("application_shutting_down")
 
@@ -91,7 +93,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(restaurants.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(scores.router, prefix="/api/v1")
-app.include_router(seed.router, prefix="/api/v1")
+if settings.allow_seed_routes:
+    app.include_router(seed.router, prefix="/api/v1")
 app.include_router(leads.router, prefix="/api/v1")
 app.include_router(changes.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
