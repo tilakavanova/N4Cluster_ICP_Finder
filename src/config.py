@@ -54,7 +54,10 @@ class Settings(BaseSettings):
     stale_job_timeout_minutes: int = 60
 
     # LLM cost controls
-    llm_daily_token_limit: int = 0  # 0 = unlimited. Set to e.g. 500000 for 500K tokens/day
+    llm_daily_token_limit: int = 1_000_000  # Daily token budget across all providers
+
+    # Seed routes (data-import endpoints — disable in production)
+    allow_seed_routes: bool = False  # Set ALLOW_SEED_ROUTES=true to enable /seed/* endpoints
 
     # HubSpot CRM
     hubspot_api_key: str = ""
