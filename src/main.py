@@ -17,6 +17,7 @@ from src.api.routers import restaurants, jobs, scores, seed, leads, changes, ana
 from src.api.routers import tracking as tracking_router
 from src.api.routers import webhooks as webhooks_router
 from src.api.routers import unsubscribe as unsubscribe_router
+from src.api.routers import auth as auth_router
 from src.dashboard.routes import router as dashboard_router
 
 logger = get_logger("app")
@@ -109,6 +110,7 @@ app.include_router(qualification.router, prefix="/api/v1")
 app.include_router(rep_queue.router, prefix="/api/v1")
 app.include_router(conversion_analytics.router, prefix="/api/v1")
 app.include_router(cluster_engine.router, prefix="/api/v1")
+app.include_router(auth_router.router, prefix="/api/v1")
 app.include_router(tracking_router.router)  # /t/{token} and /px/{token}.gif — no prefix
 app.include_router(webhooks_router.router)  # /webhooks/sendgrid, /webhooks/sendgrid/inbound
 app.include_router(unsubscribe_router.router)  # /unsubscribe/{token}, /unsubscribe/one-click

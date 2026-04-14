@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     allowed_origins: str = "https://n4cluster.com,https://www.n4cluster.com"
     api_key: str = ""
 
+    # JWT / OAuth2 (NIF-254)
+    jwt_secret_key: str = ""  # Falls back to secret_key if empty
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60
+
     # Dashboard auth
     dashboard_username: str = "admin"
     dashboard_password: str = ""  # Must be set via env var for dashboard access
@@ -89,6 +94,11 @@ class Settings(BaseSettings):
     sendgrid_from_email: str = ""
     sendgrid_from_name: str = "N4Cluster"
     sendgrid_webhook_signing_key: str = ""
+
+    @property
+    def effective_jwt_secret(self) -> str:
+        """Return the JWT signing secret, falling back to secret_key."""
+        return self.jwt_secret_key or self.secret_key or "dev-jwt-secret-change-me"
 
     @property
     def async_database_url(self) -> str:

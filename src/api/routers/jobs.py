@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.config import settings
 from src.db.session import get_session, async_session
 from src.db.models import CrawlJob, Restaurant, SourceRecord
@@ -314,7 +314,7 @@ async def get_job(
     return job
 
 
-@router.post("/enrich-websites", dependencies=[Depends(require_api_key)])
+@router.post("/enrich-websites", dependencies=[Depends(require_auth)])
 async def enrich_websites(
     limit: int = Query(50, ge=1, le=200, description="Max restaurants to enrich"),
     session: AsyncSession = Depends(get_session),
@@ -326,7 +326,7 @@ async def enrich_websites(
     return result
 
 
-@router.delete("/cleanup", dependencies=[Depends(require_api_key)])
+@router.delete("/cleanup", dependencies=[Depends(require_auth)])
 async def cleanup_old_jobs(
     max_age_days: int = Query(None, ge=1, le=365, description="Override retention period in days"),
     session: AsyncSession = Depends(get_session),

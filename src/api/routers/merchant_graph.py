@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.db.models import MerchantEntity
 from src.db.session import get_session
 from src.services.merchant_graph import (
@@ -22,7 +22,7 @@ logger = get_logger("merchant_graph")
 router = APIRouter(
     prefix="/merchant-graph",
     tags=["merchant-graph"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_auth)],
 )
 
 
