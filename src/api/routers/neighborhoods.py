@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.neighborhoods import (
     compute_neighborhood_score,
@@ -19,7 +19,7 @@ logger = get_logger("neighborhoods")
 router = APIRouter(
     prefix="/neighborhoods",
     tags=["neighborhoods"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_auth)],
 )
 
 

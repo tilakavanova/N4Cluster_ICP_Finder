@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.rep_queue import (
     get_queue,
@@ -24,7 +24,7 @@ logger = get_logger("rep_queue_api")
 router = APIRouter(
     prefix="/rep-queue",
     tags=["rep-queue"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_auth)],
 )
 
 

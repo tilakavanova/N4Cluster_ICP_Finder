@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.configuration import (
     get_config,
@@ -23,7 +23,7 @@ logger = get_logger("configuration_api")
 router = APIRouter(
     prefix="/config",
     tags=["configuration"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_auth)],
 )
 
 

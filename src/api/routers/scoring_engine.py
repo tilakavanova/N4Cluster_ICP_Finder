@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.db.models import (
     ScoringProfile, ScoringRule, ScoreExplanation,
     ScoreVersion, ScoringConfigLink, ScoreRecalcJob,
@@ -26,7 +26,7 @@ logger = get_logger("scoring_engine_api")
 router = APIRouter(
     prefix="/scoring-engine",
     tags=["scoring-engine"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_auth)],
 )
 
 

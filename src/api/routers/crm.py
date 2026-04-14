@@ -9,7 +9,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.db.models import (
     Account, Contact, Lead,
     LeadStageHistory, LeadAssignmentHistory,
@@ -20,7 +20,7 @@ from src.utils.logging import get_logger
 
 logger = get_logger("crm")
 
-router = APIRouter(prefix="/crm", tags=["crm"], dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/crm", tags=["crm"], dependencies=[Depends(require_auth)])
 
 
 # --- Schemas ---

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.conversion_analytics import (
     record_event,
@@ -22,7 +22,7 @@ logger = get_logger("conversion_analytics_api")
 router = APIRouter(
     prefix="/conversion",
     tags=["conversion"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_auth)],
 )
 
 

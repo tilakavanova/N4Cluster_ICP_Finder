@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_api_key
+from src.api.auth import require_auth
 from src.db.session import get_session
 from src.db.models import Restaurant, ICPScore
 
@@ -156,7 +156,7 @@ async def recalculate_scores(
     return {"message": f"Scored {len(scores)} restaurants", "scored": len(scores)}
 
 
-@router.get("/export", dependencies=[Depends(require_api_key)])
+@router.get("/export", dependencies=[Depends(require_auth)])
 async def export_leads(
     format: str = Query("csv", pattern="^(csv|json)$"),
     min_score: float = Query(0.0),
