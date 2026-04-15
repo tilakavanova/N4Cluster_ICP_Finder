@@ -31,10 +31,10 @@ class TestVersionedEndpoints:
     @pytest.mark.asyncio
     async def test_leads_versioned_path(self):
         """GET /api/v1/leads should return 200 (or 401 in auth mode, not 404)."""
-        transport = ASGITransport(app=app)
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/api/v1/leads")
-        # Dev mode: 200.  Auth-required mode: 401.  Not-found: 404.
+        # Dev mode: 200.  Auth-required mode: 401.  DB error: 500.  Not-found: 404.
         assert r.status_code != 404
 
     @pytest.mark.asyncio
@@ -47,7 +47,7 @@ class TestVersionedEndpoints:
 
     @pytest.mark.asyncio
     async def test_restaurants_versioned_path(self):
-        transport = ASGITransport(app=app)
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/api/v1/restaurants")
         assert r.status_code != 404
@@ -61,9 +61,9 @@ class TestVersionedEndpoints:
 
     @pytest.mark.asyncio
     async def test_scores_versioned_path(self):
-        transport = ASGITransport(app=app)
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            r = await client.get("/api/v1/scores")
+            r = await client.get("/api/v1/scores/leaderboard")
         assert r.status_code != 404
 
     @pytest.mark.asyncio
@@ -80,7 +80,7 @@ class TestRootLevelEndpoints:
     @pytest.mark.asyncio
     async def test_tracking_pixel_at_root(self):
         """GET /px/{token}.gif must be reachable (not 404) — even if token is invalid."""
-        transport = ASGITransport(app=app)
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/px/fakeshorttok.gif")
         # 404 would mean the route doesn't exist; any other code means route is registered
@@ -89,14 +89,14 @@ class TestRootLevelEndpoints:
     @pytest.mark.asyncio
     async def test_click_redirect_at_root(self):
         """GET /t/{token} must be reachable (not 404)."""
-        transport = ASGITransport(app=app)
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/t/fakeshorttok")
         assert r.status_code != 404
 
     @pytest.mark.asyncio
     async def test_unsubscribe_at_root(self):
-        transport = ASGITransport(app=app)
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/unsubscribe/faketoken")
         assert r.status_code != 404

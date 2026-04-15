@@ -1,6 +1,7 @@
 """Tests for application configuration."""
 
 import pytest
+from unittest.mock import patch
 from src.config import Settings
 
 
@@ -43,7 +44,12 @@ class TestConfig:
         assert s.proxy_pool == ["http://p1", "http://p2"]
 
     def test_default_api_keys_empty(self):
-        s = Settings(database_url="postgresql+asyncpg://localhost/test")
+        with patch.dict("os.environ", {
+            "OPENAI_API_KEY": "",
+            "YELP_FUSION_API_KEY": "",
+            "GOOGLE_PLACES_API_KEY": "",
+        }):
+            s = Settings(database_url="postgresql+asyncpg://localhost/test")
         assert s.openai_api_key == ""
         assert s.yelp_fusion_api_key == ""
         assert s.google_places_api_key == ""
