@@ -23,6 +23,24 @@
     .htmx-settling { opacity: 0.8; }
     .htmx-swapping { opacity: 0.5; transition: opacity 0.2s; }
   </style>
+  <script>
+    // NIF-275: If an hx-boost AJAX navigation returns a server error,
+    // fall back to a full page load so the user sees the error instead
+    // of the tab appearing unresponsive.
+    document.addEventListener("htmx:responseError", function(event) {
+      var xhr = event.detail.xhr;
+      if (xhr && xhr.status >= 500) {
+        window.location.href = event.detail.pathInfo
+          ? event.detail.pathInfo.requestPath
+          : event.detail.elt.getAttribute("href") || window.location.href;
+      }
+    });
+    document.addEventListener("htmx:sendError", function(event) {
+      // Network error — reload to show standard browser error
+      var href = event.detail.elt.getAttribute("href");
+      if (href) window.location.href = href;
+    });
+  </script>
 </head>
 <body class="h-full" hx-boost="true">
   <div class="min-h-full">
