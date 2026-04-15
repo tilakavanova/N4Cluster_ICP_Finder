@@ -1,4 +1,4 @@
-"""Tests for NIF-219: Webhook signature verification.
+"""Tests for NIF-219, NIF-257: Webhook signature verification.
 
 Covers:
 - verify_sendgrid_signature: valid ECDSA signature passes
@@ -9,9 +9,17 @@ Covers:
 - verify_webhook_request: dispatches to sendgrid provider
 - verify_webhook_request: unknown provider returns False
 - verify_webhook_request: case-insensitive header lookup
+- verify_hubspot_signature: valid HMAC-SHA256 signature passes
+- verify_hubspot_signature: invalid signature rejected
+- verify_hubspot_signature: stale timestamp rejected
+- verify_hubspot_signature: missing fields return False
 """
 
 import base64
+import hashlib
+import hmac
+import time
+from unittest.mock import patch
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ec import (
@@ -25,7 +33,11 @@ from cryptography.hazmat.primitives.serialization import (
     PublicFormat,
 )
 
-from src.utils.webhook_verification import verify_sendgrid_signature, verify_webhook_request
+from src.utils.webhook_verification import (
+    verify_hubspot_signature,
+    verify_sendgrid_signature,
+    verify_webhook_request,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -155,3 +167,105 @@ class TestVerifyWebhookRequest:
     def test_missing_headers_returns_false(self):
         payload = b'test'
         assert verify_webhook_request(payload, {}, "sendgrid", self.public_pem) is False
+
+
+# ---------------------------------------------------------------------------
+# verify_hubspot_signature
+# ---------------------------------------------------------------------------
+
+
+def _make_hubspot_sig(client_secret: str, source_string: str) -> str:
+    """Return a valid base64 HMAC-SHA256 signature."""
+    digest = hmac.new(
+        client_secret.encode("utf-8"),
+        source_string.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    return base64.b64encode(digest).decode("utf-8")
+
+
+def _fresh_ts() -> str:
+    """Return current Unix time in milliseconds as a string."""
+    return str(int(time.time() * 1000))
+
+
+class TestVerifyHubspotSignature:
+    def test_valid_signature_returns_true(self):
+        secret = "my-client-secret"
+        body = b'[{"subscriptionType":"deal.propertyChange"}]'
+        source = f"POSThttps://example.com/webhooks/hubspot{body.decode()}"
+        sig = _make_hubspot_sig(secret, source)
+
+        with patch("src.utils.webhook_verification.time") as mock_time:
+            mock_time.time.return_value = 1700000000.0
+            ts = str(1700000000 * 1000)
+            result = verify_hubspot_signature(body, sig, secret, source, ts)
+
+        assert result is True
+
+    def test_invalid_signature_returns_false(self):
+        secret = "my-client-secret"
+        body = b'[{"subscriptionType":"deal.propertyChange"}]'
+        source = f"POSThttps://example.com/webhooks/hubspot{body.decode()}"
+
+        with patch("src.utils.webhook_verification.time") as mock_time:
+            mock_time.time.return_value = 1700000000.0
+            ts = str(1700000000 * 1000)
+            result = verify_hubspot_signature(body, "wrong-sig", secret, source, ts)
+
+        assert result is False
+
+    def test_stale_timestamp_returns_false(self):
+        secret = "my-client-secret"
+        body = b'test'
+        source = f"POSThttps://example.com/webhooks/hubspot{body.decode()}"
+        sig = _make_hubspot_sig(secret, source)
+
+        with patch("src.utils.webhook_verification.time") as mock_time:
+            # Current time is 10 minutes after the request timestamp
+            mock_time.time.return_value = 1700000600.0
+            ts = str(1700000000 * 1000)  # 10 minutes ago
+            result = verify_hubspot_signature(body, sig, secret, source, ts)
+
+        assert result is False
+
+    def test_missing_secret_returns_false(self):
+        body = b'test'
+        source = "POSThttp://example.com/test"
+        sig = _make_hubspot_sig("some-secret", source)
+        ts = _fresh_ts()
+        assert verify_hubspot_signature(body, sig, "", source, ts) is False
+
+    def test_missing_signature_returns_false(self):
+        body = b'test'
+        source = "POSThttp://example.com/test"
+        ts = _fresh_ts()
+        assert verify_hubspot_signature(body, "", "secret", source, ts) is False
+
+    def test_missing_timestamp_returns_false(self):
+        secret = "secret"
+        body = b'test'
+        source = "POSThttp://example.com/test"
+        sig = _make_hubspot_sig(secret, source)
+        assert verify_hubspot_signature(body, sig, secret, source, "") is False
+
+    def test_tampered_source_returns_false(self):
+        secret = "my-client-secret"
+        body = b'{"data":"original"}'
+        source = f"POSThttps://example.com/webhooks/hubspot{body.decode()}"
+        sig = _make_hubspot_sig(secret, source)
+        tampered_source = "POSThttps://example.com/webhooks/hubspot{'data':'tampered'}"
+
+        with patch("src.utils.webhook_verification.time") as mock_time:
+            mock_time.time.return_value = 1700000000.0
+            ts = str(1700000000 * 1000)
+            result = verify_hubspot_signature(body, sig, secret, tampered_source, ts)
+
+        assert result is False
+
+    def test_invalid_timestamp_format_returns_false(self):
+        secret = "secret"
+        body = b'test'
+        source = "POSThttp://example.com"
+        sig = _make_hubspot_sig(secret, source)
+        assert verify_hubspot_signature(body, sig, secret, source, "not-a-number") is False

@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     # HubSpot CRM
     hubspot_api_key: str = ""
     hubspot_pipeline_id: str = ""
+    hubspot_webhook_secret: str = ""  # App client secret for HubSpot webhook signature verification (NIF-257)
 
     # Lead notifications
     slack_webhook_url: str = ""

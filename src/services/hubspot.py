@@ -177,3 +177,45 @@ class HubSpotService:
 
             logger.error("hubspot_deal_create_failed", status=resp.status_code, body=resp.text)
             return None
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+    async def get_deal_by_id(self, deal_id: str) -> dict | None:
+        """Fetch a deal's properties from HubSpot by deal ID.
+
+        Args:
+            deal_id: HubSpot deal object ID.
+
+        Returns:
+            Dict of deal properties, or None on failure.
+        """
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{HUBSPOT_API_BASE}/crm/v3/objects/deals/{deal_id}",
+                headers=_headers(),
+                params={"properties": "dealname,dealstage,closedate,pipeline"},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.error("hubspot_get_deal_failed", deal_id=deal_id, status=resp.status_code)
+            return None
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+    async def get_contact_by_id(self, contact_id: str) -> dict | None:
+        """Fetch a contact's properties from HubSpot by contact ID.
+
+        Args:
+            contact_id: HubSpot contact object ID.
+
+        Returns:
+            Dict of contact properties, or None on failure.
+        """
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{HUBSPOT_API_BASE}/crm/v3/objects/contacts/{contact_id}",
+                headers=_headers(),
+                params={"properties": "email,firstname,lastname,company,phone"},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.error("hubspot_get_contact_failed", contact_id=contact_id, status=resp.status_code)
+            return None
