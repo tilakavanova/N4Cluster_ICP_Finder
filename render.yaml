@@ -1,6 +1,9 @@
 databases:
   - name: icp-finder-db
-    plan: free
+    # Upgraded from free to Starter:
+    #   • Free-tier PostgreSQL expires after 90 days — data loss risk in production
+    #   • Starter provides persistent storage with daily backups
+    plan: starter
     databaseName: icp_finder
     user: icp_user
     postgresMajorVersion: "16"
@@ -10,7 +13,10 @@ services:
   - type: web
     name: icp-finder-api
     runtime: python
-    plan: free
+    # Upgraded from free to Starter:
+    #   • Free tier sleeps after 15 min of inactivity — breaks webhook reliability
+    #   • Starter provides always-on instances required for SendGrid webhooks
+    plan: starter
     buildCommand: chmod +x scripts/build.sh && ./scripts/build.sh
     startCommand: chmod +x scripts/start.sh && ./scripts/start.sh
     healthCheckPath: /health
@@ -52,6 +58,15 @@ services:
         sync: false
       - key: SERPAPI_API_KEY
         sync: false
+      # ── JWT / OAuth2 (NIF-254) ───────────────────────────────────────────────
+      # JWT_SECRET_KEY must be set manually in Render dashboard (sync: false).
+      # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: JWT_ALGORITHM
+        value: "HS256"
+      - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
       # ── SendGrid — Lead Communication Tracking Phase 1 ──────────────────────
       - key: SENDGRID_API_KEY
         sync: false
@@ -141,6 +156,11 @@ services:
   # ── Redis ────────────────────────────────────────────────────────────────────
   - type: redis
     name: icp-finder-redis
-    plan: free
+    # Upgraded from free to Starter:
+    #   • Free tier uses allkeys-lru eviction — rate-limit sorted sets can be
+    #     silently dropped under memory pressure, making fail-open the default
+    #     rather than the exception (NIF-255)
+    #   • Starter provides dedicated memory and persistence
+    plan: starter
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []

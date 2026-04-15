@@ -3,13 +3,16 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from src.api.schemas import LeadCreate, LeadUpdate, LeadResponse, LeadDetail, LeadFilter
-from src.api.auth import require_auth
-from src.db.models import Lead, Restaurant, ICPScore
+from src.api.auth import require_auth, require_scope
+from src.db.models import (
+    Lead, Restaurant, ICPScore,
+    OutreachTarget, OutreachActivity, TrackerEvent, AuditLog,
+)
 from src.db.session import get_session
 from src.services.lead_enrichment import LeadEnrichmentService
 from src.services.hubspot import HubSpotService
@@ -152,3 +155,103 @@ async def update_lead(
 
     logger.info("lead_updated", lead_id=str(lead_id), updates=update_data)
     return lead
+
+
+@router.delete("/{lead_id}/erasure", dependencies=[Depends(require_scope("admin:all"))])
+async def erase_lead_pii(
+    lead_id: UUID,
+    auth: dict = Depends(require_scope("admin:all")),
+    session: AsyncSession = Depends(get_session),
+):
+    """GDPR right-to-erasure: redact PII and remove related activity records.
+
+    The Lead row is retained (business continuity / audit trail) but all
+    personally-identifying fields are overwritten with "[REDACTED]".
+    Related OutreachTargets, OutreachActivities, and TrackerEvents linked
+    to this lead are permanently deleted.  An AuditLog entry records the
+    request.
+
+    Requires scope: admin:all
+    """
+    result = await session.execute(select(Lead).where(Lead.id == lead_id))
+    lead = result.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # ── 1. Cascade-delete OutreachActivities via OutreachTargets ────────────
+    target_result = await session.execute(
+        select(OutreachTarget).where(OutreachTarget.lead_id == lead_id)
+    )
+    targets = target_result.scalars().all()
+    target_ids = [t.id for t in targets]
+
+    activities_deleted = 0
+    if target_ids:
+        act_result = await session.execute(
+            delete(OutreachActivity)
+            .where(OutreachActivity.target_id.in_(target_ids))
+            .returning(OutreachActivity.id)
+        )
+        activities_deleted = len(act_result.all())
+
+    targets_deleted = 0
+    if target_ids:
+        tgt_result = await session.execute(
+            delete(OutreachTarget)
+            .where(OutreachTarget.lead_id == lead_id)
+            .returning(OutreachTarget.id)
+        )
+        targets_deleted = len(tgt_result.all())
+
+    # ── 2. Delete TrackerEvents linked to this lead ──────────────────────────
+    te_result = await session.execute(
+        delete(TrackerEvent)
+        .where(TrackerEvent.lead_id == lead_id)
+        .returning(TrackerEvent.id)
+    )
+    tracker_events_deleted = len(te_result.all())
+
+    # ── 3. Redact PII fields on the Lead record ──────────────────────────────
+    _REDACTED = "[REDACTED]"
+    lead.first_name = _REDACTED
+    lead.last_name = _REDACTED
+    lead.email = _REDACTED
+    lead.company = _REDACTED
+    lead.message = _REDACTED
+    lead.utm_source = None
+    lead.utm_medium = None
+    lead.utm_campaign = None
+    lead.hubspot_contact_id = None
+    lead.hubspot_deal_id = None
+
+    # ── 4. Write AuditLog entry ──────────────────────────────────────────────
+    audit = AuditLog(
+        action="gdpr_erasure",
+        entity_type="lead",
+        details={
+            "lead_id": str(lead_id),
+            "targets_deleted": targets_deleted,
+            "activities_deleted": activities_deleted,
+            "tracker_events_deleted": tracker_events_deleted,
+        },
+        performed_by=auth.get("sub", "unknown"),
+    )
+    session.add(audit)
+    await session.flush()
+
+    logger.info(
+        "gdpr_erasure_completed",
+        lead_id=str(lead_id),
+        targets_deleted=targets_deleted,
+        activities_deleted=activities_deleted,
+        tracker_events_deleted=tracker_events_deleted,
+        performed_by=auth.get("sub"),
+    )
+
+    return {
+        "lead_id": str(lead_id),
+        "pii_redacted": True,
+        "targets_deleted": targets_deleted,
+        "activities_deleted": activities_deleted,
+        "tracker_events_deleted": tracker_events_deleted,
+    }
