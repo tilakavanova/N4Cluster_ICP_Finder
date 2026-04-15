@@ -45,23 +45,24 @@ class TestNIF209_JobsAutoRefresh:
 class TestNIF210_RestaurantStatsFilter:
     """NIF-210: Restaurant metrics bar should refresh based on applied filters."""
 
-    def test_stats_use_filter_function(self):
+    def test_stats_use_filtered_subquery(self):
         with open("src/dashboard/routes.py") as f:
             content = f.read()
-        assert "_apply_restaurant_filters" in content
+        # NIF-275 rewrote to use subquery pattern instead of helper function
+        assert "filtered_ids" in content
+        assert "stat_base" in content
 
     def test_filtered_stats_include_city(self):
         with open("src/dashboard/routes.py") as f:
             content = f.read()
-        # The filter helper should check city
-        idx = content.index("_apply_restaurant_filters")
+        idx = content.index("stat_base")
         section = content[idx:idx+500]
         assert "city" in section
 
     def test_filtered_stats_include_state(self):
         with open("src/dashboard/routes.py") as f:
             content = f.read()
-        idx = content.index("_apply_restaurant_filters")
+        idx = content.index("stat_base")
         section = content[idx:idx+500]
         assert "state" in section
 
@@ -96,6 +97,47 @@ class TestNIF211_RestaurantColumns:
         with open("src/dashboard/templates/restaurants.html") as f:
             html = f.read()
         assert "r.icp_score.pos_provider" in html or "r.icp_score.has_pos" in html
+
+
+class TestNIF275_RestaurantsTabBroken:
+    """NIF-275: Restaurants tab not responding — stats query crash + HTMX swallowing 500."""
+
+    def test_no_double_join_in_stats(self):
+        """Stats should use subquery pattern, not outerjoin on each stat query."""
+        with open("src/dashboard/routes.py") as f:
+            content = f.read()
+        assert "filtered_ids = stat_base.subquery()" in content
+
+    def test_stats_wrapped_in_try_except(self):
+        with open("src/dashboard/routes.py") as f:
+            content = f.read()
+        # Stats section should be wrapped in try/except
+        idx = content.index("stat_base")
+        section = content[idx-200:idx+2500]
+        assert "except Exception" in section
+
+    def test_data_query_wrapped_in_try_except(self):
+        with open("src/dashboard/routes.py") as f:
+            content = f.read()
+        assert "Error loading restaurants" in content
+
+    def test_htmx_error_handler_in_base(self):
+        with open("src/dashboard/templates/base.html") as f:
+            html = f.read()
+        assert "htmx:responseError" in html
+
+    def test_htmx_send_error_handler_in_base(self):
+        with open("src/dashboard/templates/base.html") as f:
+            html = f.read()
+        assert "htmx:sendError" in html
+
+    def test_no_query_variable_shadowing(self):
+        """The search text 'q' param should not be shadowed by SQLAlchemy query."""
+        with open("src/dashboard/routes.py") as f:
+            content = f.read()
+        # Should use 'data_query' not 'query' to avoid shadowing 'q'
+        assert "data_query" in content
+        assert "search_text = q" in content
 
 
 class TestNIF212_NeighborhoodDelivery:

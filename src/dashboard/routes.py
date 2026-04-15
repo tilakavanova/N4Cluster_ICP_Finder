@@ -547,93 +547,99 @@ async def restaurants_dashboard(
     from sqlalchemy.orm import joinedload
 
     filters = {"city": city, "state": state, "fit_label": fit_label, "min_score": min_score, "q": q}
+    restaurants = []
+    total_pages = 1
 
-    query = (
-        select(Restaurant)
-        .options(joinedload(Restaurant.icp_score))
-        .outerjoin(ICPScore)
-        .order_by(ICPScore.total_icp_score.desc().nullslast())
-    )
-    count_query = select(func.count(Restaurant.id))
+    try:
+        data_query = (
+            select(Restaurant)
+            .options(joinedload(Restaurant.icp_score))
+            .outerjoin(ICPScore)
+            .order_by(ICPScore.total_icp_score.desc().nullslast())
+        )
+        count_query = select(func.count(Restaurant.id))
 
-    if city:
-        query = query.where(Restaurant.city.ilike(f"%{city}%"))
-        count_query = count_query.where(Restaurant.city.ilike(f"%{city}%"))
-    if state:
-        query = query.where(Restaurant.state == state.upper())
-        count_query = count_query.where(Restaurant.state == state.upper())
-    if fit_label:
-        query = query.where(ICPScore.fit_label == fit_label)
-        count_query = count_query.join(ICPScore).where(ICPScore.fit_label == fit_label)
-    if min_score:
-        try:
-            ms = float(min_score)
-            query = query.where(ICPScore.total_icp_score >= ms)
-            count_query = count_query.join(ICPScore).where(ICPScore.total_icp_score >= ms)
-        except ValueError:
-            pass
-    if q:
-        query = query.where(Restaurant.name.ilike(f"%{q}%"))
-        count_query = count_query.where(Restaurant.name.ilike(f"%{q}%"))
-
-    total = await session.scalar(count_query) or 0
-    total_pages = max(1, math.ceil(total / PAGE_SIZE))
-
-    query = query.offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
-    result = await session.execute(query)
-    restaurants = result.unique().scalars().all()
-
-    # Stats — filtered to match the current query (NIF-210 fix)
-    def _apply_restaurant_filters(base_query):
-        """Apply the same filters to stats queries so metrics match the table."""
-        q = base_query.outerjoin(ICPScore, ICPScore.restaurant_id == Restaurant.id)
         if city:
-            q = q.where(Restaurant.city.ilike(f"%{city}%"))
+            data_query = data_query.where(Restaurant.city.ilike(f"%{city}%"))
+            count_query = count_query.where(Restaurant.city.ilike(f"%{city}%"))
         if state:
-            q = q.where(Restaurant.state == state.upper())
+            data_query = data_query.where(Restaurant.state == state.upper())
+            count_query = count_query.where(Restaurant.state == state.upper())
         if fit_label:
-            q = q.where(ICPScore.fit_label == fit_label)
+            data_query = data_query.where(ICPScore.fit_label == fit_label)
+            count_query = count_query.join(ICPScore).where(ICPScore.fit_label == fit_label)
         if min_score:
             try:
-                q = q.where(ICPScore.total_icp_score >= float(min_score))
+                ms = float(min_score)
+                data_query = data_query.where(ICPScore.total_icp_score >= ms)
+                count_query = count_query.join(ICPScore).where(ICPScore.total_icp_score >= ms)
             except ValueError:
                 pass
-        if q_filter_text:
-            q = q.where(Restaurant.name.ilike(f"%{q_filter_text}%"))
-        return q
+        if q:
+            data_query = data_query.where(Restaurant.name.ilike(f"%{q}%"))
+            count_query = count_query.where(Restaurant.name.ilike(f"%{q}%"))
 
-    q_filter_text = q  # preserve the search text variable name
-    total_all = await session.scalar(
-        _apply_restaurant_filters(select(func.count(Restaurant.id)))
-    ) or 0
-    independent = await session.scalar(
-        _apply_restaurant_filters(
-            select(func.count(Restaurant.id)).where(Restaurant.is_chain == False)  # noqa: E712
-        )
-    ) or 0
-    has_delivery = await session.scalar(
-        _apply_restaurant_filters(
+        total = await session.scalar(count_query) or 0
+        total_pages = max(1, math.ceil(total / PAGE_SIZE))
+
+        data_query = data_query.offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
+        result = await session.execute(data_query)
+        restaurants = result.unique().scalars().all()
+    except Exception as exc:
+        message = message or f"Error loading restaurants: {exc}"
+
+    # Stats — filtered to match the current query (NIF-210 + NIF-275 fix)
+    try:
+        search_text = q  # preserve before any shadowing
+        stat_base = select(Restaurant.id).outerjoin(ICPScore, ICPScore.restaurant_id == Restaurant.id)
+        if city:
+            stat_base = stat_base.where(Restaurant.city.ilike(f"%{city}%"))
+        if state:
+            stat_base = stat_base.where(Restaurant.state == state.upper())
+        if fit_label:
+            stat_base = stat_base.where(ICPScore.fit_label == fit_label)
+        if min_score:
+            try:
+                stat_base = stat_base.where(ICPScore.total_icp_score >= float(min_score))
+            except ValueError:
+                pass
+        if search_text:
+            stat_base = stat_base.where(Restaurant.name.ilike(f"%{search_text}%"))
+
+        filtered_ids = stat_base.subquery()
+
+        total_all = await session.scalar(
+            select(func.count()).select_from(filtered_ids)
+        ) or 0
+        independent = await session.scalar(
             select(func.count(Restaurant.id))
-        ).where(ICPScore.has_delivery == True)  # noqa: E712
-    ) or 0
-    has_pos = await session.scalar(
-        _apply_restaurant_filters(
-            select(func.count(Restaurant.id))
-        ).where(ICPScore.has_pos == True)  # noqa: E712
-    ) or 0
-    avg_score = await session.scalar(
-        _apply_restaurant_filters(
+            .where(Restaurant.id.in_(select(filtered_ids.c.id)))
+            .where(Restaurant.is_chain == False)  # noqa: E712
+        ) or 0
+        has_delivery = await session.scalar(
+            select(func.count(ICPScore.id))
+            .where(ICPScore.restaurant_id.in_(select(filtered_ids.c.id)))
+            .where(ICPScore.has_delivery == True)  # noqa: E712
+        ) or 0
+        has_pos = await session.scalar(
+            select(func.count(ICPScore.id))
+            .where(ICPScore.restaurant_id.in_(select(filtered_ids.c.id)))
+            .where(ICPScore.has_pos == True)  # noqa: E712
+        ) or 0
+        avg_score = await session.scalar(
             select(func.avg(ICPScore.total_icp_score))
+            .where(ICPScore.restaurant_id.in_(select(filtered_ids.c.id)))
         )
-    )
 
-    stats = {
-        "total": total_all,
-        "independent": independent,
-        "has_delivery": has_delivery,
-        "has_pos": has_pos,
-        "avg_score": float(avg_score) if avg_score else None,
-    }
+        stats = {
+            "total": total_all,
+            "independent": independent,
+            "has_delivery": has_delivery,
+            "has_pos": has_pos,
+            "avg_score": float(avg_score) if avg_score else None,
+        }
+    except Exception:
+        stats = {"total": 0, "independent": 0, "has_delivery": 0, "has_pos": 0, "avg_score": None}
 
     html = templates.get_template("restaurants.html").render(
         restaurants=restaurants,
