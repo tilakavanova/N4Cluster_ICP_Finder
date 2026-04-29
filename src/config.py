@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     crawl_job_retention_days: int = 30
     stale_job_timeout_minutes: int = 60
 
+    # GDPR / data retention (NIF-241)
+    data_retention_days: int = 730  # 2 years default
+
     # LLM cost controls
     llm_daily_token_limit: int = 1_000_000  # Daily token budget across all providers
 

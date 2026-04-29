@@ -3,6 +3,8 @@
 Syncs leads to HubSpot contacts and deals via REST API v3.
 """
 
+from datetime import datetime, timezone
+
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -219,3 +221,223 @@ class HubSpotService:
                 return resp.json()
             logger.error("hubspot_get_contact_failed", contact_id=contact_id, status=resp.status_code)
             return None
+
+    # ------------------------------------------------------------------
+    # NIF-237: Communication log sync
+    # ------------------------------------------------------------------
+
+    _ENGAGEMENT_TYPE_MAP = {
+        "email": "EMAIL",
+        "call": "CALL",
+        "meeting": "MEETING",
+    }
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+    async def sync_communication_log(
+        self,
+        lead: Lead,
+        activity_type: str,
+        outcome: str | None = None,
+        channel: str | None = None,
+        notes: str | None = None,
+    ) -> dict | None:
+        """Create a HubSpot engagement (email/call/meeting) linked to the lead's contact.
+
+        Args:
+            lead: Lead ORM object (must have hubspot_contact_id).
+            activity_type: One of 'email', 'call', 'meeting'.
+            outcome: Outcome description (e.g. 'connected', 'voicemail', 'no_answer').
+            channel: Communication channel (e.g. 'email', 'phone', 'zoom').
+            notes: Free-text notes for the engagement body.
+
+        Returns:
+            Dict with engagement_id, or None if disabled / no contact.
+        """
+        if not self.enabled:
+            logger.debug("hubspot_disabled")
+            return None
+
+        contact_id = lead.hubspot_contact_id
+        if not contact_id:
+            logger.warning("hubspot_no_contact_id", lead_id=str(lead.id))
+            return None
+
+        engagement_type = self._ENGAGEMENT_TYPE_MAP.get(activity_type, "NOTE")
+        timestamp_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+        metadata: dict = {}
+        if engagement_type == "EMAIL":
+            metadata = {
+                "subject": f"Communication log - {outcome or activity_type}",
+                "text": notes or "",
+            }
+        elif engagement_type == "CALL":
+            metadata = {
+                "body": notes or "",
+                "disposition": outcome or "connected",
+                "durationMilliseconds": 0,
+            }
+        elif engagement_type == "MEETING":
+            metadata = {
+                "body": notes or "",
+                "title": f"Meeting - {lead.company or lead.first_name}",
+                "startTime": timestamp_ms,
+                "endTime": timestamp_ms,
+            }
+        else:
+            metadata = {"body": notes or ""}
+
+        payload = {
+            "engagement": {
+                "active": True,
+                "type": engagement_type,
+                "timestamp": timestamp_ms,
+            },
+            "associations": {
+                "contactIds": [int(contact_id)],
+                "dealIds": [int(lead.hubspot_deal_id)] if lead.hubspot_deal_id else [],
+            },
+            "metadata": metadata,
+        }
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{HUBSPOT_API_BASE}/engagements/v1/engagements",
+                headers=_headers(),
+                json=payload,
+            )
+            if resp.status_code in (200, 201):
+                engagement_id = resp.json().get("engagement", {}).get("id")
+                logger.info(
+                    "hubspot_engagement_created",
+                    engagement_id=engagement_id,
+                    type=engagement_type,
+                    lead_id=str(lead.id),
+                )
+                return {"engagement_id": str(engagement_id)}
+
+            logger.error(
+                "hubspot_engagement_create_failed",
+                status=resp.status_code,
+                body=resp.text,
+            )
+            return None
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+    async def sync_deal_stage(self, lead: Lead, new_stage: str) -> dict | None:
+        """Update the HubSpot deal stage when lead lifecycle changes.
+
+        Args:
+            lead: Lead ORM object (must have hubspot_deal_id).
+            new_stage: HubSpot deal stage ID (e.g. 'qualifiedtobuy', 'closedwon').
+
+        Returns:
+            Dict with deal_id and new_stage, or None if disabled / no deal.
+        """
+        if not self.enabled:
+            logger.debug("hubspot_disabled")
+            return None
+
+        deal_id = lead.hubspot_deal_id
+        if not deal_id:
+            logger.warning("hubspot_no_deal_id", lead_id=str(lead.id))
+            return None
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.patch(
+                f"{HUBSPOT_API_BASE}/crm/v3/objects/deals/{deal_id}",
+                headers=_headers(),
+                json={"properties": {"dealstage": new_stage}},
+            )
+            if resp.status_code == 200:
+                logger.info(
+                    "hubspot_deal_stage_updated",
+                    deal_id=deal_id,
+                    new_stage=new_stage,
+                    lead_id=str(lead.id),
+                )
+                return {"deal_id": deal_id, "new_stage": new_stage}
+
+            logger.error(
+                "hubspot_deal_stage_update_failed",
+                deal_id=deal_id,
+                status=resp.status_code,
+                body=resp.text,
+            )
+            return None
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+    async def pull_hubspot_activities(self, contact_id: str, limit: int = 50) -> list[dict]:
+        """Fetch recent HubSpot engagements for a contact.
+
+        Args:
+            contact_id: HubSpot contact object ID.
+            limit: Max number of engagements to return.
+
+        Returns:
+            List of engagement dicts with id, type, timestamp, metadata.
+        """
+        if not self.enabled:
+            logger.debug("hubspot_disabled")
+            return []
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{HUBSPOT_API_BASE}/engagements/v1/engagements/associated/CONTACT/{contact_id}/paged",
+                headers=_headers(),
+                params={"limit": limit},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+                for item in data.get("results", []):
+                    eng = item.get("engagement", {})
+                    results.append({
+                        "id": str(eng.get("id")),
+                        "type": eng.get("type"),
+                        "timestamp": eng.get("timestamp"),
+                        "created_at": eng.get("createdAt"),
+                        "metadata": item.get("metadata", {}),
+                    })
+                logger.info(
+                    "hubspot_activities_fetched",
+                    contact_id=contact_id,
+                    count=len(results),
+                )
+                return results
+
+            logger.error(
+                "hubspot_activities_fetch_failed",
+                contact_id=contact_id,
+                status=resp.status_code,
+            )
+            return []
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+    async def delete_contact(self, contact_id: str) -> bool:
+        """Delete a contact from HubSpot (used for GDPR erasure).
+
+        Args:
+            contact_id: HubSpot contact object ID.
+
+        Returns:
+            True if deleted successfully, False otherwise.
+        """
+        if not self.enabled:
+            return False
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.delete(
+                f"{HUBSPOT_API_BASE}/crm/v3/objects/contacts/{contact_id}",
+                headers=_headers(),
+            )
+            if resp.status_code in (200, 204):
+                logger.info("hubspot_contact_deleted", contact_id=contact_id)
+                return True
+
+            logger.error(
+                "hubspot_contact_delete_failed",
+                contact_id=contact_id,
+                status=resp.status_code,
+            )
+            return False
