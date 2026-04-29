@@ -16,6 +16,8 @@ from src.api.routers import webhooks as webhooks_router
 from src.api.routers import hubspot_webhooks as hubspot_webhooks_router
 from src.api.routers import unsubscribe as unsubscribe_router
 from src.api.routers import auth as auth_router
+from src.api.routers import compliance as compliance_router
+from src.api.routers import feedback_loop as feedback_loop_router
 from src.dashboard.routes import router as dashboard_router
 
 logger = get_logger("app")
@@ -103,6 +105,8 @@ app.include_router(rep_queue.router, prefix="/api/v1")
 app.include_router(conversion_analytics.router, prefix="/api/v1")
 app.include_router(cluster_engine.router, prefix="/api/v1")
 app.include_router(auth_router.router, prefix="/api/v1")
+app.include_router(compliance_router.router, prefix="/api/v1")
+app.include_router(feedback_loop_router.router, prefix="/api/v1")
 app.include_router(tracking_router.router)  # /t/{token} and /px/{token}.gif — no prefix
 app.include_router(webhooks_router.router)  # /webhooks/sendgrid, /webhooks/sendgrid/inbound
 app.include_router(hubspot_webhooks_router.router)  # /webhooks/hubspot
