@@ -265,6 +265,75 @@ def engagement_recency_score(
     return score
 
 
+# ── Signal 9: Communication Engagement (0% default) ─────────
+
+
+def communication_engagement_score(
+    tracker_events: list[dict] | None = None,
+    outreach_activities: list[dict] | None = None,
+) -> float | None:
+    """Score based on actual communication engagement data.
+
+    Computes a 0-1 score from email/SMS/WhatsApp interaction signals:
+      - Emails opened:   weight 0.30
+      - Links clicked:   weight 0.30
+      - Replies received: weight 0.25
+      - Meetings booked: weight 0.15
+
+    Returns None if there is no communication data (signal is then
+    excluded from the scoring model and its weight redistributed).
+    """
+    events = tracker_events or []
+    activities = outreach_activities or []
+
+    if not events and not activities:
+        return None
+
+    # Count engagement signals from TrackerEvent records
+    total_sends = 0
+    opens = 0
+    clicks = 0
+
+    for ev in events:
+        et = (ev.get("event_type") or "").lower()
+        if et in ("delivery", "send"):
+            total_sends += 1
+        elif et == "open":
+            opens += 1
+        elif et == "click":
+            clicks += 1
+
+    # Count signals from OutreachActivity records
+    replies = 0
+    meetings = 0
+    total_activities = 0
+
+    for act in activities:
+        at = (act.get("activity_type") or "").lower()
+        outcome = (act.get("outcome") or "").lower()
+        total_activities += 1
+
+        if at == "email_reply" or outcome == "replied":
+            replies += 1
+        elif at == "meeting" or outcome in ("meeting_booked", "meeting_scheduled", "demo_scheduled"):
+            meetings += 1
+
+    # Compute rates (avoid division by zero)
+    denominator = max(total_sends, total_activities, 1)
+    open_rate = min(opens / denominator, 1.0)
+    click_rate = min(clicks / denominator, 1.0)
+    reply_rate = min(replies / max(total_activities, 1), 1.0)
+    meeting_rate = min(meetings / max(total_activities, 1), 1.0)
+
+    score = (
+        0.30 * open_rate
+        + 0.30 * click_rate
+        + 0.25 * reply_rate
+        + 0.15 * meeting_rate
+    )
+    return min(round(score, 4), 1.0)
+
+
 # ── Disqualifiers ────────────────────────────────────────────
 
 

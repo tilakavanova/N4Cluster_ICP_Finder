@@ -77,6 +77,7 @@ class ICPScore(Base):
     price_tier = Column(Text)
     price_point_fit = Column(Float, default=0.7)
     engagement_recency = Column(Float, default=0.3)
+    communication_engagement = Column(Float)  # NIF-236: 9th signal, nullable (None = no data)
     disqualifier_penalty = Column(Float, default=0.0)
     total_icp_score = Column(Float, default=0.0, index=True)
     fit_label = Column(String(20), default="unknown")

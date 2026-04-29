@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     weight_cuisine_fit: float = 10.0
     weight_price_point: float = 8.0
     weight_engagement: float = 8.0
+    weight_communication_engagement: float = 0.0  # NIF-236: 9th signal, disabled by default
     scoring_version: int = 2
 
     # Crawl execution mode

@@ -8,7 +8,8 @@ from src.scoring.signals import (
     detect_chain, detect_delivery, detect_pos,
     platform_dependency_score, pos_maturity_score,
     volume_proxy_score, cuisine_fit_score, price_point_score,
-    engagement_recency_score, compute_disqualifier_penalty,
+    engagement_recency_score, communication_engagement_score,
+    compute_disqualifier_penalty,
 )
 from src.scoring.geo_density import compute_density_scores
 from src.utils.logging import get_logger
@@ -17,7 +18,7 @@ logger = get_logger("scoring.icp")
 
 
 class ICPScorer:
-    """Compute ICP scores using 8-signal model with disqualifiers."""
+    """Compute ICP scores using 9-signal model with disqualifiers."""
 
     def __init__(self):
         self.weights = {
@@ -29,6 +30,7 @@ class ICPScorer:
             "cuisine_fit": settings.weight_cuisine_fit,           # 10%
             "price_point": settings.weight_price_point,           # 8%
             "engagement": settings.weight_engagement,             # 8%
+            "communication_engagement": settings.weight_communication_engagement,  # 0% default (NIF-236)
         }
 
     def score_restaurant(
@@ -36,8 +38,10 @@ class ICPScorer:
         restaurant: dict[str, Any],
         source_records: list[dict],
         density_score: float = 0.0,
+        tracker_events: list[dict] | None = None,
+        outreach_activities: list[dict] | None = None,
     ) -> dict[str, Any]:
-        """Compute ICP score for a single restaurant using 8 signals."""
+        """Compute ICP score for a single restaurant using 9 signals."""
 
         # Signal 1: Independence (15%)
         is_chain, chain_name = detect_chain(
@@ -82,16 +86,36 @@ class ICPScorer:
         latest_review = restaurant.get("latest_review_date")
         engagement_signal = engagement_recency_score(review_count, rating, latest_review)
 
+        # Signal 9: Communication Engagement (0% default — NIF-236)
+        comm_signal = communication_engagement_score(tracker_events, outreach_activities)
+
+        # Build signal map for weighted scoring
+        signals = {
+            "independent": independence_signal,
+            "platform_dependency": platform_dep_signal,
+            "pos": pos_signal,
+            "density": density_signal,
+            "volume": volume_signal,
+            "cuisine_fit": cuisine_signal,
+            "price_point": price_signal,
+            "engagement": engagement_signal,
+            "communication_engagement": comm_signal,
+        }
+
+        # If communication_engagement is None (no data), redistribute its
+        # weight proportionally across the other signals.
+        active_weights = dict(self.weights)
+        if comm_signal is None:
+            excluded_weight = active_weights.pop("communication_engagement", 0.0)
+            remaining_total = sum(active_weights.values())
+            if remaining_total > 0 and excluded_weight > 0:
+                scale = (remaining_total + excluded_weight) / remaining_total
+                active_weights = {k: v * scale for k, v in active_weights.items()}
+
         # Weighted composite score (0-100)
-        total_score = (
-            self.weights["independent"] * independence_signal
-            + self.weights["platform_dependency"] * platform_dep_signal
-            + self.weights["pos"] * pos_signal
-            + self.weights["density"] * density_signal
-            + self.weights["volume"] * volume_signal
-            + self.weights["cuisine_fit"] * cuisine_signal
-            + self.weights["price_point"] * price_signal
-            + self.weights["engagement"] * engagement_signal
+        total_score = sum(
+            active_weights.get(k, 0.0) * (v if v is not None else 0.0)
+            for k, v in signals.items()
         )
 
         # Apply disqualifier penalties
@@ -119,6 +143,7 @@ class ICPScorer:
             "price_tier": price_tier,
             "price_point_fit": round(price_signal, 3),
             "engagement_recency": round(engagement_signal, 3),
+            "communication_engagement": round(comm_signal, 3) if comm_signal is not None else None,
             "disqualifier_penalty": round(penalty, 2),
             "total_icp_score": total_score,
             "fit_label": fit_label,
