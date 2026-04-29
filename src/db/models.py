@@ -773,6 +773,43 @@ class ClusterFeedback(Base):
     cluster = relationship("MerchantCluster", back_populates="feedback")
 
 
+class ABExperiment(Base):
+    """A/B test experiment (NIF-238, NIF-262)."""
+    __tablename__ = "ab_experiments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False, index=True)
+    experiment_type = Column(String(30), nullable=False, default="template")  # template | scoring_profile
+    status = Column(String(20), nullable=False, default="draft", index=True)  # draft | running | completed
+    variants = Column(JSONB, nullable=False, default=list)  # [{name, template_id/scoring_profile_id, ...}]
+    metric = Column(String(30), nullable=False)  # open_rate | click_rate | reply_rate | conversion_rate
+    sample_size = Column(Integer, nullable=False, default=100)
+    winner_variant = Column(Text)
+    started_at = Column(DateTime(timezone=True))
+    ended_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    assignments = relationship("ABAssignment", back_populates="experiment", cascade="all, delete-orphan")
+
+
+class ABAssignment(Base):
+    """A/B test variant assignment per lead (NIF-238)."""
+    __tablename__ = "ab_assignments"
+    __table_args__ = (
+        UniqueConstraint("experiment_id", "lead_id", name="uq_ab_assignment_experiment_lead"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    experiment_id = Column(UUID(as_uuid=True), ForeignKey("ab_experiments.id"), nullable=False, index=True)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False, index=True)
+    variant_name = Column(Text, nullable=False)
+    outcome = Column(JSONB)  # {metric_value, recorded_at}
+    assigned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    experiment = relationship("ABExperiment", back_populates="assignments")
+    lead = relationship("Lead", foreign_keys=[lead_id])
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -807,3 +844,23 @@ class TrackerEvent(Base):
     lead = relationship("Lead", foreign_keys=[lead_id])
     campaign = relationship("OutreachCampaign", foreign_keys=[campaign_id])
     target = relationship("OutreachTarget", foreign_keys=[target_id])
+
+
+class SMSConsent(Base):
+    """TCPA SMS consent record (NIF-234).
+
+    Tracks opt-in / opt-out consent per phone number for SMS communications.
+    """
+    __tablename__ = "sms_consents"
+    __table_args__ = (
+        UniqueConstraint("phone_number", name="uq_sms_consent_phone"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    phone_number = Column(String(20), nullable=False, index=True)
+    consent_type = Column(String(10), nullable=False, default="opt_in")  # opt_in | opt_out
+    consented_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    source = Column(Text)  # e.g. "web_form", "sms_keyword", "api", "manual"
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
