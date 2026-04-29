@@ -23,6 +23,7 @@ from src.db.models import (
     MerchantCluster, ClusterMember, ClusterExpansionPlan,
     FollowUpTask, LeadStageHistory, LeadAssignmentHistory, Account, Contact,
     ConversionFunnel, ConversionEvent,
+    TrackerEvent,
 )
 from src.db.session import get_session
 from src.services.cleanup import CleanupService
@@ -1977,3 +1978,148 @@ async def merge_lead_route(
         url=f"/dashboard/leads/{lead_id}",
         status_code=303,
     )
+
+
+# ── Communications Analytics (NIF-239) ──────────────────────
+
+
+@router.get("/communications", response_class=HTMLResponse)
+async def communications_dashboard(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Communication analytics dashboard — email/SMS engagement metrics."""
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+    from sqlalchemy import cast, Date
+
+    # Overall stats from TrackerEvent
+    total_sent = await session.scalar(
+        select(func.count(TrackerEvent.id)).where(
+            TrackerEvent.event_type.in_(["delivery", "send"])
+        )
+    ) or 0
+    total_opens = await session.scalar(
+        select(func.count(TrackerEvent.id)).where(
+            TrackerEvent.event_type == "open"
+        )
+    ) or 0
+    total_clicks = await session.scalar(
+        select(func.count(TrackerEvent.id)).where(
+            TrackerEvent.event_type == "click"
+        )
+    ) or 0
+    total_bounces = await session.scalar(
+        select(func.count(TrackerEvent.id)).where(
+            TrackerEvent.event_type == "bounce"
+        )
+    ) or 0
+    total_replies = await session.scalar(
+        select(func.count(OutreachActivity.id)).where(
+            OutreachActivity.outcome == "replied"
+        )
+    ) or 0
+
+    open_rate = (total_opens / total_sent * 100) if total_sent > 0 else 0
+    click_rate = (total_clicks / total_sent * 100) if total_sent > 0 else 0
+    reply_rate = (total_replies / total_sent * 100) if total_sent > 0 else 0
+    bounce_rate = (total_bounces / total_sent * 100) if total_sent > 0 else 0
+
+    stats = {
+        "total_sent": total_sent,
+        "total_opens": total_opens,
+        "total_clicks": total_clicks,
+        "total_bounces": total_bounces,
+        "total_replies": total_replies,
+        "open_rate": round(open_rate, 1),
+        "click_rate": round(click_rate, 1),
+        "reply_rate": round(reply_rate, 1),
+        "bounce_rate": round(bounce_rate, 1),
+    }
+
+    # Timeline: emails per day for last 30 days
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    time_rows = await session.execute(
+        select(
+            cast(TrackerEvent.occurred_at, Date).label("day"),
+            func.count(TrackerEvent.id).label("cnt"),
+        )
+        .where(TrackerEvent.occurred_at >= thirty_days_ago)
+        .where(TrackerEvent.event_type.in_(["delivery", "send"]))
+        .group_by("day")
+        .order_by("day")
+    )
+    raw_timeline = {str(r[0]): r[1] for r in time_rows.all()}
+    timeline = []
+    for i in range(31):
+        d = (thirty_days_ago + timedelta(days=i)).strftime("%Y-%m-%d")
+        timeline.append({"date": d[5:], "count": raw_timeline.get(d, 0)})
+
+    # Top engaged leads — leads with highest engagement event counts
+    top_leads_rows = await session.execute(
+        select(
+            Lead.id,
+            Lead.email,
+            Lead.company,
+            Lead.first_name,
+            Lead.last_name,
+            func.count(TrackerEvent.id).label("event_count"),
+        )
+        .join(TrackerEvent, TrackerEvent.lead_id == Lead.id)
+        .group_by(Lead.id, Lead.email, Lead.company, Lead.first_name, Lead.last_name)
+        .order_by(func.count(TrackerEvent.id).desc())
+        .limit(15)
+    )
+    top_leads = [
+        {
+            "id": str(r[0]),
+            "email": r[1],
+            "company": r[2],
+            "name": f"{r[3] or ''} {r[4] or ''}".strip(),
+            "event_count": r[5],
+        }
+        for r in top_leads_rows.all()
+    ]
+
+    # Campaign performance summary
+    campaign_rows = await session.execute(
+        select(
+            OutreachCampaign.id,
+            OutreachCampaign.name,
+            OutreachCampaign.status,
+            OutreachCampaign.campaign_type,
+            func.count(TrackerEvent.id).label("event_count"),
+        )
+        .outerjoin(TrackerEvent, TrackerEvent.campaign_id == OutreachCampaign.id)
+        .group_by(OutreachCampaign.id, OutreachCampaign.name, OutreachCampaign.status, OutreachCampaign.campaign_type)
+        .order_by(func.count(TrackerEvent.id).desc())
+        .limit(10)
+    )
+    campaigns = [
+        {
+            "id": str(r[0]),
+            "name": r[1],
+            "status": r[2],
+            "type": r[3],
+            "event_count": r[4],
+        }
+        for r in campaign_rows.all()
+    ]
+
+    # Recent communication events
+    recent_events_result = await session.execute(
+        select(TrackerEvent)
+        .order_by(TrackerEvent.occurred_at.desc())
+        .limit(20)
+    )
+    recent_events = recent_events_result.scalars().all()
+
+    html = templates.get_template("communications.html").render(
+        stats=stats,
+        timeline=timeline,
+        top_leads=top_leads,
+        campaigns=campaigns,
+        recent_events=recent_events,
+        active_tab="communications",
+    )
+    return HTMLResponse(html)

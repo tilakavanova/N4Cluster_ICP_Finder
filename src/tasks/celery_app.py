@@ -16,6 +16,7 @@ celery_app = Celery(
         "src.tasks.tracking_tasks",
         "src.tasks.email_tasks",
         "src.tasks.hubspot_tasks",
+        "src.tasks.engagement_tasks",
     ],
 )
 
@@ -49,6 +50,17 @@ celery_app.conf.beat_schedule = {
     "daily-cleanup-old-jobs": {
         "task": "cleanup_old_jobs",
         "schedule": crontab(hour=3, minute=0),  # 3 AM UTC daily
+        "args": (),
+    },
+    # NIF-240: Engagement score aggregation
+    "hourly-engagement-aggregation": {
+        "task": "src.tasks.engagement_tasks.aggregate_engagement_scores",
+        "schedule": crontab(minute=15),  # Every hour at :15
+        "args": (),
+    },
+    "daily-engagement-recalculation": {
+        "task": "src.tasks.engagement_tasks.recalculate_engagement_signal",
+        "schedule": crontab(hour=5, minute=0),  # 5 AM UTC daily
         "args": (),
     },
 }

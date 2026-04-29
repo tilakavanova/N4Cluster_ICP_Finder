@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Communications{% endblock %}
+
+{% block content %}
+<!-- Stats row -->
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Emails Sent</div>
+    <div class="text-2xl font-bold text-navy-950 mt-1">{{ stats.total_sent }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Open Rate</div>
+    <div class="text-2xl font-bold text-green-600 mt-1">{{ stats.open_rate }}%</div>
+    <div class="text-xs text-slate-400 mt-0.5">{{ stats.total_opens }} opens</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Click Rate</div>
+    <div class="text-2xl font-bold text-cobalt-500 mt-1">{{ stats.click_rate }}%</div>
+    <div class="text-xs text-slate-400 mt-0.5">{{ stats.total_clicks }} clicks</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Reply Rate</div>
+    <div class="text-2xl font-bold text-teal-500 mt-1">{{ stats.reply_rate }}%</div>
+    <div class="text-xs text-slate-400 mt-0.5">{{ stats.total_replies }} replies</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 px-5 py-4">
+    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Bounce Rate</div>
+    <div class="text-2xl font-bold text-red-500 mt-1">{{ stats.bounce_rate }}%</div>
+    <div class="text-xs text-slate-400 mt-0.5">{{ stats.total_bounces }} bounces</div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+  <!-- Email Volume Timeline -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h2 class="text-sm font-semibold text-navy-950 mb-4">Email Volume (Last 30 Days)</h2>
+    <div class="flex items-end gap-0.5 h-32">
+      {% set max_count = namespace(val=1) %}
+      {% for day in timeline %}
+        {% if day.count > max_count.val %}{% set max_count.val = day.count %}{% endif %}
+      {% endfor %}
+      {% for day in timeline %}
+        <div class="flex-1 group relative">
+          <div class="bg-cobalt-400 hover:bg-cobalt-500 rounded-t transition-colors"
+               style="height: {{ (day.count / max_count.val * 100) if max_count.val > 0 else 0 }}%;"
+               title="{{ day.date }}: {{ day.count }} emails"></div>
+          {% if loop.index % 5 == 0 %}
+          <div class="text-[9px] text-slate-400 text-center mt-1">{{ day.date }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Campaign Performance -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h2 class="text-sm font-semibold text-navy-950 mb-4">Campaign Performance</h2>
+    {% if campaigns %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs text-slate-500 uppercase border-b border-slate-100">
+            <th class="pb-2 font-medium">Campaign</th>
+            <th class="pb-2 font-medium">Type</th>
+            <th class="pb-2 font-medium">Status</th>
+            <th class="pb-2 font-medium text-right">Events</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for c in campaigns %}
+          <tr class="hover:bg-slate-50">
+            <td class="py-2 font-medium text-navy-950">{{ c.name }}</td>
+            <td class="py-2 text-slate-600">{{ c.type or 'email' }}</td>
+            <td class="py-2">
+              <span class="inline-block px-2 py-0.5 rounded text-xs font-medium
+                {% if c.status == 'active' %}bg-green-100 text-green-700
+                {% elif c.status == 'completed' %}bg-teal-100 text-teal-700
+                {% elif c.status == 'draft' %}bg-slate-100 text-slate-600
+                {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                {{ c.status }}
+              </span>
+            </td>
+            <td class="py-2 text-right text-slate-600">{{ c.event_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400">No campaigns found.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <!-- Top Engaged Leads -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h2 class="text-sm font-semibold text-navy-950 mb-4">Top Engaged Leads</h2>
+    {% if top_leads %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs text-slate-500 uppercase border-b border-slate-100">
+            <th class="pb-2 font-medium">Name</th>
+            <th class="pb-2 font-medium">Email</th>
+            <th class="pb-2 font-medium">Company</th>
+            <th class="pb-2 font-medium text-right">Events</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for lead in top_leads %}
+          <tr class="hover:bg-slate-50">
+            <td class="py-2">
+              <a href="/dashboard/leads/{{ lead.id }}" class="text-cobalt-500 hover:underline font-medium">
+                {{ lead.name or 'Unknown' }}
+              </a>
+            </td>
+            <td class="py-2 text-slate-600">{{ lead.email }}</td>
+            <td class="py-2 text-slate-600">{{ lead.company or '-' }}</td>
+            <td class="py-2 text-right">
+              <span class="inline-block px-2 py-0.5 rounded bg-cobalt-100 text-cobalt-700 text-xs font-medium">
+                {{ lead.event_count }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400">No engagement data yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Recent Communication Events -->
+  <div class="bg-white rounded-lg border border-slate-200 p-6">
+    <h2 class="text-sm font-semibold text-navy-950 mb-4">Recent Events</h2>
+    {% if recent_events %}
+    <div class="overflow-x-auto max-h-96 overflow-y-auto">
+      <table class="w-full text-sm">
+        <thead class="sticky top-0 bg-white">
+          <tr class="text-left text-xs text-slate-500 uppercase border-b border-slate-100">
+            <th class="pb-2 font-medium">Event</th>
+            <th class="pb-2 font-medium">Channel</th>
+            <th class="pb-2 font-medium">Provider</th>
+            <th class="pb-2 font-medium">Time</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50">
+          {% for ev in recent_events %}
+          <tr class="hover:bg-slate-50">
+            <td class="py-2">
+              <span class="inline-block px-2 py-0.5 rounded text-xs font-medium
+                {% if ev.event_type == 'open' %}bg-green-100 text-green-700
+                {% elif ev.event_type == 'click' %}bg-cobalt-100 text-cobalt-700
+                {% elif ev.event_type == 'bounce' %}bg-red-100 text-red-700
+                {% elif ev.event_type in ('delivery', 'send') %}bg-slate-100 text-slate-600
+                {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                {{ ev.event_type }}
+              </span>
+            </td>
+            <td class="py-2 text-slate-600">{{ ev.channel }}</td>
+            <td class="py-2 text-slate-600">{{ ev.provider or '-' }}</td>
+            <td class="py-2 text-slate-400 text-xs">{{ ev.occurred_at.strftime('%m/%d %H:%M') if ev.occurred_at else '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400">No communication events recorded yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
