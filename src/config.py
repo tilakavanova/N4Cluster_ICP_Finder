@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     sendgrid_from_name: str = "N4Cluster"
     sendgrid_webhook_signing_key: str = ""
 
+    # Plivo SMS (NIF-231)
+    plivo_auth_id: str = ""
+    plivo_auth_token: str = ""
+    plivo_from_number: str = ""  # Plivo sender phone number (E.164 format)
+    plivo_callback_url: str = ""  # Base URL for delivery status callbacks
+
     @property
     def effective_jwt_secret(self) -> str:
         """Return the JWT signing secret, falling back to secret_key."""

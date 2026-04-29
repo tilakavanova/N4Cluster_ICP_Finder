@@ -334,6 +334,119 @@ def communication_engagement_score(
     return min(round(score, 4), 1.0)
 
 
+# ── Signal 10: Intent Score from Engagement (NIF-261) ───────
+
+
+def intent_score(
+    tracker_events: list[dict] | None = None,
+    outreach_activities: list[dict] | None = None,
+) -> tuple[float, str]:
+    """Derive a behavioural intent score from engagement patterns.
+
+    Unlike communication_engagement_score (NIF-236) which computes raw
+    engagement rates, this function classifies the *intent level* of a
+    lead based on observed behavioural patterns:
+
+        - Replied or booked a meeting            -> "high_intent"   (1.0)
+        - Clicked pricing/demo links             -> "evaluating"    (0.7)
+        - Opened 3+ emails                       -> "researching"   (0.4)
+        - No engagement in 30+ days after contact -> "cold"         (0.1)
+        - No data at all                         -> "unknown"       (0.0)
+
+    Returns (score, intent_label).
+    """
+    events = tracker_events or []
+    activities = outreach_activities or []
+
+    if not events and not activities:
+        return 0.0, "unknown"
+
+    # Count engagement signals
+    opens = 0
+    has_pricing_click = False
+    has_reply = False
+    has_meeting = False
+
+    # High-intent link keywords
+    _PRICING_KEYWORDS = {"pricing", "demo", "schedule", "book", "trial", "signup", "sign-up", "plan"}
+
+    for ev in events:
+        et = (ev.get("event_type") or "").lower()
+        if et == "open":
+            opens += 1
+        elif et == "click":
+            url = (ev.get("event_metadata") or {}).get("url", "") or ""
+            url_lower = url.lower()
+            if any(kw in url_lower for kw in _PRICING_KEYWORDS):
+                has_pricing_click = True
+
+    for act in activities:
+        at = (act.get("activity_type") or "").lower()
+        outcome = (act.get("outcome") or "").lower()
+
+        if at == "email_reply" or outcome == "replied":
+            has_reply = True
+        if at == "meeting" or outcome in (
+            "meeting_booked", "meeting_scheduled", "demo_scheduled",
+        ):
+            has_meeting = True
+
+    # Classification — highest intent wins
+    if has_reply or has_meeting:
+        return 1.0, "high_intent"
+
+    if has_pricing_click:
+        return 0.7, "evaluating"
+
+    if opens >= 3:
+        return 0.4, "researching"
+
+    # Check for cold: had contact events but no engagement in 30+ days
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    latest_event_at = None
+
+    for ev in events:
+        occurred = ev.get("occurred_at")
+        if isinstance(occurred, datetime):
+            if latest_event_at is None or occurred > latest_event_at:
+                latest_event_at = occurred
+        elif isinstance(occurred, str):
+            try:
+                dt = datetime.fromisoformat(occurred)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if latest_event_at is None or dt > latest_event_at:
+                    latest_event_at = dt
+            except (ValueError, TypeError):
+                pass
+
+    for act in activities:
+        performed = act.get("performed_at")
+        if isinstance(performed, datetime):
+            if latest_event_at is None or performed > latest_event_at:
+                latest_event_at = performed
+        elif isinstance(performed, str):
+            try:
+                dt = datetime.fromisoformat(performed)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if latest_event_at is None or dt > latest_event_at:
+                    latest_event_at = dt
+            except (ValueError, TypeError):
+                pass
+
+    if latest_event_at and (now - latest_event_at) > timedelta(days=30):
+        return 0.1, "cold"
+
+    # Has some engagement but below thresholds
+    if opens > 0:
+        return 0.3, "aware"
+
+    return 0.1, "cold"
+
+
 # ── Disqualifiers ────────────────────────────────────────────
 
 

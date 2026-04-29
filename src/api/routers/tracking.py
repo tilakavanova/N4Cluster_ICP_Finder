@@ -68,6 +68,38 @@ async def click_redirect(token: str, request: Request):
     return RedirectResponse(url=destination, status_code=302)
 
 
+@router.get("/t/s/{token}", include_in_schema=False)
+async def sms_click_redirect(token: str, request: Request):
+    """Redirect short SMS URL and queue an SMS click TrackerEvent (NIF-233)."""
+    from src.tasks.tracking_tasks import log_tracker_event
+
+    data = get_tracking_data(token)
+
+    if data is None:
+        logger.info("sms_click_token_not_found", token=token)
+        return RedirectResponse(url=_fallback_url(), status_code=302)
+
+    ip_hash = _hash_ip(request.client.host if request.client else None)
+    user_agent = request.headers.get("user-agent")
+    occurred_at = datetime.now(timezone.utc).isoformat()
+
+    log_tracker_event.delay(
+        event_type="click",
+        token=token,
+        lead_id=data.get("lead_id"),
+        campaign_id=data.get("campaign_id"),
+        target_id=data.get("target_id"),
+        channel=data.get("channel", "sms"),
+        ip_hash=ip_hash,
+        user_agent=user_agent,
+        occurred_at=occurred_at,
+    )
+
+    destination = data.get("url") or _fallback_url()
+    logger.info("sms_click_redirect", token=token, destination=destination)
+    return RedirectResponse(url=destination, status_code=302)
+
+
 @router.get("/px/{token}.gif", include_in_schema=False)
 async def open_pixel(token: str, request: Request):
     """Return a 1×1 transparent GIF and queue an open TrackerEvent."""
