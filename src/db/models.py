@@ -810,6 +810,27 @@ class ABAssignment(Base):
     lead = relationship("Lead", foreign_keys=[lead_id])
 
 
+class LLMPromptTemplate(Base):
+    """Versioned LLM prompt template (NIF-264)."""
+    __tablename__ = "llm_prompt_templates"
+    __table_args__ = (
+        UniqueConstraint("name", "version", name="uq_prompt_name_version"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(200), nullable=False, index=True)
+    version = Column(Integer, nullable=False, default=1)
+    prompt_text = Column(Text, nullable=False)
+    model_id = Column(String(50), nullable=False, default="gpt-4o-mini")
+    temperature = Column(Float, nullable=False, default=0.7)
+    max_tokens = Column(Integer, nullable=False, default=4000)
+    metadata_ = Column("metadata", JSONB, default=dict)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    created_by = Column(Text, default="system")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -864,3 +885,59 @@ class SMSConsent(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+# ── NIF-267: Campaign Anomaly Detection ─────────────────────────
+
+
+class CampaignAnomalyLog(Base):
+    """Log of detected campaign anomalies and auto-pause events (NIF-267)."""
+    __tablename__ = "campaign_anomaly_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("outreach_campaigns.id"), nullable=False, index=True)
+    anomaly_type = Column(String(30), nullable=False, index=True)  # high_bounce, high_complaint, volume_drop
+    metric_value = Column(Float, nullable=False)
+    threshold = Column(Float, nullable=False)
+    action_taken = Column(String(20), nullable=False, default="paused")  # paused, alerted, none
+    details = Column(JSONB, default=dict)
+    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+    campaign = relationship("OutreachCampaign", foreign_keys=[campaign_id])
+
+
+# ── NIF-269-273: AI Agent Framework ─────────────────────────────
+
+
+class AgentRun(Base):
+    """Record of an AI agent execution (NIF-269)."""
+    __tablename__ = "agent_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_name = Column(String(50), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, running, completed, failed
+    input_context = Column(JSONB, default=dict)
+    output_result = Column(JSONB, default=dict)
+    error_message = Column(Text)
+    duration_ms = Column(Integer)
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+# ── NIF-274: RLHF Feedback ──────────────────────────────────────
+
+
+class AgentFeedback(Base):
+    """RLHF feedback from sales reps on agent outputs (NIF-274)."""
+    __tablename__ = "agent_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_name = Column(String(50), nullable=False, index=True)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("agent_runs.id"), nullable=True, index=True)
+    input_context = Column(JSONB, default=dict)
+    output_result = Column(JSONB, default=dict)
+    rating = Column(Integer, nullable=False)  # 1-5
+    feedback_text = Column(Text)
+    rated_by = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

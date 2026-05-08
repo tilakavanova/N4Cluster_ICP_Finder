@@ -20,6 +20,10 @@ from src.api.routers import compliance as compliance_router
 from src.api.routers import feedback_loop as feedback_loop_router
 from src.api.routers import sms as sms_router
 from src.api.routers import ab_testing as ab_testing_router
+from src.api.routers import address as address_router
+from src.api.routers import prompts as prompts_router
+from src.api.routers import agents as agents_router
+from src.api.routers import metrics as metrics_router
 from src.dashboard.routes import router as dashboard_router
 
 logger = get_logger("app")
@@ -111,6 +115,10 @@ app.include_router(compliance_router.router, prefix="/api/v1")
 app.include_router(feedback_loop_router.router, prefix="/api/v1")
 app.include_router(sms_router.router, prefix="/api/v1")
 app.include_router(ab_testing_router.router, prefix="/api/v1")
+app.include_router(address_router.router, prefix="/api/v1")
+app.include_router(prompts_router.router, prefix="/api/v1")
+app.include_router(agents_router.router, prefix="/api/v1")
+app.include_router(metrics_router.router)  # /metrics — no prefix (Prometheus convention)
 app.include_router(tracking_router.router)  # /t/{token}, /t/s/{token}, and /px/{token}.gif — no prefix
 app.include_router(webhooks_router.router)  # /webhooks/sendgrid, /webhooks/sendgrid/inbound
 app.include_router(hubspot_webhooks_router.router)  # /webhooks/hubspot

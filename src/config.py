@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     # Crawler API keys
     google_places_api_key: str = ""
+    google_geocoding_api_key: str = ""  # NIF-263: Falls back to google_places_api_key
     yelp_fusion_api_key: str = ""
     serpapi_api_key: str = ""
     google_places_max_pages: int = 5
@@ -105,6 +106,11 @@ class Settings(BaseSettings):
     plivo_auth_token: str = ""
     plivo_from_number: str = ""  # Plivo sender phone number (E.164 format)
     plivo_callback_url: str = ""  # Base URL for delivery status callbacks
+
+    @property
+    def effective_geocoding_key(self) -> str:
+        """Return the Google Geocoding API key, falling back to Places key."""
+        return self.google_geocoding_api_key or self.google_places_api_key
 
     @property
     def effective_jwt_secret(self) -> str:
