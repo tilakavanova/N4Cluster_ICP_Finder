@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.models import (
     RepQueueItem, RepQueueRanking,
     Restaurant, ICPScore, Lead,
+    TrackerEvent, OutreachActivity, OutreachTarget,
 )
+from src.scoring.signals import intent_score
 from src.utils.logging import get_logger
 
 logger = get_logger("rep_queue")
@@ -298,3 +300,193 @@ async def populate_queue(
     await session.flush()
     logger.info("queue_populated", rep_id=rep_id, added=added, filters=filters)
     return {"rep_id": rep_id, "added": added, "filters": filters}
+
+
+# -- Next-Best-Action (NIF-242) -----------------------------------------------
+
+# Intent label -> recommended action mapping
+INTENT_ACTION_MAP: dict[str, str] = {
+    "high_intent": "Schedule demo",
+    "evaluating": "Send case study",
+    "researching": "Follow up email",
+    "aware": "Follow up email",
+    "cold": "Re-engage sequence",
+    "unknown": "Re-engage sequence",
+}
+
+
+async def _fetch_engagement_data(
+    session: AsyncSession,
+    restaurant_id: UUID,
+    lead_id: UUID | None,
+) -> tuple[list[dict], list[dict]]:
+    """Fetch tracker events and outreach activities for a restaurant/lead."""
+    tracker_events: list[dict] = []
+    outreach_activities: list[dict] = []
+
+    # Fetch tracker events via lead_id if available
+    if lead_id:
+        result = await session.execute(
+            select(TrackerEvent).where(TrackerEvent.lead_id == lead_id)
+        )
+        for ev in result.scalars().all():
+            tracker_events.append({
+                "event_type": ev.event_type,
+                "channel": ev.channel,
+                "occurred_at": ev.occurred_at,
+                "event_metadata": ev.event_metadata or {},
+            })
+
+    # Fetch outreach activities via outreach targets for this restaurant
+    target_q = select(OutreachTarget.id).where(
+        OutreachTarget.restaurant_id == restaurant_id
+    )
+    result = await session.execute(
+        select(OutreachActivity).where(
+            OutreachActivity.target_id.in_(target_q)
+        ).order_by(OutreachActivity.performed_at.desc())
+    )
+    for act in result.scalars().all():
+        outreach_activities.append({
+            "activity_type": act.activity_type,
+            "outcome": act.outcome,
+            "performed_at": act.performed_at,
+        })
+
+    return tracker_events, outreach_activities
+
+
+def _determine_action(
+    intent_label: str,
+    last_activity_type: str | None,
+    days_since_contact: float | None,
+    icp_score: float,
+    fit_label: str,
+) -> dict:
+    """Determine the recommended next action based on signals."""
+    action = INTENT_ACTION_MAP.get(intent_label, "Re-engage sequence")
+
+    # Override: if high ICP score + strong fit but cold, escalate
+    if fit_label in ("strong", "good") and icp_score >= 70.0 and intent_label == "cold":
+        action = "Priority re-engage — high-value dormant lead"
+
+    # Override: if recently contacted (< 3 days) and evaluating, wait
+    if days_since_contact is not None and days_since_contact < 3.0 and intent_label == "evaluating":
+        action = "Wait — evaluating, contacted recently"
+
+    return {
+        "recommended_action": action,
+        "intent_label": intent_label,
+        "last_activity_type": last_activity_type,
+        "days_since_contact": round(days_since_contact, 1) if days_since_contact is not None else None,
+        "icp_score": icp_score,
+        "fit_label": fit_label,
+    }
+
+
+async def _enrich_item_with_action(
+    session: AsyncSession,
+    item: RepQueueItem,
+) -> dict:
+    """Compute next-best-action for a single queue item and return enrichment data."""
+    ctx = item.context_data or {}
+    icp_score = float(ctx.get("icp_score", 0.0))
+    fit_label = ctx.get("fit_label", "unknown")
+
+    tracker_events, outreach_activities = await _fetch_engagement_data(
+        session, item.restaurant_id, item.lead_id,
+    )
+
+    # Compute intent score
+    score_val, intent_label = intent_score(tracker_events, outreach_activities)
+
+    # Determine last activity and days since contact
+    last_activity_type: str | None = None
+    days_since_contact: float | None = None
+    now = datetime.now(timezone.utc)
+
+    if outreach_activities:
+        latest = outreach_activities[0]  # already sorted desc
+        last_activity_type = latest.get("activity_type")
+        performed = latest.get("performed_at")
+        if isinstance(performed, datetime):
+            if performed.tzinfo is None:
+                performed = performed.replace(tzinfo=timezone.utc)
+            days_since_contact = (now - performed).total_seconds() / 86400.0
+
+    action_data = _determine_action(
+        intent_label, last_activity_type, days_since_contact,
+        icp_score, fit_label,
+    )
+    action_data["intent_score"] = score_val
+
+    return action_data
+
+
+async def get_next_best_action(
+    session: AsyncSession,
+    rep_id: str,
+) -> dict | None:
+    """Return the highest priority unclaimed item with a recommended action (NIF-242)."""
+    result = await session.execute(
+        select(RepQueueItem)
+        .where(
+            and_(
+                RepQueueItem.rep_id == rep_id,
+                RepQueueItem.status == "pending",
+            )
+        )
+        .order_by(RepQueueItem.priority_score.desc())
+        .limit(1)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        return None
+
+    action_data = await _enrich_item_with_action(session, item)
+
+    # Store action in context_data
+    ctx = dict(item.context_data or {})
+    ctx["next_action"] = action_data
+    item.context_data = ctx
+    await session.flush()
+
+    logger.info(
+        "next_best_action",
+        rep_id=rep_id,
+        item=str(item.id),
+        action=action_data["recommended_action"],
+    )
+
+    return {
+        "id": str(item.id),
+        "rep_id": item.rep_id,
+        "restaurant_id": str(item.restaurant_id),
+        "lead_id": str(item.lead_id) if item.lead_id else None,
+        "priority_score": item.priority_score,
+        "status": item.status,
+        "reason": item.reason,
+        "context_data": item.context_data,
+        "next_action": action_data,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+    }
+
+
+async def enrich_queue_with_actions(
+    session: AsyncSession,
+    rep_id: str,
+) -> dict:
+    """Enrich all pending queue items with recommended next actions (NIF-242)."""
+    items = await get_queue(session, rep_id, status="pending")
+    enriched = 0
+
+    for item in items:
+        action_data = await _enrich_item_with_action(session, item)
+        ctx = dict(item.context_data or {})
+        ctx["next_action"] = action_data
+        item.context_data = ctx
+        enriched += 1
+
+    await session.flush()
+    logger.info("queue_enriched", rep_id=rep_id, enriched=enriched)
+    return {"rep_id": rep_id, "enriched": enriched}

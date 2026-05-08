@@ -16,6 +16,8 @@ from src.services.rep_queue import (
     skip_item,
     get_rep_ranking,
     populate_queue,
+    get_next_best_action,
+    enrich_queue_with_actions,
 )
 from src.utils.logging import get_logger
 
@@ -185,6 +187,30 @@ async def get_ranking(
     ranking = await get_rep_ranking(session, rep_id)
     await session.commit()
     return _ranking_to_dict(ranking)
+
+
+@router.get("/{rep_id}/next-action")
+async def get_rep_next_action(
+    rep_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Get highest-priority item with next-best-action recommendation (NIF-242)."""
+    result = await get_next_best_action(session, rep_id)
+    if not result:
+        raise HTTPException(404, "No pending queue items for this rep")
+    await session.commit()
+    return result
+
+
+@router.post("/{rep_id}/enrich-actions")
+async def enrich_rep_queue_actions(
+    rep_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Enrich all pending queue items with next-best-action recommendations (NIF-242)."""
+    result = await enrich_queue_with_actions(session, rep_id)
+    await session.commit()
+    return result
 
 
 @router.post("/{rep_id}/populate")
