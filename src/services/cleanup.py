@@ -74,7 +74,10 @@ class CleanupService:
                 finished_at=datetime.now(timezone.utc),
             )
         )
-        count = result.rowcount
+        # AsyncSession.execute is typed Result[Any] but for UPDATE/DELETE the
+        # runtime value is a CursorResult exposing .rowcount. The stubs widen
+        # this away.
+        count = result.rowcount  # type: ignore[attr-defined]
         if count:
             logger.info("stale_jobs_marked", count=count, timeout_minutes=settings.stale_job_timeout_minutes)
         return count
@@ -90,7 +93,10 @@ class CleanupService:
                 CrawlJob.created_at < cutoff,
             )
         )
-        count = result.rowcount
+        # AsyncSession.execute is typed Result[Any] but for UPDATE/DELETE the
+        # runtime value is a CursorResult exposing .rowcount. The stubs widen
+        # this away.
+        count = result.rowcount  # type: ignore[attr-defined]
         if count:
             logger.info("old_jobs_deleted", count=count, retention_days=retention_days)
         return count
