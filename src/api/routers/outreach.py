@@ -10,18 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.outreach import (
-    create_campaign,
-    get_campaign,
-    list_campaigns,
-    update_campaign,
-    delete_campaign,
-    select_targets,
     add_target,
-    list_targets,
-    update_target_status,
-    log_activity,
-    list_activities,
     calculate_performance,
+    create_campaign,
+    delete_campaign,
+    get_campaign,
+    list_activities,
+    list_campaigns,
+    list_targets,
+    log_activity,
+    select_targets,
+    update_campaign,
+    update_target_status,
 )
 from src.utils.logging import get_logger
 
@@ -288,6 +288,7 @@ async def get_performance_endpoint(
 ):
     """Get the latest performance summary for a campaign."""
     from sqlalchemy import select
+
     from src.db.models import OutreachPerformance
 
     result = await session.execute(

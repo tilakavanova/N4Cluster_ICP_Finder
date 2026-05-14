@@ -6,14 +6,12 @@ injection, URL wrapping, and List-Unsubscribe header support.
 """
 
 import re
-from typing import Optional
 
 import redis as redis_lib
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Category,
     ClickTracking,
-    DynamicTemplateData,
     From,
     Header,
     Mail,
@@ -65,9 +63,9 @@ class SendGridClient:
         to_email: str,
         subject: str,
         html_content: str,
-        text_content: Optional[str] = None,
-        tracking_data: Optional[dict] = None,
-    ) -> tuple[bool, Optional[str], Optional[str]]:
+        text_content: str | None = None,
+        tracking_data: dict | None = None,
+    ) -> tuple[bool, str | None, str | None]:
         """Send a plain-content email.
 
         Args:
@@ -106,8 +104,8 @@ class SendGridClient:
         to_email: str,
         template_id: str,
         dynamic_data: dict,
-        tracking_data: Optional[dict] = None,
-    ) -> tuple[bool, Optional[str], Optional[str]]:
+        tracking_data: dict | None = None,
+    ) -> tuple[bool, str | None, str | None]:
         """Send an email using a SendGrid dynamic template.
 
         Args:
@@ -212,7 +210,7 @@ class SendGridClient:
         message.add_header(Header("List-Unsubscribe", f"<{unsubscribe_url}>"))
         message.add_header(Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click"))
 
-    def _send(self, message: Mail) -> tuple[bool, Optional[str], Optional[str]]:
+    def _send(self, message: Mail) -> tuple[bool, str | None, str | None]:
         try:
             response = self._client.send(message)
             # SendGrid returns the message-id in X-Message-Id header

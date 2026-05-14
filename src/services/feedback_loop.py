@@ -4,15 +4,17 @@ Analyzes conversion data to identify which ICP score ranges convert best,
 then suggests and applies weight adjustments to scoring profiles.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func, and_, case, extract
+from sqlalchemy import and_, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
-    ConversionEvent, Restaurant, ICPScore,
-    ScoringProfile, ScoreExplanation, ScoreVersion,
+    ConversionEvent,
+    ICPScore,
+    ScoreExplanation,
+    ScoringProfile,
 )
 from src.services.scoring_engine import create_version_snapshot
 from src.utils.logging import get_logger
@@ -104,7 +106,7 @@ async def analyze_conversions(
     return {
         "period": period,
         "buckets": buckets,
-        "analyzed_at": datetime.now(timezone.utc).isoformat(),
+        "analyzed_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -240,7 +242,7 @@ async def suggest_weight_adjustments(
         "converted_count": len(converted_ids),
         "not_converted_count": len(not_converted_ids),
         "adjustments": adjustments,
-        "suggested_at": datetime.now(timezone.utc).isoformat(),
+        "suggested_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -296,7 +298,7 @@ async def apply_adjustments(
     old_version = profile.version
     profile.version = old_version + 1
     profile.signals = signals
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(UTC)
 
     await create_version_snapshot(
         session,
@@ -322,7 +324,7 @@ async def apply_adjustments(
         "old_version": old_version,
         "new_version": profile.version,
         "changes": changes,
-        "applied_at": datetime.now(timezone.utc).isoformat(),
+        "applied_at": datetime.now(UTC).isoformat(),
         "approved_by": approved_by,
     }
 
@@ -353,5 +355,5 @@ async def get_feedback_report(
         "signal_analysis": suggestions.get("adjustments", []),
         "profile_id": suggestions.get("profile_id"),
         "profile_name": suggestions.get("profile_name"),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }

@@ -7,12 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.prompt_versioning import (
-    get_active_prompt,
     create_prompt,
-    update_prompt,
-    list_prompts,
+    get_active_prompt,
     get_prompt_history,
+    list_prompts,
     rollback_prompt,
+    update_prompt,
 )
 from src.utils.logging import get_logger
 

@@ -5,7 +5,7 @@ GET /px/{token}.gif   — open pixel tracker (queues open event)
 """
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse, Response
@@ -49,7 +49,7 @@ async def click_redirect(token: str, request: Request):
 
     ip_hash = _hash_ip(request.client.host if request.client else None)
     user_agent = request.headers.get("user-agent")
-    occurred_at = datetime.now(timezone.utc).isoformat()
+    occurred_at = datetime.now(UTC).isoformat()
 
     log_tracker_event.delay(
         event_type="click",
@@ -81,7 +81,7 @@ async def sms_click_redirect(token: str, request: Request):
 
     ip_hash = _hash_ip(request.client.host if request.client else None)
     user_agent = request.headers.get("user-agent")
-    occurred_at = datetime.now(timezone.utc).isoformat()
+    occurred_at = datetime.now(UTC).isoformat()
 
     log_tracker_event.delay(
         event_type="click",
@@ -110,7 +110,7 @@ async def open_pixel(token: str, request: Request):
     if data is not None:
         ip_hash = _hash_ip(request.client.host if request.client else None)
         user_agent = request.headers.get("user-agent")
-        occurred_at = datetime.now(timezone.utc).isoformat()
+        occurred_at = datetime.now(UTC).isoformat()
 
         log_tracker_event.delay(
             event_type="open",

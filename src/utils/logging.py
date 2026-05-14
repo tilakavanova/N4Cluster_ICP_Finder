@@ -1,7 +1,9 @@
 """Structured logging configuration."""
 
 import logging
+
 import structlog
+
 from src.config import settings
 from src.utils.pii_masking import mask_dict_pii
 

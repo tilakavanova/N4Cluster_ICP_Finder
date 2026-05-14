@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import json
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis
 from fastapi import APIRouter, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 
 from src.config import settings
-from src.db.session import async_session
 from src.db.models import Lead, TrackerEvent
+from src.db.session import async_session
 from src.utils.logging import get_logger
 
 logger = get_logger("unsubscribe")
@@ -114,7 +114,6 @@ async def one_click_unsubscribe(
     Expects ``List-Unsubscribe=One-Click`` in the form body, along with an
     ``email`` parameter identifying the recipient.
     """
-    import uuid as _uuid
 
     form = await request.form()
     email = form.get("email") or form.get("recipient")
@@ -137,7 +136,7 @@ async def one_click_unsubscribe(
                 lead_id=lead.id,
                 provider="n4cluster",
                 provider_event_id=f"one-click-unsub:{email}",
-                occurred_at=datetime.now(timezone.utc),
+                occurred_at=datetime.now(UTC),
             )
             session.add(tracker)
             await session.commit()
@@ -193,7 +192,7 @@ async def process_unsubscribe(token: str) -> HTMLResponse:
             target_id=_uuid.UUID(target_id_str) if target_id_str else None,
             provider="n4cluster",
             provider_event_id=f"unsub:{token}",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         session.add(tracker)
         await session.commit()

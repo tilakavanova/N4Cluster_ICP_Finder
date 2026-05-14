@@ -12,7 +12,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from src.config import settings
-from src.tasks.email_tasks import process_sendgrid_events, process_inbound_reply_task
+from src.tasks.email_tasks import process_inbound_reply_task, process_sendgrid_events
 from src.utils.logging import get_logger
 from src.utils.webhook_verification import verify_sendgrid_signature
 

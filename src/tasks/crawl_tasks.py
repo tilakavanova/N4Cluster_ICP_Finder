@@ -1,7 +1,7 @@
 """Celery tasks for crawling operations."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.tasks.celery_app import celery_app
 from src.utils.logging import get_logger
@@ -24,10 +24,11 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
     logger.info("crawl_task_started", source=source, query=query, location=location, job_id=job_id)
 
     async def _crawl():
-        from src.db.session import async_session
-        from src.db.models import CrawlJob, SourceRecord, Restaurant, RestaurantChange
         from sqlalchemy import select
         from sqlalchemy.dialects.postgresql import insert
+
+        from src.db.models import CrawlJob, Restaurant, RestaurantChange, SourceRecord
+        from src.db.session import async_session
 
         crawler = _get_crawler(source)
         if not crawler:
@@ -39,7 +40,7 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                 job = await session.get(CrawlJob, job_id)
                 if job:
                     job.status = "running"
-                    job.started_at = datetime.now(timezone.utc)
+                    job.started_at = datetime.now(UTC)
                     await session.commit()
 
             try:
@@ -98,7 +99,7 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                             "rating_avg": rating,
                             "review_count": review_count,
                             "price_tier": price_tier,
-                            "updated_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(UTC),
                         },
                     )
                     await session.execute(stmt)
@@ -170,7 +171,7 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                             source=record.get("source", source),
                             source_url=record.get("source_url"),
                             raw_data=record,
-                            crawled_at=datetime.now(timezone.utc),
+                            crawled_at=datetime.now(UTC),
                         )
                         session.add(source_rec)
                         count += 1
@@ -185,7 +186,7 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                     if job:
                         job.status = "done"
                         job.total_items = count
-                        job.finished_at = datetime.now(timezone.utc)
+                        job.finished_at = datetime.now(UTC)
                         await session.commit()
 
                 logger.info("crawl_task_complete", source=source, items=count)
@@ -198,7 +199,7 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                         if job:
                             job.status = "failed"
                             job.error_message = str(e)
-                            job.finished_at = datetime.now(timezone.utc)
+                            job.finished_at = datetime.now(UTC)
                             await err_session.commit()
                 raise
 
@@ -229,10 +230,10 @@ def run_daily_crawl():
 
 def _get_crawler(source: str):
     """Factory to get crawler instance by source name."""
-    from src.crawlers.google_maps import GoogleMapsCrawler
-    from src.crawlers.yelp import YelpCrawler
     from src.crawlers.delivery import DeliveryCrawler
+    from src.crawlers.google_maps import GoogleMapsCrawler
     from src.crawlers.website import WebsiteCrawler
+    from src.crawlers.yelp import YelpCrawler
 
     crawlers = {
         "google_maps": GoogleMapsCrawler,

@@ -6,12 +6,12 @@ sequencing follow-up communications, and handing off to sales reps.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import BaseAgent, AgentResult, register_agent
+from src.agents.base import AgentResult, BaseAgent, register_agent
 from src.utils.logging import get_logger
 
 logger = get_logger("agents.closing")
@@ -69,7 +69,7 @@ class ClosingAgent(BaseAgent):
 
         if not demo_date:
             # Suggest next Tuesday/Thursday at 2 PM
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             days_until_tue = (1 - now.weekday()) % 7 or 7
             suggested = now + timedelta(days=days_until_tue)
             suggested = suggested.replace(hour=14, minute=0, second=0, microsecond=0)
@@ -88,7 +88,7 @@ class ClosingAgent(BaseAgent):
     def _plan_followups(self, context: dict[str, Any]) -> AgentResult:
         """Generate a follow-up sequence plan."""
         lead_id = context["lead_id"]
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         sequence = []
         for step in DEFAULT_FOLLOWUP_SEQUENCE:

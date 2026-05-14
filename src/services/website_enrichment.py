@@ -1,14 +1,14 @@
 """Website enrichment service — crawls restaurant websites for POS detection."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.crawlers.website import WebsiteCrawler
-from src.db.models import Restaurant, SourceRecord, ICPScore
-from src.scoring.signals import detect_pos, detect_chain
+from src.db.models import ICPScore, Restaurant, SourceRecord
+from src.scoring.signals import detect_chain, detect_pos
 from src.utils.logging import get_logger
 
 logger = get_logger("services.website_enrichment")
@@ -100,7 +100,7 @@ class WebsiteEnrichmentService:
             source="website",
             source_url=url,
             raw_data={"raw_text": raw_text[:5000]},  # Truncate for storage
-            crawled_at=datetime.now(timezone.utc),
+            crawled_at=datetime.now(UTC),
         )
         self.session.add(sr)
 

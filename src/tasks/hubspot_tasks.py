@@ -7,6 +7,8 @@ creating LeadStageHistory records and AuditLog entries as appropriate.
 
 from __future__ import annotations
 
+from datetime import UTC
+
 from src.tasks.celery_app import celery_app
 from src.tasks.crawl_tasks import run_async
 from src.utils.logging import get_logger
@@ -58,12 +60,10 @@ def process_hubspot_webhook(self, events: list[dict]):
         events: List of HubSpot event dicts from the webhook payload.
     """
     async def _process():
-        from datetime import datetime, timezone
 
-        from sqlalchemy import select
 
-        from src.db.session import async_session
         from src.db.models import AuditLog, Lead, LeadStageHistory
+        from src.db.session import async_session
 
         processed = 0
         skipped = 0
@@ -197,7 +197,7 @@ async def _find_lead_by_email(session, email: str, Lead):
 
 async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHistory, AuditLog):
     """Map HubSpot deal stage to local lifecycle_stage and persist the change."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     local_stage = HUBSPOT_STAGE_MAP.get(hs_stage)
 
@@ -232,7 +232,7 @@ async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHisto
 
     # Update lead stage
     lead.lifecycle_stage = local_stage
-    lead.updated_at = datetime.now(timezone.utc)
+    lead.updated_at = datetime.now(UTC)
 
     # Create history record
     history = LeadStageHistory(
@@ -240,7 +240,7 @@ async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHisto
         from_stage=old_stage,
         to_stage=local_stage,
         changed_by="hubspot_webhook",
-        changed_at=datetime.now(timezone.utc),
+        changed_at=datetime.now(UTC),
     )
     session.add(history)
 
@@ -269,9 +269,9 @@ async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHisto
 
 async def _handle_close_date_change(session, lead, close_date_value: str, AuditLog):
     """Record a deal close-date change in the audit log and update Lead metadata."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    lead.updated_at = datetime.now(timezone.utc)
+    lead.updated_at = datetime.now(UTC)
 
     session.add(AuditLog(
         action="hubspot_closedate_sync",
@@ -293,7 +293,7 @@ async def _handle_close_date_change(session, lead, close_date_value: str, AuditL
 
 async def _handle_contact_property_change(session, lead, property_name: str, property_value: str, AuditLog):
     """Apply a HubSpot contact property change to the local Lead."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     local_field = CONTACT_FIELD_MAP.get(property_name)
 
@@ -307,7 +307,7 @@ async def _handle_contact_property_change(session, lead, property_name: str, pro
 
     old_value = getattr(lead, local_field, None)
     setattr(lead, local_field, property_value)
-    lead.updated_at = datetime.now(timezone.utc)
+    lead.updated_at = datetime.now(UTC)
 
     session.add(AuditLog(
         action="hubspot_contact_sync",

@@ -1,6 +1,7 @@
 """Celery tasks for scheduled cleanup operations."""
 
 import asyncio
+
 from src.tasks.celery_app import celery_app
 from src.utils.logging import get_logger
 

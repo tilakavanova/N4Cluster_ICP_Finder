@@ -1,7 +1,7 @@
 """Generic website crawler for restaurant detail pages (httpx only, no Playwright)."""
 
 import re
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from src.crawlers.base import BaseCrawler
 from src.utils.logging import get_logger

@@ -2,16 +2,16 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.address_normalization import (
-    normalize_address,
-    geocode_restaurant,
     batch_normalize,
+    geocode_restaurant,
+    normalize_address,
 )
 from src.utils.logging import get_logger
 

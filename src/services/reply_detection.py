@@ -8,7 +8,7 @@ status transition.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import src.services.communication_status as cs
 from src.utils.logging import get_logger
@@ -104,7 +104,7 @@ async def process_inbound_reply(session, reply_data: dict) -> dict:
 
     from sqlalchemy import select
 
-    from src.db.models import Lead, OutreachActivity, OutreachTarget, TrackerEvent
+    from src.db.models import OutreachActivity, OutreachTarget, TrackerEvent
 
     activity: OutreachActivity | None = None
 
@@ -166,7 +166,7 @@ async def process_inbound_reply(session, reply_data: dict) -> dict:
             "subject": reply_data.get("subject"),
             "in_reply_to": reply_data.get("in_reply_to"),
         },
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     session.add(tracker)
     await session.flush()

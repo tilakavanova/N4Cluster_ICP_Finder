@@ -1,17 +1,22 @@
 """Cluster Expansion Engine (NIF-151 through NIF-159)."""
 
-from datetime import datetime, timezone
 from uuid import UUID
 
 import numpy as np
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.db.models import (
-    MerchantCluster, ClusterMember, ClusterExpansionPlan,
-    ClusterHistory, ClusterFeedback,
-    Restaurant, ICPScore, OutreachCampaign, OutreachTarget,
+    ClusterExpansionPlan,
+    ClusterFeedback,
+    ClusterHistory,
+    ClusterMember,
+    ICPScore,
+    MerchantCluster,
+    OutreachCampaign,
+    OutreachTarget,
+    Restaurant,
 )
 from src.scoring.geo_density import haversine_distance
 from src.utils.logging import get_logger

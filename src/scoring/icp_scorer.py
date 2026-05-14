@@ -1,17 +1,23 @@
 """ICP scoring engine v2 — 8-signal model aligned to TCT ICP strategy."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.config import settings
-from src.scoring.signals import (
-    detect_chain, detect_delivery, detect_pos,
-    platform_dependency_score, pos_maturity_score,
-    volume_proxy_score, cuisine_fit_score, price_point_score,
-    engagement_recency_score, communication_engagement_score,
-    compute_disqualifier_penalty,
-)
 from src.scoring.geo_density import compute_density_scores
+from src.scoring.signals import (
+    communication_engagement_score,
+    compute_disqualifier_penalty,
+    cuisine_fit_score,
+    detect_chain,
+    detect_delivery,
+    detect_pos,
+    engagement_recency_score,
+    platform_dependency_score,
+    pos_maturity_score,
+    price_point_score,
+    volume_proxy_score,
+)
 from src.utils.logging import get_logger
 
 logger = get_logger("scoring.icp")
@@ -149,7 +155,7 @@ class ICPScorer:
             "fit_label": fit_label,
             "hot_lead": total_score >= 75,
             "scoring_version": settings.scoring_version,
-            "scored_at": datetime.now(timezone.utc).isoformat(),
+            "scored_at": datetime.now(UTC).isoformat(),
         }
 
         logger.info(

@@ -12,10 +12,11 @@ def extract_records(self, restaurant_ids: list[str] | None = None):
     """Run LLM extraction on unprocessed source records."""
 
     async def _extract():
-        from src.db.session import async_session
-        from src.db.models import SourceRecord
-        from src.extraction.extractor import extractor
         from sqlalchemy import select, update
+
+        from src.db.models import SourceRecord
+        from src.db.session import async_session
+        from src.extraction.extractor import extractor
 
         async with async_session() as session:
             query = select(SourceRecord).where(SourceRecord.extracted_data.is_(None))

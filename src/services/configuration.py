@@ -2,10 +2,10 @@
 
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import ConfigRegistry, ConfigVersion, ConfigOverride
+from src.db.models import ConfigOverride, ConfigRegistry, ConfigVersion
 from src.utils.logging import get_logger
 
 logger = get_logger("configuration")

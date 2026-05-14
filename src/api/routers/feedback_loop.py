@@ -15,10 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.feedback_loop import (
-    analyze_conversions,
-    suggest_weight_adjustments,
     apply_adjustments,
     get_feedback_report,
+    suggest_weight_adjustments,
 )
 from src.utils.logging import get_logger
 

@@ -9,15 +9,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_auth
 from src.db.models import (
-    ScoringProfile, ScoringRule, ScoreExplanation,
-    ScoreVersion, ScoringConfigLink, ScoreRecalcJob,
+    ScoreRecalcJob,
+    ScoreVersion,
+    ScoringConfigLink,
+    ScoringProfile,
+    ScoringRule,
 )
 from src.db.session import get_session
 from src.services.scoring_engine import (
+    create_version_snapshot,
     evaluate_restaurant,
     explain_score,
     recalculate_batch,
-    create_version_snapshot,
 )
 from src.utils.logging import get_logger
 

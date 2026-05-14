@@ -1,13 +1,13 @@
 """Lead analytics API endpoints."""
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func, case, cast, Date
+from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_auth
-from src.db.models import Lead, Restaurant, ICPScore
+from src.db.models import ICPScore, Lead, Restaurant
 from src.db.session import get_session
 from src.utils.logging import get_logger
 
@@ -22,7 +22,7 @@ async def lead_summary(
     session: AsyncSession = Depends(get_session),
 ):
     """Lead analytics summary: totals by source, status, and fit label."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
 
     # Total leads
     total = (await session.execute(
@@ -80,7 +80,7 @@ async def lead_funnel(
     session: AsyncSession = Depends(get_session),
 ):
     """Leads per status over time — for funnel visualization."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
 
     if interval == "week":
         date_expr = func.date_trunc("week", Lead.created_at)

@@ -7,8 +7,7 @@ tracking URLs (NIF-233), and logs TrackerEvents for delivery tracking.
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -16,7 +15,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.db.models import Lead, OutreachTarget, TrackerEvent
+from src.db.models import TrackerEvent
 from src.services.communication_status import mark_as_failed, mark_as_opted_out, mark_as_sent
 from src.services.outreach import log_activity
 from src.services.tcpa import can_send_sms
@@ -151,7 +150,7 @@ class SMSService:
             provider="plivo",
             provider_event_id=message_uuid,
             event_metadata={"status": "sent", "to": to_number},
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
         )
         session.add(tracker)
 
@@ -303,7 +302,7 @@ async def handle_delivery_callback(
         provider="plivo",
         provider_event_id=provider_event_id,
         event_metadata=callback_data,
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     session.add(tracker)
 

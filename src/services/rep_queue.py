@@ -1,15 +1,19 @@
 """Sales Rep Work Queue & Priority Engine (NIF-145, NIF-146, NIF-147)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
-    RepQueueItem, RepQueueRanking,
-    Restaurant, ICPScore, Lead,
-    TrackerEvent, OutreachActivity, OutreachTarget,
+    ICPScore,
+    OutreachActivity,
+    OutreachTarget,
+    RepQueueItem,
+    RepQueueRanking,
+    Restaurant,
+    TrackerEvent,
 )
 from src.scoring.signals import intent_score
 from src.utils.logging import get_logger
@@ -108,7 +112,7 @@ async def claim_item(
         raise ValueError(f"Cannot claim item with status '{item.status}'")
 
     item.status = "claimed"
-    item.claimed_at = datetime.now(timezone.utc)
+    item.claimed_at = datetime.now(UTC)
     await session.flush()
 
     logger.info("queue_item_claimed", item=str(item_id), rep_id=rep_id)
@@ -127,7 +131,7 @@ async def complete_item(
     if item.status not in ("pending", "claimed"):
         raise ValueError(f"Cannot complete item with status '{item.status}'")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item.status = "completed"
     item.completed_at = now
     if outcome:
@@ -190,7 +194,7 @@ async def get_rep_ranking(
     )
     ranking.active_items = active_result.scalar() or 0
 
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     completed_today_result = await session.execute(
         select(func.count(RepQueueItem.id)).where(
             and_(
@@ -227,7 +231,7 @@ async def get_rep_ranking(
         score += 60.0 / ranking.avg_completion_time_mins  # faster = higher score
     ranking.ranking_score = round(score, 2)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     ranking.last_activity_at = now
     ranking.updated_at = now
 
@@ -403,7 +407,7 @@ async def _enrich_item_with_action(
     # Determine last activity and days since contact
     last_activity_type: str | None = None
     days_since_contact: float | None = None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if outreach_activities:
         latest = outreach_activities[0]  # already sorted desc
@@ -411,7 +415,7 @@ async def _enrich_item_with_action(
         performed = latest.get("performed_at")
         if isinstance(performed, datetime):
             if performed.tzinfo is None:
-                performed = performed.replace(tzinfo=timezone.utc)
+                performed = performed.replace(tzinfo=UTC)
             days_since_contact = (now - performed).total_seconds() / 86400.0
 
     action_data = _determine_action(
