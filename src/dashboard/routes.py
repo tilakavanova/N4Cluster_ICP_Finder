@@ -307,7 +307,7 @@ async def export_leads_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=leads-export.csv"},
+        headers={"Content-Disposition": 'attachment; filename="leads-export.csv"'},
     )
 
 
@@ -1076,7 +1076,7 @@ async def export_prospects_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
