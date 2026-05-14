@@ -2,10 +2,10 @@
 
 from collections import Counter
 
-from sqlalchemy import select, func, case
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Restaurant, ICPScore, Neighborhood
+from src.db.models import ICPScore, Neighborhood, Restaurant
 from src.utils.logging import get_logger
 
 logger = get_logger("neighborhoods")

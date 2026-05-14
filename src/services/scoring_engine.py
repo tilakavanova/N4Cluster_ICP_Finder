@@ -1,21 +1,30 @@
 """Configurable Scoring Engine — profile-driven ICP scoring (NIF-125 through NIF-132)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
-    Restaurant, SourceRecord, ICPScore,
-    ScoringProfile, ScoringRule, ScoreExplanation,
-    ScoreVersion, ScoreRecalcJob,
+    Restaurant,
+    ScoreExplanation,
+    ScoreRecalcJob,
+    ScoreVersion,
+    ScoringProfile,
+    ScoringRule,
+    SourceRecord,
 )
 from src.scoring.signals import (
-    detect_chain, detect_delivery, detect_pos,
-    platform_dependency_score, pos_maturity_score,
-    volume_proxy_score, cuisine_fit_score, price_point_score,
-    engagement_recency_score, compute_disqualifier_penalty,
+    cuisine_fit_score,
+    detect_chain,
+    detect_delivery,
+    detect_pos,
+    engagement_recency_score,
+    platform_dependency_score,
+    pos_maturity_score,
+    price_point_score,
+    volume_proxy_score,
 )
 from src.utils.logging import get_logger
 
@@ -240,7 +249,7 @@ async def evaluate_restaurant(
         score_exp.total_score = total_score
         score_exp.fit_label = fit_label
         score_exp.explanation_text = explanation_text
-        score_exp.scored_at = datetime.now(timezone.utc)
+        score_exp.scored_at = datetime.now(UTC)
     else:
         score_exp = ScoreExplanation(
             restaurant_id=restaurant_id,
@@ -301,7 +310,7 @@ async def recalculate_batch(
         status="running",
         total_items=total,
         processed_items=0,
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     session.add(job)
     await session.flush()
@@ -318,11 +327,11 @@ async def recalculate_batch(
             job.processed_items = processed
 
         job.status = "completed"
-        job.finished_at = datetime.now(timezone.utc)
+        job.finished_at = datetime.now(UTC)
     except Exception as exc:
         job.status = "failed"
         job.error_message = str(exc)[:500]
-        job.finished_at = datetime.now(timezone.utc)
+        job.finished_at = datetime.now(UTC)
         logger.error("recalc_failed", profile=str(profile_id), error=str(exc))
 
     await session.flush()

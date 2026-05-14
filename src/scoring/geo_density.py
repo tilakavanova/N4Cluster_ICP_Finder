@@ -1,7 +1,8 @@
 """Geographic density scoring using HDBSCAN clustering."""
 
-import numpy as np
 from typing import Any
+
+import numpy as np
 
 from src.utils.logging import get_logger
 

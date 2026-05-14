@@ -9,15 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.rep_queue import (
-    get_queue,
     add_to_queue,
     claim_item,
     complete_item,
-    skip_item,
+    enrich_queue_with_actions,
+    get_next_best_action,
+    get_queue,
     get_rep_ranking,
     populate_queue,
-    get_next_best_action,
-    enrich_queue_with_actions,
+    skip_item,
 )
 from src.utils.logging import get_logger
 

@@ -1,26 +1,25 @@
 """API endpoints for restaurant change detection."""
 
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
+from src.db.models import Restaurant, RestaurantChange
 from src.db.session import async_session
-from src.db.models import RestaurantChange, Restaurant
 
 router = APIRouter(prefix="/changes", tags=["changes"])
 
 
 @router.get("/")
 async def list_changes(
-    change_type: Optional[str] = Query(None, description="Filter by change type: new_restaurant, rating_change, delivery_change, field_update"),
+    change_type: str | None = Query(None, description="Filter by change type: new_restaurant, rating_change, delivery_change, field_update"),
     days: int = Query(7, ge=1, le=90, description="Look back N days"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
     """List detected restaurant changes."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
 
     async with async_session() as session:
         query = (
@@ -61,7 +60,7 @@ async def change_summary(
     days: int = Query(7, ge=1, le=90),
 ):
     """Summary counts of changes by type."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
 
     async with async_session() as session:
         result = await session.execute(

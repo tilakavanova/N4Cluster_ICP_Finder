@@ -10,10 +10,10 @@ from src.api.auth import require_auth
 from src.db.models import MerchantEntity
 from src.db.session import get_session
 from src.services.merchant_graph import (
-    ensure_entity,
-    build_relationships_for_entity,
-    query_graph,
     build_graph_for_zip,
+    build_relationships_for_entity,
+    ensure_entity,
+    query_graph,
 )
 from src.utils.logging import get_logger
 

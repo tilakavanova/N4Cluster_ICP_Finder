@@ -1,5 +1,7 @@
 """Celery tasks for ICP scoring."""
 
+from datetime import UTC
+
 from src.tasks.celery_app import celery_app
 from src.tasks.crawl_tasks import run_async
 from src.utils.logging import get_logger
@@ -13,13 +15,15 @@ def score_restaurants(restaurant_ids: list[str] | None = None):
     logger.info("score_task_started", restaurant_ids_count=len(restaurant_ids) if restaurant_ids else "all")
 
     async def _score():
-        from datetime import datetime, timezone
-        from src.db.session import async_session
-        from src.db.models import Restaurant, SourceRecord, ICPScore
-        from src.scoring.icp_scorer import icp_scorer
-        from src.scoring.geo_density import compute_density_scores
+        from datetime import datetime
+
         from sqlalchemy import select
         from sqlalchemy.dialects.postgresql import insert
+
+        from src.db.models import ICPScore, Restaurant, SourceRecord
+        from src.db.session import async_session
+        from src.scoring.geo_density import compute_density_scores
+        from src.scoring.icp_scorer import icp_scorer
 
         async with async_session() as session:
             query = select(Restaurant)
@@ -77,7 +81,7 @@ def score_restaurants(restaurant_ids: list[str] | None = None):
                     total_icp_score=score["total_icp_score"],
                     fit_label=score["fit_label"],
                     scoring_version=score["scoring_version"],
-                    scored_at=datetime.now(timezone.utc),
+                    scored_at=datetime.now(UTC),
                 ).on_conflict_do_update(
                     index_elements=["restaurant_id"],
                     set_={
@@ -92,7 +96,7 @@ def score_restaurants(restaurant_ids: list[str] | None = None):
                         "total_icp_score": score["total_icp_score"],
                         "fit_label": score["fit_label"],
                         "scoring_version": score["scoring_version"],
-                        "scored_at": datetime.now(timezone.utc),
+                        "scored_at": datetime.now(UTC),
                     },
                 )
                 await session.execute(stmt)

@@ -5,12 +5,12 @@ in the city. Each ZIP returns ~60-100 unique results. After deduplication,
 yields 1,500-2,000+ restaurants per city.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import select, func, distinct
+from sqlalchemy import distinct, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Restaurant, CrawlJob
+from src.db.models import CrawlJob, Restaurant
 from src.utils.logging import get_logger
 
 logger = get_logger("services.zipcode_crawl")
@@ -196,7 +196,7 @@ class ZipCodeCrawlService:
             if job:
                 job.status = "completed"
                 job.total_items = new_found
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = datetime.now(UTC)
                 await self.session.commit()
 
         result = {

@@ -1,19 +1,24 @@
 """CRM core API endpoints — accounts, contacts, lead lifecycle, tasks, merge."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, EmailStr
-from sqlalchemy import select, func
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.api.auth import require_auth
 from src.db.models import (
-    Account, Contact, Lead,
-    LeadStageHistory, LeadAssignmentHistory,
-    AccountHistory, ContactHistory, FollowUpTask,
+    Account,
+    AccountHistory,
+    Contact,
+    ContactHistory,
+    FollowUpTask,
+    Lead,
+    LeadAssignmentHistory,
+    LeadStageHistory,
 )
 from src.db.session import get_session
 from src.utils.logging import get_logger
@@ -523,7 +528,7 @@ async def update_task(task_id: UUID, payload: TaskUpdate, session: AsyncSession 
         setattr(task, field, value)
 
     if payload.status == "completed" and not task.completed_at:
-        task.completed_at = datetime.now(timezone.utc)
+        task.completed_at = datetime.now(UTC)
 
     logger.info("task_updated", task_id=str(task_id), updates=list(update_data.keys()))
     return {"id": str(task_id), "status": task.status}

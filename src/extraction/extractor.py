@@ -5,9 +5,9 @@ from typing import Any
 from src.config import settings
 from src.extraction.llm_client import llm_client
 from src.extraction.prompts import (
-    RESTAURANT_EXTRACTION_PROMPT,
     CHAIN_DETECTION_PROMPT,
     POS_DETECTION_PROMPT,
+    RESTAURANT_EXTRACTION_PROMPT,
 )
 from src.utils.logging import get_logger
 

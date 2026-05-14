@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.conversion_analytics import (
-    record_event,
-    get_funnel,
     calculate_funnel,
     get_conversion_timeline,
+    get_funnel,
     get_funnel_trends,
+    record_event,
 )
 from src.utils.logging import get_logger
 

@@ -1,6 +1,6 @@
 """Yelp Fusion API crawler (replaces HTML scraping)."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from src.config import settings
 from src.crawlers.base import BaseCrawler

@@ -1,6 +1,6 @@
 """Delivery platform detection via Yelp transactions + optional SerpAPI verification."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from src.config import settings
 from src.crawlers.base import BaseCrawler

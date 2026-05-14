@@ -1,6 +1,6 @@
 """Crawl job management endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,10 +9,10 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_auth
-from src.config import settings
-from src.db.session import get_session, async_session
-from src.db.models import CrawlJob, Restaurant, SourceRecord
 from src.api.schemas import CrawlJobCreate, CrawlJobResponse
+from src.config import settings
+from src.db.models import CrawlJob, Restaurant, SourceRecord
+from src.db.session import async_session, get_session
 from src.services.cleanup import CleanupService
 from src.utils.logging import get_logger
 
@@ -43,16 +43,18 @@ def _build_score_values(score: dict) -> dict:
         "total_icp_score": score["total_icp_score"],
         "fit_label": score["fit_label"],
         "scoring_version": score["scoring_version"],
-        "scored_at": datetime.now(timezone.utc),
+        "scored_at": datetime.now(UTC),
     }
 
 
 async def _score_restaurants_inline(session: AsyncSession) -> int:
     """Score all unscored restaurants. Runs after crawl."""
-    from src.scoring.icp_scorer import icp_scorer
-    from src.scoring.geo_density import compute_density_scores
-    from src.db.models import ICPScore, SourceRecord as SR
     from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from src.db.models import ICPScore
+    from src.db.models import SourceRecord as SR
+    from src.scoring.geo_density import compute_density_scores
+    from src.scoring.icp_scorer import icp_scorer
 
     # Find restaurants without ICP scores
     scored_ids = select(ICPScore.restaurant_id)
@@ -109,7 +111,7 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
             if job:
                 job.status = "failed"
                 job.error_message = f"Unknown source: {source}"
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = datetime.now(UTC)
                 await session.commit()
         return
 
@@ -118,7 +120,7 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
         job = await session.get(CrawlJob, job_id)
         if job:
             job.status = "running"
-            job.started_at = datetime.now(timezone.utc)
+            job.started_at = datetime.now(UTC)
             await session.commit()
 
         try:
@@ -168,7 +170,7 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                         "rating_avg": rating,
                         "review_count": review_count,
                         "price_tier": price_tier,
-                        "updated_at": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(UTC),
                     },
                 )
                 await session.execute(stmt)
@@ -187,7 +189,7 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                         source=record.get("source", source),
                         source_url=record.get("source_url"),
                         raw_data=record,
-                        crawled_at=datetime.now(timezone.utc),
+                        crawled_at=datetime.now(UTC),
                     ))
                     count += 1
 
@@ -202,7 +204,7 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
             if job:
                 job.status = "completed"
                 job.total_items = count
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = datetime.now(UTC)
                 await session.commit()
 
             logger.info("inline_crawl_complete", source=source, items=count, scored=scored, job_id=job_id)
@@ -214,7 +216,7 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                 if job:
                     job.status = "failed"
                     job.error_message = str(e)[:500]
-                    job.finished_at = datetime.now(timezone.utc)
+                    job.finished_at = datetime.now(UTC)
                     await err_session.commit()
 
 
@@ -242,7 +244,7 @@ async def create_crawl_job(
             j = await s.get(CrawlJob, job.id)
             if j:
                 j.status = "running"
-                j.started_at = datetime.now(timezone.utc)
+                j.started_at = datetime.now(UTC)
                 await s.commit()
 
         for src in ["google_maps", "yelp", "delivery"]:
@@ -259,12 +261,13 @@ async def create_crawl_job(
             if j:
                 j.status = "completed"
                 j.total_items = scored
-                j.finished_at = datetime.now(timezone.utc)
+                j.finished_at = datetime.now(UTC)
                 await s.commit()
         logger.info("multi_source_crawl_complete", location=job_in.location, scored=scored)
     elif settings.use_celery:
         try:
             from celery import chain
+
             from src.tasks.crawl_tasks import crawl_source
             from src.tasks.extract_tasks import extract_records
             from src.tasks.score_tasks import score_restaurants

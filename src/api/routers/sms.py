@@ -11,14 +11,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.sms import SMSService, handle_delivery_callback
-from src.services.tcpa import can_send_sms, check_consent, record_consent, process_opt_out
+from src.services.tcpa import check_consent, process_opt_out, record_consent
 from src.utils.logging import get_logger
 
 logger = get_logger("sms_api")

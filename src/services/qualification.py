@@ -1,15 +1,17 @@
 """AI Merchant Qualification Agent service (NIF-142 through NIF-144)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.db.models import (
-    Restaurant, ICPScore,
-    QualificationResult, QualificationExplanation,
+    ICPScore,
+    QualificationExplanation,
+    QualificationResult,
+    Restaurant,
 )
 from src.utils.logging import get_logger
 
@@ -161,7 +163,7 @@ async def qualify_restaurant(
 
     status, confidence, signals, explanations_data = _compute_qualification(restaurant, icp)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     qualified_at = now if status == "qualified" else None
     expires_at = (now + timedelta(days=QUALIFICATION_EXPIRY_DAYS)) if status == "qualified" else None
 
@@ -229,7 +231,7 @@ async def review_qualification(
     if decision not in ("approved", "rejected"):
         raise ValueError(f"Invalid decision: {decision}. Must be 'approved' or 'rejected'")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     qual_result.review_decision = decision
     qual_result.reviewed_by = reviewed_by
     qual_result.reviewed_at = now

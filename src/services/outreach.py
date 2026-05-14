@@ -1,14 +1,18 @@
 """Outreach Orchestration & Campaign Engine service (NIF-133 through NIF-136)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
-    OutreachCampaign, OutreachTarget, OutreachActivity, OutreachPerformance,
-    Restaurant, ICPScore, Lead,
+    ICPScore,
+    OutreachActivity,
+    OutreachCampaign,
+    OutreachPerformance,
+    OutreachTarget,
+    Restaurant,
 )
 from src.utils.logging import get_logger
 
@@ -351,7 +355,7 @@ async def calculate_performance(
         perf.converted = converted
         perf.response_rate = round(response_rate, 2)
         perf.conversion_rate = round(conversion_rate, 2)
-        perf.last_calculated_at = datetime.now(timezone.utc)
+        perf.last_calculated_at = datetime.now(UTC)
     else:
         perf = OutreachPerformance(
             campaign_id=campaign_id,

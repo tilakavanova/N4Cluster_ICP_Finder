@@ -75,6 +75,7 @@ async def refresh_token(
     scopes: list[str] = auth.get("scopes", [])
 
     from sqlalchemy import select
+
     from src.db.auth_models import APIClient
 
     result = await db.execute(

@@ -1,9 +1,9 @@
 """Conversion Intelligence & Neighborhood Penetration Analytics (NIF-148, NIF-149, NIF-150)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func, and_, extract
+from sqlalchemy import and_, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import ConversionEvent, ConversionFunnel, Restaurant
@@ -121,7 +121,7 @@ async def calculate_funnel(
 
     # Upsert funnel record
     funnel = await get_funnel(session, period, zip_code)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if not funnel:
         funnel = ConversionFunnel(period=period, zip_code=zip_code)

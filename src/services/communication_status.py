@@ -11,11 +11,11 @@ QUEUED → OPTED_OUT (if opt-out detected before send)
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import OutreachTarget, TrackerEvent
@@ -152,7 +152,7 @@ async def transition_status(
         lead_id=target.lead_id,
         provider_event_id=f"status-{new.value}-{uuid.uuid4()}",
         event_metadata=metadata or {},
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
     )
     session.add(event)
     await session.flush()

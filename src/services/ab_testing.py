@@ -6,13 +6,13 @@ and statistical significance testing via two-sample z-test for proportions.
 
 import hashlib
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import ABExperiment, ABAssignment, ScoringProfile
+from src.db.models import ABAssignment, ABExperiment, ScoringProfile
 from src.utils.logging import get_logger
 
 logger = get_logger("ab_testing")
@@ -108,7 +108,7 @@ class ABTestService:
             raise ValueError(f"Cannot start experiment in '{experiment.status}' status")
 
         experiment.status = "running"
-        experiment.started_at = datetime.now(timezone.utc)
+        experiment.started_at = datetime.now(UTC)
         await self.session.flush()
         logger.info("experiment_started", experiment_id=str(experiment_id))
         return experiment
@@ -184,7 +184,7 @@ class ABTestService:
 
         outcome = assignment.outcome or {}
         outcome["metric_value"] = metric_value
-        outcome["recorded_at"] = datetime.now(timezone.utc).isoformat()
+        outcome["recorded_at"] = datetime.now(UTC).isoformat()
         assignment.outcome = outcome
         await self.session.flush()
         return assignment
@@ -291,7 +291,7 @@ class ABTestService:
         if significant:
             experiment.status = "completed"
             experiment.winner_variant = best_name
-            experiment.ended_at = datetime.now(timezone.utc)
+            experiment.ended_at = datetime.now(UTC)
             await self.session.flush()
             logger.info(
                 "winner_declared",

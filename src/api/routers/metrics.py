@@ -6,9 +6,9 @@ No external library required — builds the text format directly.
 
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
-from src.db.models import Restaurant, Lead, ICPScore, OutreachCampaign
+from src.db.models import ICPScore, Lead, OutreachCampaign, Restaurant
 from src.db.session import get_session
 from src.utils.logging import get_logger
 

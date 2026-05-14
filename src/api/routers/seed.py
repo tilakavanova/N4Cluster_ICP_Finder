@@ -1,19 +1,17 @@
 """Data seeding and import endpoints."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.db.models import ICPScore, Restaurant, SourceRecord
 from src.db.session import get_session
-from src.db.models import Restaurant, SourceRecord, ICPScore
 from src.scoring.icp_scorer import icp_scorer
-from src.scoring.signals import detect_chain
 from src.utils.logging import get_logger
 
 logger = get_logger("api.seed")
@@ -94,7 +92,7 @@ async def _import_and_score(data: list[dict], session: AsyncSession) -> dict:
                 "phone": entry.get("phone"),
                 "website": entry.get("website"),
                 "cuisine_type": cuisine,
-                "updated_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(UTC),
             },
         )
         await session.execute(stmt)
@@ -114,7 +112,7 @@ async def _import_and_score(data: list[dict], session: AsyncSession) -> dict:
             source="manual_import",
             raw_data=entry,
             extracted_data=entry,
-            crawled_at=datetime.now(timezone.utc),
+            crawled_at=datetime.now(UTC),
         )
         session.add(source_rec)
 
@@ -166,7 +164,7 @@ async def _import_and_score(data: list[dict], session: AsyncSession) -> dict:
             total_icp_score=score["total_icp_score"],
             fit_label=score["fit_label"],
             scoring_version=score["scoring_version"],
-            scored_at=datetime.now(timezone.utc),
+            scored_at=datetime.now(UTC),
         ).on_conflict_do_update(
             index_elements=["restaurant_id"],
             set_={
@@ -181,7 +179,7 @@ async def _import_and_score(data: list[dict], session: AsyncSession) -> dict:
                 "total_icp_score": score["total_icp_score"],
                 "fit_label": score["fit_label"],
                 "scoring_version": score["scoring_version"],
-                "scored_at": datetime.now(timezone.utc),
+                "scored_at": datetime.now(UTC),
             },
         )
         await session.execute(score_stmt)

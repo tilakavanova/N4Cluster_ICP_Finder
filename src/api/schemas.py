@@ -1,12 +1,10 @@
 """Pydantic schemas for API request/response models."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from typing import Literal
-
 from pydantic import BaseModel, EmailStr, Field
-
 
 # --- Restaurant schemas ---
 

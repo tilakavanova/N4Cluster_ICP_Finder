@@ -6,11 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.neighborhoods import (
+    compare_neighborhoods,
     compute_neighborhood_score,
     rank_neighborhoods,
-    compare_neighborhoods,
-    refresh_neighborhood,
     refresh_all_neighborhoods,
+    refresh_neighborhood,
 )
 from src.utils.logging import get_logger
 

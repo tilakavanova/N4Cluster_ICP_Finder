@@ -5,22 +5,21 @@ Provides endpoints to run agents, check status, and submit RLHF feedback.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import require_auth
-from src.db.session import get_session
+import src.agents.closing  # noqa: F401
+import src.agents.coordinator  # noqa: F401
+import src.agents.lead_discovery  # noqa: F401
+import src.agents.outreach  # noqa: F401
+import src.agents.qualification  # noqa: F401
 
 # Import all agents to trigger registration
 from src.agents.base import get_agent, list_agents  # noqa: E402
-import src.agents.lead_discovery  # noqa: F401
-import src.agents.qualification  # noqa: F401
-import src.agents.outreach  # noqa: F401
-import src.agents.closing  # noqa: F401
-import src.agents.coordinator  # noqa: F401
-
-from src.services.rlhf_feedback import record_feedback, get_feedback_summary
+from src.api.auth import require_auth
+from src.db.session import get_session
+from src.services.rlhf_feedback import get_feedback_summary, record_feedback
 from src.utils.logging import get_logger
 
 logger = get_logger("agents_api")
@@ -88,6 +87,7 @@ async def agent_status(
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
 
     from sqlalchemy import select
+
     from src.db.models import AgentRun
 
     q = (

@@ -7,8 +7,7 @@ verification, revocation, and key rotation.
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
@@ -93,7 +92,7 @@ async def authenticate_client(
     client_id: str,
     client_secret: str,
     db: AsyncSession,
-) -> Optional[APIClient]:
+) -> APIClient | None:
     """Return the APIClient if credentials are valid and client is active."""
     result = await db.execute(
         select(APIClient).where(APIClient.client_id == client_id)
@@ -109,7 +108,7 @@ async def authenticate_client(
     await db.execute(
         update(APIClient)
         .where(APIClient.id == client.id)
-        .values(last_used_at=datetime.now(timezone.utc))
+        .values(last_used_at=datetime.now(UTC))
     )
     await db.commit()
     return client
@@ -137,7 +136,7 @@ async def deactivate_client(client_id: str, db: AsyncSession) -> bool:
 async def rotate_client_secret(
     client_id: str,
     db: AsyncSession,
-) -> Optional[str]:
+) -> str | None:
     """Rotate the client secret. Returns the new raw secret, or None if not found."""
     result = await db.execute(
         select(APIClient).where(APIClient.client_id == client_id)
@@ -154,7 +153,7 @@ async def rotate_client_secret(
         .where(APIClient.id == client.id)
         .values(
             client_secret_hash=new_hash,
-            updated_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(UTC),
         )
     )
     await db.commit()
@@ -168,7 +167,7 @@ async def rotate_client_secret(
 
 def create_token(
     client: APIClient,
-    scopes: Optional[list[str]] = None,
+    scopes: list[str] | None = None,
     expires_in: int = 3600,
 ) -> str:
     """Issue a signed JWT for *client*.
@@ -178,7 +177,7 @@ def create_token(
     """
     effective_scopes = scopes if scopes is not None else (client.scopes or [])
     token_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     exp = now + timedelta(seconds=expires_in)
 
     payload = {
@@ -207,7 +206,7 @@ async def persist_token(
     """Store a token record so it can be revoked later."""
     token_payload = verify_token(token)
     token_id = uuid.UUID(token_payload["jti"])
-    exp = datetime.fromtimestamp(token_payload["exp"], tz=timezone.utc)
+    exp = datetime.fromtimestamp(token_payload["exp"], tz=UTC)
 
     record = APIToken(
         id=token_id,
@@ -258,7 +257,7 @@ async def revoke_token(token_id: str, db: AsyncSession) -> bool:
     await db.execute(
         update(APIToken)
         .where(APIToken.id == tid)
-        .values(revoked_at=datetime.now(timezone.utc))
+        .values(revoked_at=datetime.now(UTC))
     )
     await db.commit()
     logger.info("token_revoked", token_id=token_id)

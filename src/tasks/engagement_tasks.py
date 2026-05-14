@@ -1,7 +1,7 @@
 """Celery tasks for engagement score aggregation (NIF-240)."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.tasks.celery_app import celery_app
 from src.utils.logging import get_logger
@@ -20,12 +20,13 @@ def _run_async(coro):
 
 async def _aggregate_engagement_scores_async(hours: int = 24):
     """Query recent TrackerEvents, compute engagement scores, update ICPScore."""
-    from sqlalchemy import select, func
+    from sqlalchemy import select
+
+    from src.db.models import ICPScore, Lead, OutreachActivity, OutreachTarget, TrackerEvent
     from src.db.session import async_session
-    from src.db.models import TrackerEvent, OutreachActivity, OutreachTarget, ICPScore, Lead
     from src.scoring.signals import communication_engagement_score
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
     updated = 0
 
     async with async_session() as session:
@@ -95,9 +96,10 @@ async def _aggregate_engagement_scores_async(hours: int = 24):
 
 async def _recalculate_all_engagement_async():
     """Full recalculation of engagement scores for all restaurants with communication data."""
-    from sqlalchemy import select, func
+    from sqlalchemy import select
+
+    from src.db.models import ICPScore, Lead, OutreachActivity, OutreachTarget, TrackerEvent
     from src.db.session import async_session
-    from src.db.models import TrackerEvent, OutreachActivity, OutreachTarget, ICPScore, Lead
     from src.scoring.signals import communication_engagement_score
 
     updated = 0

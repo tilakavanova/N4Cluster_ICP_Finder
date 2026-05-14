@@ -1,9 +1,9 @@
 """Lead enrichment service — matches leads against restaurant DB and attaches ICP data."""
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Lead, Restaurant, ICPScore
+from src.db.models import ICPScore, Lead, Restaurant
 from src.utils.logging import get_logger
 
 logger = get_logger("services.lead_enrichment")

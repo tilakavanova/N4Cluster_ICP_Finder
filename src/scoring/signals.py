@@ -1,7 +1,7 @@
 """ICP signal extractors — v2 aligned to TCT ICP strategy document."""
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.utils.logging import get_logger
 
@@ -234,9 +234,9 @@ def engagement_recency_score(
     """
     # If we have a review date, use it (future: Yelp review dates)
     if latest_review_date:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if latest_review_date.tzinfo is None:
-            latest_review_date = latest_review_date.replace(tzinfo=timezone.utc)
+            latest_review_date = latest_review_date.replace(tzinfo=UTC)
         days_ago = (now - latest_review_date).days
         if days_ago <= 30:
             return 1.0
@@ -404,7 +404,7 @@ def intent_score(
     # Check for cold: had contact events but no engagement in 30+ days
     from datetime import timedelta
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     latest_event_at = None
 
     for ev in events:
@@ -416,7 +416,7 @@ def intent_score(
             try:
                 dt = datetime.fromisoformat(occurred)
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.replace(tzinfo=UTC)
                 if latest_event_at is None or dt > latest_event_at:
                     latest_event_at = dt
             except (ValueError, TypeError):
@@ -431,7 +431,7 @@ def intent_score(
             try:
                 dt = datetime.fromisoformat(performed)
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.replace(tzinfo=UTC)
                 if latest_event_at is None or dt > latest_event_at:
                     latest_event_at = dt
             except (ValueError, TypeError):

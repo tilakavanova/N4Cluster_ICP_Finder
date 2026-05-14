@@ -1,7 +1,6 @@
 """Celery tasks for click/open tracking event persistence (NIF-223)."""
 
-import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.tasks.celery_app import celery_app
 from src.tasks.crawl_tasks import run_async
@@ -46,18 +45,19 @@ def log_tracker_event(
     """
     async def _persist():
         import uuid as _uuid
+
         from sqlalchemy import select
         from sqlalchemy.exc import IntegrityError
 
-        from src.db.session import async_session
         from src.db.models import TrackerEvent
+        from src.db.session import async_session
 
         provider_event_id = f"{token}:{event_type}"
 
         ts = (
             datetime.fromisoformat(occurred_at)
             if occurred_at
-            else datetime.now(timezone.utc)
+            else datetime.now(UTC)
         )
 
         metadata: dict = {}

@@ -7,10 +7,9 @@ The framework tracks execution via AgentRun records in the database.
 from __future__ import annotations
 
 import time
-import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,7 +64,7 @@ class BaseAgent(ABC):
                 agent_name=self.name,
                 status="running",
                 input_context=context,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
             )
             session.add(run_record)
             await session.flush()
@@ -78,7 +77,7 @@ class BaseAgent(ABC):
                 run_record.status = "completed"
                 run_record.output_result = result.to_dict()
                 run_record.duration_ms = duration_ms
-                run_record.completed_at = datetime.now(timezone.utc)
+                run_record.completed_at = datetime.now(UTC)
                 await session.flush()
 
             logger.info(
@@ -95,7 +94,7 @@ class BaseAgent(ABC):
                 run_record.status = "failed"
                 run_record.error_message = str(exc)
                 run_record.duration_ms = duration_ms
-                run_record.completed_at = datetime.now(timezone.utc)
+                run_record.completed_at = datetime.now(UTC)
                 await session.flush()
 
             logger.error("agent_failed", agent=self.name, error=str(exc))

@@ -8,8 +8,7 @@ re-use the same content skeleton and only swap in lead-specific tokens.
 from __future__ import annotations
 
 import hashlib
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.extraction.llm_client import llm_client
@@ -34,7 +33,7 @@ def _archetype_key(restaurant_type: str, city: str) -> str:
 def _is_cache_valid(entry: dict[str, Any]) -> bool:
     if "created_at" not in entry:
         return False
-    age = (datetime.now(timezone.utc) - entry["created_at"]).total_seconds()
+    age = (datetime.now(UTC) - entry["created_at"]).total_seconds()
     return age < CACHE_TTL_SECONDS
 
 
@@ -53,7 +52,7 @@ def set_cached_archetype(restaurant_type: str, city: str, content: dict[str, Any
     key = _archetype_key(restaurant_type, city)
     _archetype_cache[key] = {
         "content": content,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
     logger.debug("archetype_cached", key=key)
 
