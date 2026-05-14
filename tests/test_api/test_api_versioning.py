@@ -12,10 +12,9 @@ Covers:
 """
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from src.main import app
-
 
 # All API requests use dev-mode auth (no API_KEY configured in tests)
 
@@ -96,10 +95,16 @@ class TestRootLevelEndpoints:
 
     @pytest.mark.asyncio
     async def test_unsubscribe_at_root(self):
+        # The /unsubscribe/{token} handler intentionally returns 404 with an HTML
+        # "link expired/invalid" page for unknown tokens (NIF-227), so we cannot
+        # use a bare `!= 404` check to prove the route is mounted. Instead,
+        # confirm the handler ran by inspecting the body — FastAPI's "no such
+        # route" 404 returns JSON like `{"detail":"Not Found"}`, never HTML.
         transport = ASGITransport(app=app, raise_app_exceptions=False)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.get("/unsubscribe/faketoken")
-        assert r.status_code != 404
+        body = r.text.lower()
+        assert r.status_code != 404 or "expired" in body or "invalid" in body
 
     @pytest.mark.asyncio
     async def test_webhook_not_under_v1(self):
