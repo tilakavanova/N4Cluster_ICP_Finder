@@ -7,8 +7,8 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import APIRouter, Depends, Form, Query, Request, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -304,10 +304,16 @@ async def export_leads_csv(
         ])
 
     output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="leads-export.csv"'},
+    # Use application/octet-stream + no-store to force the browser to download
+    # rather than render inline. Some Chrome configurations render text/csv
+    # inline even with Content-Disposition: attachment (NIF-283 round 2).
+    return Response(
+        content=output.getvalue(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": 'attachment; filename="leads-export.csv"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
@@ -1073,10 +1079,16 @@ async def export_prospects_csv(
 
     output.seek(0)
     filename = f"prospects-{zip_code}-{radius}mi.csv"
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    # Use application/octet-stream + no-store to force the browser to download
+    # rather than render inline. Some Chrome configurations render text/csv
+    # inline even with Content-Disposition: attachment (NIF-283 round 2).
+    return Response(
+        content=output.getvalue(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
