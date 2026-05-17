@@ -1160,6 +1160,45 @@ async def promote_prospects_route(
     return HTMLResponse(toast_html + "\n" + oob_blocks)
 
 
+@router.get("/leads/{lead_id}/qualification", response_class=HTMLResponse)
+async def qualification_card_route(
+    request: Request,
+    lead_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    """HTMX polling endpoint — render the qualification card for a Lead.
+
+    Returns the `partials/qualification_card.html` fragment. While the
+    qualification result is not yet final the partial includes an `hx-trigger`
+    that polls this endpoint every 3 seconds. Once the result reaches a
+    terminal status (`qualified`, `needs_review`, or `not_qualified`) the
+    polling attribute is omitted so the client stops polling.
+    """
+    if not _require_login(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    from src.services.qualification import get_latest_qualification
+
+    lead = await session.get(Lead, lead_id)
+    if lead is None:
+        return HTMLResponse("Lead not found", status_code=404)
+
+    qualification = None
+    if lead.restaurant_id:
+        qualification = await get_latest_qualification(session, lead.restaurant_id)
+
+    final = qualification is not None and qualification.qualification_status in {
+        "qualified",
+        "needs_review",
+        "not_qualified",
+    }
+
+    html = templates.get_template("partials/qualification_card.html").render(
+        lead=lead, qualification=qualification, final=final
+    )
+    return HTMLResponse(html)
+
+
 # ── Neighborhoods (NIF-202) ───────────────────────────────────
 
 

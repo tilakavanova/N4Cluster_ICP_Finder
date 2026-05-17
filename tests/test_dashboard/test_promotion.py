@@ -120,3 +120,66 @@ async def test_promote_rejects_bulk_over_cap(async_client, logged_in_session):
     )
     assert response.status_code == 400
     assert "100 or fewer" in response.text
+
+
+@pytest.mark.asyncio
+async def test_qualification_card_renders_for_lead_with_qualified_result(
+    async_client, db_session, sample_restaurant_with_icp_score, logged_in_session
+):
+    """Seed Lead + QualificationResult directly, then fetch the polling endpoint."""
+    from datetime import datetime, timezone
+
+    from src.db.models import Lead, QualificationResult
+
+    lead = Lead(
+        source="prospect_finder",
+        status="qualified",
+        lifecycle_stage="qualified",
+        restaurant_id=sample_restaurant_with_icp_score.id,
+    )
+    db_session.add(lead)
+    await db_session.flush()
+
+    qual = QualificationResult(
+        restaurant_id=sample_restaurant_with_icp_score.id,
+        qualification_status="qualified",
+        confidence_score=0.92,
+        signals_summary=["ICP-fit", "delivery-on"],
+        qualified_at=datetime.now(timezone.utc),
+    )
+    db_session.add(qual)
+    await db_session.commit()
+
+    response = await async_client.get(f"/dashboard/leads/{lead.id}/qualification")
+    assert response.status_code == 200, response.text
+    body = response.text
+    # Status pill renders correctly
+    assert "Qualified" in body
+    # Confidence rendered
+    assert "92%" in body
+    # No polling attribute since this is a final state
+    assert 'hx-trigger="every 3s"' not in body
+
+
+@pytest.mark.asyncio
+async def test_qualification_card_shows_qualifying_state_when_no_result(
+    async_client, db_session, sample_restaurant_with_icp_score, logged_in_session
+):
+    """Lead exists but no QualificationResult yet — card shows 'Qualifying…' and polls."""
+    from src.db.models import Lead
+
+    lead = Lead(
+        source="prospect_finder",
+        status="new",
+        lifecycle_stage="new",
+        restaurant_id=sample_restaurant_with_icp_score.id,
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    response = await async_client.get(f"/dashboard/leads/{lead.id}/qualification")
+    assert response.status_code == 200, response.text
+    body = response.text
+    assert "Qualifying" in body
+    # Polling attribute present since result is not final
+    assert 'hx-trigger="every 3s"' in body
