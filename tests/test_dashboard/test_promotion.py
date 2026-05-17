@@ -162,6 +162,25 @@ async def test_qualification_card_renders_for_lead_with_qualified_result(
 
 
 @pytest.mark.asyncio
+async def test_prospects_page_renders_with_action_column(
+    async_client, logged_in_session, sample_restaurant_with_icp_score
+):
+    """Prospects table includes the Action column header and select-all checkbox.
+
+    The 02115 fixture restaurant has no lat/lng, so the proximity search
+    centroid query returns no rows and `_find_prospects` produces an empty
+    list. We only assert the page structure: the thead renders whenever the
+    `searched` flag is true (driven by a 5-digit zip), so both new columns
+    must appear in the HTML.
+    """
+    response = await async_client.get("/dashboard/prospects?zip_code=02115")
+    assert response.status_code == 200, response.text
+    body = response.text
+    assert "Action" in body
+    assert 'id="prospects-select-all"' in body
+
+
+@pytest.mark.asyncio
 async def test_qualification_card_shows_qualifying_state_when_no_result(
     async_client, db_session, sample_restaurant_with_icp_score, logged_in_session
 ):

@@ -999,6 +999,21 @@ async def prospect_finder(
             filters["independent_only"], filters["has_delivery"],
         )
 
+        # Enrich each prospect with its lead_id (if a Lead exists for the restaurant).
+        # This drives the "Already a Lead" badge in the Action column.
+        if prospects:
+            restaurant_ids = [p["id"] for p in prospects]
+            lead_rows = (
+                await session.execute(
+                    select(Lead.id, Lead.restaurant_id).where(
+                        Lead.restaurant_id.in_(restaurant_ids)
+                    )
+                )
+            ).all()
+            lead_map = {str(row.restaurant_id): str(row.id) for row in lead_rows}
+            for p in prospects:
+                p["lead_id"] = lead_map.get(str(p["id"]))
+
         scores = [p["icp_score"] for p in prospects if p["icp_score"] is not None]
         distances = [p["distance"] for p in prospects]
         stats = {
