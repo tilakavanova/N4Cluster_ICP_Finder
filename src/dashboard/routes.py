@@ -1371,20 +1371,30 @@ async def create_campaign_route(
     request: Request,
     name: str = Form(...),
     campaign_type: str = Form("email"),
+    start_date: str = Form(""),
+    end_date: str = Form(""),
+    status: str = Form("draft"),
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new outreach campaign from the dashboard form."""
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
 
+    from datetime import datetime
     from src.services.outreach import create_campaign
 
+    def _parse(d: str):
+        return datetime.strptime(d, "%Y-%m-%d") if d else None
+
     try:
-        campaign = await create_campaign(
+        await create_campaign(
             session,
             name=name,
             campaign_type=campaign_type,
-            created_by="dashboard",
+            start_date=_parse(start_date),
+            end_date=_parse(end_date),
+            status=status,
+            created_by=request.session.get("username") or "dashboard",
         )
         await session.commit()
         msg = f"Campaign '{name}' created successfully"

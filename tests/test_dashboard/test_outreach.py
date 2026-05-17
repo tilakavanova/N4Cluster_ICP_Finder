@@ -94,3 +94,29 @@ async def test_outreach_dashboard_renders_response_rate_column(
     assert response.status_code == 200
     assert "Response Rate" in response.text
     assert "Conversion" in response.text
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_form_persists_start_date(
+    async_client, db_session, logged_in_session
+):
+    response = await async_client.post(
+        "/dashboard/outreach/campaigns",
+        data={
+            "name": "Dated Campaign",
+            "campaign_type": "email",
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-30",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    from sqlalchemy import select
+    from src.db.models import OutreachCampaign
+    campaign = (await db_session.execute(
+        select(OutreachCampaign).where(OutreachCampaign.name == "Dated Campaign")
+    )).scalar_one()
+    assert campaign.start_date is not None
+    assert campaign.start_date.month == 6
+    assert campaign.end_date.day == 30
