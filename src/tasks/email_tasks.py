@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import uuid as _uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from src.services.reply_detection import detect_reply, process_inbound_reply
 from src.tasks.celery_app import celery_app
 from src.tasks.crawl_tasks import run_async
 from src.utils.logging import get_logger
-from src.services.reply_detection import detect_reply, process_inbound_reply
 
 logger = get_logger("tasks.email")
 
@@ -126,9 +126,9 @@ def process_sendgrid_events(self, events: list[dict]):
         from sqlalchemy import select
         from sqlalchemy.exc import IntegrityError
 
-        from src.db.session import async_session
-        from src.db.models import Lead, OutreachActivity, OutreachTarget, TrackerEvent
         import src.services.communication_status as cs
+        from src.db.models import Lead, OutreachActivity, OutreachTarget, TrackerEvent
+        from src.db.session import async_session
 
         processed = 0
         skipped = 0
@@ -142,9 +142,9 @@ def process_sendgrid_events(self, events: list[dict]):
                 user_agent: str | None = event.get("useragent") or event.get("user_agent")
                 occurred_ts_raw = event.get("timestamp")
                 occurred_at = (
-                    datetime.fromtimestamp(int(occurred_ts_raw), tz=timezone.utc)
+                    datetime.fromtimestamp(int(occurred_ts_raw), tz=UTC)
                     if occurred_ts_raw
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
 
                 # Build a stable dedup key

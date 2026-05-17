@@ -1,12 +1,12 @@
 """Cleanup service — removes old crawl jobs, marks stale jobs, cleans orphans."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, func, delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.db.models import CrawlJob, SourceRecord, Restaurant, AuditLog
+from src.db.models import AuditLog, CrawlJob, Restaurant, SourceRecord
 from src.utils.logging import get_logger
 
 logger = get_logger("services.cleanup")
@@ -30,13 +30,13 @@ class CleanupService:
             performed_by: Who triggered the cleanup (system / admin / api).
         """
         retention_days = max_age_days or settings.crawl_job_retention_days
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
 
         stale_marked = await self._mark_stale_jobs()
         jobs_deleted = await self._delete_old_jobs(retention_days)
         orphans_cleaned = await self._clean_orphaned_records()
 
-        elapsed_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
+        elapsed_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
 
         result = {
             "jobs_deleted": jobs_deleted,
@@ -60,7 +60,7 @@ class CleanupService:
 
     async def _mark_stale_jobs(self) -> int:
         """Mark pending/running jobs as failed if stuck beyond timeout."""
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=settings.stale_job_timeout_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=settings.stale_job_timeout_minutes)
 
         result = await self.session.execute(
             update(CrawlJob)
@@ -71,17 +71,20 @@ class CleanupService:
             .values(
                 status="failed",
                 error_message=f"Timed out - marked as failed by cleanup task (>{settings.stale_job_timeout_minutes} min)",
-                finished_at=datetime.now(timezone.utc),
+                finished_at=datetime.now(UTC),
             )
         )
-        count = result.rowcount
+        # AsyncSession.execute is typed Result[Any] but for UPDATE/DELETE the
+        # runtime value is a CursorResult exposing .rowcount. The stubs widen
+        # this away.
+        count = result.rowcount  # type: ignore[attr-defined]
         if count:
             logger.info("stale_jobs_marked", count=count, timeout_minutes=settings.stale_job_timeout_minutes)
         return count
 
     async def _delete_old_jobs(self, retention_days: int) -> int:
         """Delete completed/failed jobs older than retention period."""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
 
         result = await self.session.execute(
             delete(CrawlJob)
@@ -90,7 +93,10 @@ class CleanupService:
                 CrawlJob.created_at < cutoff,
             )
         )
-        count = result.rowcount
+        # AsyncSession.execute is typed Result[Any] but for UPDATE/DELETE the
+        # runtime value is a CursorResult exposing .rowcount. The stubs widen
+        # this away.
+        count = result.rowcount  # type: ignore[attr-defined]
         if count:
             logger.info("old_jobs_deleted", count=count, retention_days=retention_days)
         return count

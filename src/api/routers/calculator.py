@@ -1,10 +1,10 @@
 """Savings calculator API powered by ICP data."""
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Restaurant, ICPScore, SourceRecord
+from src.db.models import ICPScore, Restaurant, SourceRecord
 from src.db.session import get_session
 from src.utils.logging import get_logger
 

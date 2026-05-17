@@ -1,8 +1,8 @@
 """LLM Prompt Versioning Service (NIF-264)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import select, and_, func
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import LLMPromptTemplate
@@ -83,7 +83,7 @@ async def update_prompt(
 
     # Deactivate old version
     current.is_active = False
-    current.updated_at = datetime.now(timezone.utc)
+    current.updated_at = datetime.now(UTC)
 
     # Create new version
     template = LLMPromptTemplate(
@@ -154,11 +154,11 @@ async def rollback_prompt(
     )
     for prompt in all_result.scalars().all():
         prompt.is_active = False
-        prompt.updated_at = datetime.now(timezone.utc)
+        prompt.updated_at = datetime.now(UTC)
 
     # Reactivate target version
     target.is_active = True
-    target.updated_at = datetime.now(timezone.utc)
+    target.updated_at = datetime.now(UTC)
     await session.flush()
 
     logger.info("prompt_rolled_back", name=name, version=version)

@@ -2,6 +2,7 @@
 
 import csv
 import io
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -9,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_auth
+from src.db.models import ICPScore, Restaurant
 from src.db.session import get_session
-from src.db.models import Restaurant, ICPScore
 
 router = APIRouter(prefix="/scores", tags=["scores"])
 
@@ -83,11 +84,13 @@ async def recalculate_scores(
     session: AsyncSession = Depends(get_session),
 ):
     """Recalculate ICP scores inline (no Celery needed)."""
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     from src.db.models import SourceRecord
-    from src.scoring.icp_scorer import icp_scorer
     from src.scoring.geo_density import compute_density_scores
+    from src.scoring.icp_scorer import icp_scorer
 
     query = select(Restaurant)
     if city:
@@ -144,7 +147,7 @@ async def recalculate_scores(
             "total_icp_score": score["total_icp_score"],
             "fit_label": score["fit_label"],
             "scoring_version": score["scoring_version"],
-            "scored_at": datetime.now(timezone.utc),
+            "scored_at": datetime.now(UTC),
         }
         stmt = pg_insert(ICPScore).values(**values).on_conflict_do_update(
             index_elements=["restaurant_id"],

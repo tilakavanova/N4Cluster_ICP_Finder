@@ -3,7 +3,7 @@
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings

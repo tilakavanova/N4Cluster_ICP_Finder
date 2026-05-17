@@ -3,7 +3,7 @@
 Syncs leads to HubSpot contacts and deals via REST API v3.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -268,7 +268,7 @@ class HubSpotService:
             return None
 
         engagement_type = self._ENGAGEMENT_TYPE_MAP.get(activity_type, "NOTE")
-        timestamp_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        timestamp_ms = int(datetime.now(UTC).timestamp() * 1000)
 
         metadata: dict = {}
         if engagement_type == "EMAIL":

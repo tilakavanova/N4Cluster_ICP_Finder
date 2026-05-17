@@ -4,30 +4,39 @@ import csv
 import io
 import math
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import APIRouter, Depends, Form, Query, Request, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.db.models import (
-    Lead, CrawlJob, Restaurant, ICPScore, AuditLog,
+    Account,
+    AuditLog,
+    ClusterMember,
+    Contact,
+    ConversionFunnel,
+    CrawlJob,
+    FollowUpTask,
+    ICPScore,
+    Lead,
+    LeadAssignmentHistory,
+    LeadStageHistory,
+    MerchantCluster,
     Neighborhood,
-    OutreachCampaign, OutreachTarget, OutreachActivity, OutreachPerformance,
-    RepQueueItem, RepQueueRanking,
-    QualificationResult, QualificationExplanation,
-    MerchantCluster, ClusterMember, ClusterExpansionPlan,
-    FollowUpTask, LeadStageHistory, LeadAssignmentHistory, Account, Contact,
-    ConversionFunnel, ConversionEvent,
+    OutreachActivity,
+    OutreachCampaign,
+    QualificationResult,
+    Restaurant,
     TrackerEvent,
 )
 from src.db.session import get_session
 from src.services.cleanup import CleanupService
-from src.utils.geo import haversine_miles, bounding_box
+from src.utils.geo import bounding_box, haversine_miles
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -87,7 +96,7 @@ async def logout(request: Request):
 async def _get_stats(session: AsyncSession) -> dict:
     """Compute lead stats for the dashboard header."""
     total = await session.scalar(select(func.count(Lead.id)))
-    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    week_ago = datetime.now(UTC) - timedelta(days=7)
     this_week = await session.scalar(
         select(func.count(Lead.id)).where(Lead.created_at >= week_ago)
     )
@@ -296,10 +305,16 @@ async def export_leads_csv(
         ])
 
     output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=leads-export.csv"},
+    # Use application/octet-stream + no-store to force the browser to download
+    # rather than render inline. Some Chrome configurations render text/csv
+    # inline even with Content-Disposition: attachment (NIF-283 round 2).
+    return Response(
+        content=output.getvalue(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": 'attachment; filename="leads-export.csv"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
@@ -391,7 +406,7 @@ async def create_job_from_dashboard(
         query=query,
         location=location,
         status="running",
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     session.add(job)
     await session.flush()
@@ -420,7 +435,7 @@ async def create_job_from_dashboard(
                 if j:
                     j.status = "completed"
                     j.total_items = scored
-                    j.finished_at = datetime.now(timezone.utc)
+                    j.finished_at = datetime.now(UTC)
                     await s.commit()
         except Exception as exc:
             async with async_session_factory() as s:
@@ -428,7 +443,7 @@ async def create_job_from_dashboard(
                 if j:
                     j.status = "failed"
                     j.error_message = str(exc)[:500]
-                    j.finished_at = datetime.now(timezone.utc)
+                    j.finished_at = datetime.now(UTC)
                     await s.commit()
 
     # Launch background task and redirect immediately
@@ -457,7 +472,7 @@ async def deep_crawl_city(
         query=f"deep_crawl:{city}",
         location=f"{city}, {state}",
         status="running",
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     session.add(job)
     await session.flush()
@@ -664,10 +679,11 @@ async def rescore_from_dashboard(
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
 
-    from src.scoring.icp_scorer import icp_scorer
-    from src.scoring.geo_density import compute_density_scores
-    from src.db.models import SourceRecord as SR
     from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from src.db.models import SourceRecord as SR
+    from src.scoring.geo_density import compute_density_scores
+    from src.scoring.icp_scorer import icp_scorer
 
     result = await session.execute(select(Restaurant))
     restaurants = result.scalars().all()
@@ -764,8 +780,8 @@ async def analytics_dashboard(
     by_status = [{"status": s.replace("_", " ").title(), "count": status_map.get(s, 0)} for s in status_order]
 
     # Leads over time (last 30 days)
-    from sqlalchemy import cast, Date
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    from sqlalchemy import Date, cast
+    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
     time_rows = await session.execute(
         select(
             cast(Lead.created_at, Date).label("day"),
@@ -1085,10 +1101,16 @@ async def export_prospects_csv(
 
     output.seek(0)
     filename = f"prospects-{zip_code}-{radius}mi.csv"
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    # Use application/octet-stream + no-store to force the browser to download
+    # rather than render inline. Some Chrome configurations render text/csv
+    # inline even with Content-Disposition: attachment (NIF-283 round 2).
+    return Response(
+        content=output.getvalue(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
@@ -1340,7 +1362,7 @@ async def outreach_dashboard(
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
 
-    from src.services.outreach import list_campaigns, calculate_performance
+    from src.services.outreach import calculate_performance, list_campaigns
 
     try:
         campaigns = await list_campaigns(session)
@@ -1417,7 +1439,7 @@ async def campaign_detail_partial(
     if not _require_login(request):
         return HTMLResponse("Unauthorized", status_code=401)
 
-    from src.services.outreach import get_campaign, list_targets, calculate_performance
+    from src.services.outreach import calculate_performance, get_campaign, list_targets
 
     try:
         campaign = await get_campaign(session, campaign_id)
@@ -1545,7 +1567,7 @@ async def claim_queue_item_route(
         item = await claim_item(session, item_id, rep_id)
         await session.commit()
         return HTMLResponse(
-            f'<span class="badge badge-claimed">claimed</span>'
+            '<span class="badge badge-claimed">claimed</span>'
         )
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
@@ -1568,7 +1590,7 @@ async def complete_queue_item_route(
         item = await complete_item(session, item_id, outcome=outcome or None)
         await session.commit()
         return HTMLResponse(
-            f'<span class="badge badge-completed">completed</span>'
+            '<span class="badge badge-completed">completed</span>'
         )
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
@@ -1591,7 +1613,7 @@ async def skip_queue_item_route(
         item = await skip_item(session, item_id, reason=reason or None)
         await session.commit()
         return HTMLResponse(
-            f'<span class="badge badge-skipped">skipped</span>'
+            '<span class="badge badge-skipped">skipped</span>'
         )
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
@@ -2020,7 +2042,7 @@ async def create_lead_task_route(
 
     if due_date:
         try:
-            task.due_date = datetime.fromisoformat(due_date).replace(tzinfo=timezone.utc)
+            task.due_date = datetime.fromisoformat(due_date).replace(tzinfo=UTC)
         except ValueError:
             pass
 
@@ -2048,11 +2070,11 @@ async def complete_lead_task_route(
         return HTMLResponse("Task not found", status_code=404)
 
     task.status = "completed"
-    task.completed_at = datetime.now(timezone.utc)
+    task.completed_at = datetime.now(UTC)
     await session.commit()
 
     return HTMLResponse(
-        f'<span class="badge badge-completed">completed</span>'
+        '<span class="badge badge-completed">completed</span>'
     )
 
 
@@ -2150,7 +2172,7 @@ async def communications_dashboard(
     """Communication analytics dashboard — email/SMS engagement metrics."""
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
-    from sqlalchemy import cast, Date
+    from sqlalchemy import Date, cast
 
     # Overall stats from TrackerEvent
     total_sent = await session.scalar(
@@ -2197,7 +2219,7 @@ async def communications_dashboard(
     }
 
     # Timeline: emails per day for last 30 days
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
     time_rows = await session.execute(
         select(
             cast(TrackerEvent.occurred_at, Date).label("day"),

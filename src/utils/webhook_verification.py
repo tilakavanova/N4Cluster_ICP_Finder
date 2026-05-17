@@ -11,7 +11,7 @@ import hmac
 import time
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ec import ECDSA
+from cryptography.hazmat.primitives.asymmetric.ec import ECDSA, EllipticCurvePublicKey
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
@@ -44,11 +44,18 @@ def verify_sendgrid_signature(
 
     try:
         public_key = load_pem_public_key(signing_key.encode())
+        # SendGrid Event Webhook v3 uses ECDSA P-256. Narrow the union returned
+        # by load_pem_public_key (13 possible key types) to the only one whose
+        # .verify() signature matches our (sig, data, ECDSA) call shape.
+        if not isinstance(public_key, EllipticCurvePublicKey):
+            return False
         signed_data = (timestamp + payload.decode("utf-8", errors="replace")).encode()
         sig_bytes = base64.b64decode(signature)
         public_key.verify(sig_bytes, signed_data, ECDSA(SHA256()))
         return True
-    except (InvalidSignature, Exception):
+    except InvalidSignature:
+        return False
+    except Exception:
         return False
 
 

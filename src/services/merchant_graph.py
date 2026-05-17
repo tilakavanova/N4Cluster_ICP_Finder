@@ -2,12 +2,15 @@
 
 from uuid import UUID
 
-from sqlalchemy import select, func, or_, and_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.db.models import (
-    Restaurant, ICPScore, MerchantEntity, MerchantRelationship,
+    ICPScore,
+    MerchantEntity,
+    MerchantRelationship,
+    Restaurant,
 )
 from src.utils.logging import get_logger
 

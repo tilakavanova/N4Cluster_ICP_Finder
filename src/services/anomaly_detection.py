@@ -6,14 +6,16 @@ volume drops) and auto-pauses campaigns that exceed safety thresholds.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
-    OutreachCampaign, OutreachTarget, TrackerEvent, CampaignAnomalyLog,
+    CampaignAnomalyLog,
+    OutreachCampaign,
+    TrackerEvent,
 )
 from src.utils.logging import get_logger
 
@@ -35,7 +37,7 @@ async def _get_campaign_metrics(
     hours: int = LOOKBACK_HOURS,
 ) -> dict:
     """Compute bounce rate, complaint rate, and send volume for the window."""
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    since = datetime.now(UTC) - timedelta(hours=hours)
 
     # Total sends
     sends_q = (
@@ -91,7 +93,7 @@ async def _get_previous_volume(
     hours: int = LOOKBACK_HOURS,
 ) -> int:
     """Get send volume from the period before the current look-back window."""
-    end = datetime.now(timezone.utc) - timedelta(hours=hours)
+    end = datetime.now(UTC) - timedelta(hours=hours)
     start = end - timedelta(hours=hours)
     q = (
         select(func.count())

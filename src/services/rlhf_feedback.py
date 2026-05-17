@@ -9,10 +9,10 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import AgentFeedback, AgentRun
+from src.db.models import AgentFeedback
 from src.utils.logging import get_logger
 
 logger = get_logger("rlhf_feedback")

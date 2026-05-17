@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import BaseAgent, AgentResult, register_agent
+from src.agents.base import AgentResult, BaseAgent, register_agent
 from src.utils.logging import get_logger
 
 logger = get_logger("agents.lead_discovery")
@@ -48,7 +48,8 @@ class LeadDiscoveryAgent(BaseAgent):
         # Step 1: Query existing high-score restaurants in target area
         if session:
             from sqlalchemy import select
-            from src.db.models import Restaurant, ICPScore
+
+            from src.db.models import ICPScore, Restaurant
 
             query = (
                 select(Restaurant, ICPScore)

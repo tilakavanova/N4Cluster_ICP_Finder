@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import BaseAgent, AgentResult, register_agent
+from src.agents.base import AgentResult, BaseAgent, register_agent
 from src.utils.logging import get_logger
 
 logger = get_logger("agents.qualification")
@@ -39,6 +39,7 @@ class QualificationAgent(BaseAgent):
             return AgentResult(success=False, errors=["Database session required"])
 
         from uuid import UUID
+
         from src.services.qualification import qualify_restaurant
 
         try:

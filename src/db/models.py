@@ -1,13 +1,20 @@
 """SQLAlchemy ORM models."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, Integer, String, Text,
-    ForeignKey, UniqueConstraint,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
@@ -37,8 +44,8 @@ class Restaurant(Base):
     price_tier = Column(Text)
     is_chain = Column(Boolean, default=False)
     chain_name = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     source_records = relationship("SourceRecord", back_populates="restaurant", cascade="all, delete-orphan")
     icp_score = relationship("ICPScore", back_populates="restaurant", uselist=False, cascade="all, delete-orphan")
@@ -53,7 +60,7 @@ class SourceRecord(Base):
     source_url = Column(Text)
     raw_data = Column(JSONB)
     extracted_data = Column(JSONB)
-    crawled_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    crawled_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     restaurant = relationship("Restaurant", back_populates="source_records")
 
@@ -82,7 +89,7 @@ class ICPScore(Base):
     total_icp_score = Column(Float, default=0.0, index=True)
     fit_label = Column(String(20), default="unknown")
     scoring_version = Column(Integer, default=2)
-    scored_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    scored_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     restaurant = relationship("Restaurant", back_populates="icp_score")
 
@@ -126,8 +133,8 @@ class Lead(Base):
     is_merged = Column(Boolean, default=False)
     email_opt_out = Column(Boolean, nullable=False, default=False)
     sms_opt_out = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
     icp_score = relationship("ICPScore", foreign_keys=[icp_score_id])
@@ -151,8 +158,8 @@ class Account(Base):
     restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=True)
     icp_score_id = Column(UUID(as_uuid=True), ForeignKey("icp_scores.id"), nullable=True)
     notes = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     contacts = relationship("Contact", back_populates="account", cascade="all, delete-orphan")
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
@@ -171,8 +178,8 @@ class Contact(Base):
     role = Column(String(50))  # owner, manager, chef, etc.
     is_primary = Column(Boolean, default=False)
     confidence = Column(Float)  # how confident are we in this contact info
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     account = relationship("Account", back_populates="contacts")
 
@@ -186,7 +193,7 @@ class LeadStageHistory(Base):
     from_stage = Column(String(30))
     to_stage = Column(String(30), nullable=False)
     changed_by = Column(Text, default="system")
-    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     lead = relationship("Lead", foreign_keys=[lead_id])
 
@@ -200,7 +207,7 @@ class LeadAssignmentHistory(Base):
     from_owner = Column(Text)
     to_owner = Column(Text, nullable=False)
     changed_by = Column(Text, default="system")
-    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     lead = relationship("Lead", foreign_keys=[lead_id])
 
@@ -215,7 +222,7 @@ class AccountHistory(Base):
     old_value = Column(Text)
     new_value = Column(Text)
     changed_by = Column(Text, default="system")
-    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     account = relationship("Account", foreign_keys=[account_id])
 
@@ -230,7 +237,7 @@ class ContactHistory(Base):
     old_value = Column(Text)
     new_value = Column(Text)
     changed_by = Column(Text, default="system")
-    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     contact = relationship("Contact", foreign_keys=[contact_id])
 
@@ -249,8 +256,8 @@ class FollowUpTask(Base):
     assigned_to = Column(Text)
     due_date = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     lead = relationship("Lead", foreign_keys=[lead_id])
 
@@ -275,8 +282,8 @@ class Neighborhood(Base):
     independent_ratio = Column(Float, default=0.0)
     delivery_coverage = Column(Float, default=0.0)
     opportunity_score = Column(Float, default=0.0, index=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class MerchantEntity(Base):
@@ -288,8 +295,8 @@ class MerchantEntity(Base):
     entity_type = Column(String(30), nullable=False, default="restaurant")  # restaurant, chain_group, market
     tags = Column(ARRAY(Text), default=list)  # e.g. ["high-volume", "pizza", "independent"]
     enrichment_data = Column(JSONB, default=dict)  # arbitrary enrichment metadata
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
 
@@ -307,7 +314,7 @@ class MerchantRelationship(Base):
     relationship_type = Column(String(30), nullable=False)  # same_cuisine, same_neighborhood, same_chain, competitor, cluster_peer
     strength = Column(Float, default=1.0)  # 0.0-1.0 edge weight
     metadata_ = Column("metadata", JSONB, default=dict)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     source = relationship("MerchantEntity", foreign_keys=[source_entity_id])
     target = relationship("MerchantEntity", foreign_keys=[target_entity_id])
@@ -323,7 +330,7 @@ class RestaurantChange(Base):
     old_value = Column(Text)
     new_value = Column(Text)
     source = Column(String(20))
-    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
 
@@ -340,7 +347,7 @@ class CrawlJob(Base):
     error_message = Column(Text)
     started_at = Column(DateTime(timezone=True))
     finished_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class ScoringProfile(Base):
@@ -353,8 +360,8 @@ class ScoringProfile(Base):
     description = Column(Text)
     signals = Column(JSONB, nullable=False, default=list)  # [{name, weight, type, enabled}]
     is_active = Column(Boolean, default=True, index=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     rules = relationship("ScoringRule", back_populates="profile", cascade="all, delete-orphan")
     score_versions = relationship("ScoreVersion", back_populates="profile", cascade="all, delete-orphan")
@@ -372,7 +379,7 @@ class ScoringRule(Base):
     condition = Column(JSONB, nullable=False, default=dict)  # e.g. {"min": 50, "max": 200}
     points = Column(Float, nullable=False, default=0.0)
     description = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     profile = relationship("ScoringProfile", back_populates="rules")
 
@@ -388,7 +395,7 @@ class ScoreExplanation(Base):
     total_score = Column(Float, nullable=False, default=0.0, index=True)
     fit_label = Column(String(20), nullable=False, default="unknown")
     explanation_text = Column(Text)
-    scored_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    scored_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
     profile = relationship("ScoringProfile", foreign_keys=[profile_id])
@@ -403,7 +410,7 @@ class ScoreVersion(Base):
     version_number = Column(Integer, nullable=False)
     changes = Column(JSONB, nullable=False, default=dict)  # {field: {old, new}}
     created_by = Column(Text, default="system")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     profile = relationship("ScoringProfile", back_populates="score_versions")
 
@@ -419,7 +426,7 @@ class ScoringConfigLink(Base):
     profile_id = Column(UUID(as_uuid=True), ForeignKey("scoring_profiles.id"), nullable=False, index=True)
     entity_type = Column(String(30), nullable=False)  # market, cuisine, chain_group
     entity_value = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     profile = relationship("ScoringProfile", back_populates="config_links")
 
@@ -436,7 +443,7 @@ class ScoreRecalcJob(Base):
     error_message = Column(Text)
     started_at = Column(DateTime(timezone=True))
     finished_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     profile = relationship("ScoringProfile", foreign_keys=[profile_id])
 
@@ -457,8 +464,8 @@ class QualificationResult(Base):
     reviewed_at = Column(DateTime(timezone=True))
     review_decision = Column(String(20))  # approved, rejected
     review_notes = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
     explanations = relationship("QualificationExplanation", back_populates="result", cascade="all, delete-orphan")
@@ -475,7 +482,7 @@ class QualificationExplanation(Base):
     impact = Column(String(10), nullable=False, default="neutral")  # positive, negative, neutral
     weight = Column(Float, nullable=False, default=0.0)
     explanation_text = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     result = relationship("QualificationResult", back_populates="explanations")
 
@@ -494,8 +501,8 @@ class ConfigRegistry(Base):
     description = Column(Text)
     data_type = Column(String(20), nullable=False, default="string")  # string, int, float, bool, json
     is_secret = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     versions = relationship("ConfigVersion", back_populates="config", cascade="all, delete-orphan")
     overrides = relationship("ConfigOverride", back_populates="config", cascade="all, delete-orphan")
@@ -511,7 +518,7 @@ class ConfigVersion(Base):
     old_value = Column(JSONB)
     new_value = Column(JSONB, nullable=False)
     changed_by = Column(Text, default="system")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     config = relationship("ConfigRegistry", back_populates="versions")
 
@@ -530,8 +537,8 @@ class ConfigOverride(Base):
     override_value = Column(JSONB, nullable=False)
     priority = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     config = relationship("ConfigRegistry", back_populates="overrides")
 
@@ -548,8 +555,8 @@ class OutreachCampaign(Base):
     start_date = Column(DateTime(timezone=True))
     end_date = Column(DateTime(timezone=True))
     created_by = Column(Text, default="system")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     targets = relationship("OutreachTarget", back_populates="campaign", cascade="all, delete-orphan")
     performance = relationship("OutreachPerformance", back_populates="campaign", uselist=False, cascade="all, delete-orphan")
@@ -567,8 +574,8 @@ class OutreachTarget(Base):
     communication_status = Column(String(20), nullable=False, default="queued", index=True)
     priority = Column(Integer, default=0)
     assigned_to = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     campaign = relationship("OutreachCampaign", back_populates="targets")
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
@@ -586,7 +593,7 @@ class OutreachActivity(Base):
     outcome = Column(String(30))
     notes = Column(Text)
     performed_by = Column(Text, default="system")
-    performed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    performed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     external_message_id = Column(Text)
     channel = Column(Text)  # email|sms|whatsapp
 
@@ -605,7 +612,7 @@ class OutreachPerformance(Base):
     converted = Column(Integer, default=0)
     response_rate = Column(Float, default=0.0)
     conversion_rate = Column(Float, default=0.0)
-    last_calculated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_calculated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     campaign = relationship("OutreachCampaign", back_populates="performance")
 
@@ -624,7 +631,7 @@ class RepQueueItem(Base):
     context_data = Column(JSONB, default=dict)  # ICP score, fit label, last activity, etc.
     claimed_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
     lead = relationship("Lead", foreign_keys=[lead_id])
@@ -642,8 +649,8 @@ class RepQueueRanking(Base):
     active_items = Column(Integer, default=0)
     last_activity_at = Column(DateTime(timezone=True))
     ranking_score = Column(Float, default=0.0, index=True)  # performance ranking
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class ConversionEvent(Base):
@@ -656,7 +663,7 @@ class ConversionEvent(Base):
     event_type = Column(String(30), nullable=False, index=True)  # discovered, contacted, demo_scheduled, pilot_started, converted, churned
     source = Column(Text)
     metadata_ = Column("metadata", JSONB, default=dict)
-    occurred_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    occurred_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     restaurant = relationship("Restaurant", foreign_keys=[restaurant_id])
     lead = relationship("Lead", foreign_keys=[lead_id])
@@ -680,7 +687,7 @@ class ConversionFunnel(Base):
     churned = Column(Integer, default=0)
     conversion_rate = Column(Float, default=0.0)
     avg_days_to_convert = Column(Float, default=0.0)
-    last_calculated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_calculated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class MerchantCluster(Base):
@@ -699,9 +706,9 @@ class MerchantCluster(Base):
     flywheel_score = Column(Float, default=0.0)
     status = Column(String(20), nullable=False, default="detected", index=True)  # detected, active, expanding, mature
     detection_params = Column(JSONB, default=dict)
-    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     members = relationship("ClusterMember", back_populates="cluster", cascade="all, delete-orphan")
     expansion_plans = relationship("ClusterExpansionPlan", back_populates="cluster", cascade="all, delete-orphan")
@@ -720,7 +727,7 @@ class ClusterMember(Base):
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("merchant_clusters.id"), nullable=False, index=True)
     restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False, index=True)
     role = Column(String(20), nullable=False, default="member")  # anchor, member, prospect
-    joined_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    joined_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     icp_score_at_join = Column(Float, default=0.0)
 
     cluster = relationship("MerchantCluster", back_populates="members")
@@ -739,8 +746,8 @@ class ClusterExpansionPlan(Base):
     priority_score = Column(Float, default=0.0, index=True)
     status = Column(String(20), nullable=False, default="planned", index=True)  # planned, in_progress, completed, skipped
     notes = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     cluster = relationship("MerchantCluster", back_populates="expansion_plans")
     target_restaurant = relationship("Restaurant", foreign_keys=[target_restaurant_id])
@@ -754,7 +761,7 @@ class ClusterHistory(Base):
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("merchant_clusters.id"), nullable=False, index=True)
     event_type = Column(String(30), nullable=False, index=True)  # detected, member_added, member_removed, recalculated, expanded, campaign_launched
     details = Column(JSONB, default=dict)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     cluster = relationship("MerchantCluster", back_populates="history")
 
@@ -768,7 +775,7 @@ class ClusterFeedback(Base):
     feedback_type = Column(String(30), nullable=False, index=True)  # expansion_success, expansion_failure, quality_rating
     details = Column(JSONB, default=dict)
     submitted_by = Column(Text, default="system")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     cluster = relationship("MerchantCluster", back_populates="feedback")
 
@@ -787,7 +794,7 @@ class ABExperiment(Base):
     winner_variant = Column(Text)
     started_at = Column(DateTime(timezone=True))
     ended_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     assignments = relationship("ABAssignment", back_populates="experiment", cascade="all, delete-orphan")
 
@@ -804,7 +811,7 @@ class ABAssignment(Base):
     lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False, index=True)
     variant_name = Column(Text, nullable=False)
     outcome = Column(JSONB)  # {metric_value, recorded_at}
-    assigned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    assigned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     experiment = relationship("ABExperiment", back_populates="assignments")
     lead = relationship("Lead", foreign_keys=[lead_id])
@@ -827,8 +834,8 @@ class LLMPromptTemplate(Base):
     metadata_ = Column("metadata", JSONB, default=dict)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     created_by = Column(Text, default="system")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class AuditLog(Base):
@@ -839,7 +846,7 @@ class AuditLog(Base):
     entity_type = Column(String(30))
     details = Column(JSONB, default=dict)
     performed_by = Column(Text, default="system")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
 
 class TrackerEvent(Base):
@@ -860,7 +867,7 @@ class TrackerEvent(Base):
     provider = Column(Text)  # sendgrid|mailgun|plivo|twilio|meta
     provider_event_id = Column(Text, unique=True)
     event_metadata = Column(JSONB)
-    occurred_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    occurred_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     lead = relationship("Lead", foreign_keys=[lead_id])
     campaign = relationship("OutreachCampaign", foreign_keys=[campaign_id])
@@ -880,11 +887,11 @@ class SMSConsent(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     phone_number = Column(String(20), nullable=False, index=True)
     consent_type = Column(String(10), nullable=False, default="opt_in")  # opt_in | opt_out
-    consented_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    consented_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     source = Column(Text)  # e.g. "web_form", "sms_keyword", "api", "manual"
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 # ── NIF-267: Campaign Anomaly Detection ─────────────────────────
@@ -901,7 +908,7 @@ class CampaignAnomalyLog(Base):
     threshold = Column(Float, nullable=False)
     action_taken = Column(String(20), nullable=False, default="paused")  # paused, alerted, none
     details = Column(JSONB, default=dict)
-    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     campaign = relationship("OutreachCampaign", foreign_keys=[campaign_id])
 
@@ -922,7 +929,7 @@ class AgentRun(Base):
     duration_ms = Column(Integer)
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 # ── NIF-274: RLHF Feedback ──────────────────────────────────────
@@ -940,4 +947,4 @@ class AgentFeedback(Base):
     rating = Column(Integer, nullable=False)  # 1-5
     feedback_text = Column(Text)
     rated_by = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

@@ -7,17 +7,22 @@ Provides:
 - Scheduled data retention cleanup
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select, delete, and_
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
-    Lead, AuditLog,
-    OutreachTarget, OutreachActivity, TrackerEvent,
-    ConversionEvent, LeadStageHistory, LeadAssignmentHistory,
+    AuditLog,
+    ConversionEvent,
     FollowUpTask,
+    Lead,
+    LeadAssignmentHistory,
+    LeadStageHistory,
+    OutreachActivity,
+    OutreachTarget,
+    TrackerEvent,
 )
 from src.services.hubspot import HubSpotService
 from src.utils.logging import get_logger
@@ -145,7 +150,7 @@ async def export_lead_data(session: AsyncSession, lead_id: UUID) -> dict:
         "conversion_events": conversions,
         "follow_up_tasks": tasks,
         "tracker_events": tracker_events,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
     }
 
     # Audit the export
@@ -317,7 +322,7 @@ async def record_consent(
     if not lead:
         return {"error": "lead_not_found"}
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     consent_entry = AuditLog(
         action="consent_recorded",
         entity_type="lead",
@@ -392,7 +397,7 @@ async def cleanup_expired_data(
     - Conversion events older than retention period (where lead is null / already erased)
     - Old audit logs (except consent and erasure records)
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    cutoff = datetime.now(UTC) - timedelta(days=retention_days)
 
     # Clean old tracker events
     te_result = await session.execute(

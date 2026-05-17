@@ -6,9 +6,9 @@ recording, and a combined ``can_send_sms`` gate used by the SMS send flow.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import SMSConsent
@@ -33,9 +33,9 @@ def check_quiet_hours(timezone_str: str | None) -> bool:
     """
     try:
         import zoneinfo
-        tz = zoneinfo.ZoneInfo(timezone_str) if timezone_str else timezone.utc
+        tz = zoneinfo.ZoneInfo(timezone_str) if timezone_str else UTC
     except Exception:
-        tz = timezone.utc
+        tz = UTC
 
     local_now = datetime.now(tz)
     hour = local_now.hour
@@ -96,8 +96,8 @@ async def record_consent(
         existing.consent_type = consent_type
         existing.is_active = consent_type == "opt_in"
         existing.source = source
-        existing.consented_at = datetime.now(timezone.utc)
-        existing.updated_at = datetime.now(timezone.utc)
+        existing.consented_at = datetime.now(UTC)
+        existing.updated_at = datetime.now(UTC)
         logger.info("consent_updated", phone=phone_number[-4:], type=consent_type, source=source)
         return existing
 
@@ -106,7 +106,7 @@ async def record_consent(
         consent_type=consent_type,
         source=source,
         is_active=consent_type == "opt_in",
-        consented_at=datetime.now(timezone.utc),
+        consented_at=datetime.now(UTC),
     )
     session.add(consent)
     logger.info("consent_recorded", phone=phone_number[-4:], type=consent_type, source=source)

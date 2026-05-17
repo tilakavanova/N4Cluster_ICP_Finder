@@ -10,19 +10,19 @@ Endpoints:
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_auth, require_scope
 from src.db.session import get_session
 from src.services.compliance import (
-    export_lead_data,
-    erase_lead_data,
-    record_consent,
-    get_consent_status,
-    cleanup_expired_data,
     DEFAULT_DATA_RETENTION_DAYS,
+    cleanup_expired_data,
+    erase_lead_data,
+    export_lead_data,
+    get_consent_status,
+    record_consent,
 )
 from src.utils.logging import get_logger
 

@@ -2,16 +2,15 @@
 
 import asyncio
 import re
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Restaurant, SourceRecord
 from src.crawlers.google_maps import GoogleMapsCrawler
-from src.utils.geo import haversine_miles, bounding_box
+from src.db.models import Restaurant, SourceRecord
+from src.utils.geo import bounding_box, haversine_miles
 from src.utils.logging import get_logger
 
 logger = get_logger("api.discover")
@@ -148,7 +147,7 @@ async def crawl_and_persist(
             crawler.run("restaurants", parsed.get("raw", location)),
             timeout=CRAWL_TIMEOUT,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("inline_crawl_timeout", location=location)
         results = []
     except Exception as e:
@@ -190,7 +189,7 @@ async def crawl_and_persist(
                     "lng": record.get("lng"),
                     "phone": record.get("phone"),
                     "website": record.get("website"),
-                    "updated_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(UTC),
                 },
             )
             await session.execute(stmt)
@@ -210,7 +209,7 @@ async def crawl_and_persist(
                     source="google_maps",
                     source_url=record.get("source_url"),
                     raw_data=record,
-                    crawled_at=datetime.now(timezone.utc),
+                    crawled_at=datetime.now(UTC),
                 )
                 session.add(sr)
 

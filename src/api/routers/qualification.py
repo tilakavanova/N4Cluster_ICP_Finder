@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.auth import require_auth
 from src.db.session import get_session
 from src.services.qualification import (
-    qualify_restaurant,
-    get_latest_qualification,
-    review_qualification,
     batch_qualify,
+    get_latest_qualification,
     list_pending_review,
+    qualify_restaurant,
+    review_qualification,
 )
 from src.utils.logging import get_logger
 

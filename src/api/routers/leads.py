@@ -3,19 +3,22 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select, func, delete
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from src.api.schemas import LeadCreate, LeadUpdate, LeadResponse, LeadDetail, LeadFilter
 from src.api.auth import require_auth, require_scope
+from src.api.schemas import LeadCreate, LeadDetail, LeadResponse, LeadUpdate
 from src.db.models import (
-    Lead, Restaurant, ICPScore,
-    OutreachTarget, OutreachActivity, TrackerEvent, AuditLog,
+    AuditLog,
+    Lead,
+    OutreachActivity,
+    OutreachTarget,
+    TrackerEvent,
 )
 from src.db.session import get_session
-from src.services.lead_enrichment import LeadEnrichmentService
 from src.services.hubspot import HubSpotService
+from src.services.lead_enrichment import LeadEnrichmentService
 from src.services.lead_notifications import route_lead
 from src.utils.logging import get_logger
 

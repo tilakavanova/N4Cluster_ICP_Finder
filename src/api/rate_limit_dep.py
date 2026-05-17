@@ -15,7 +15,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.auth import require_auth
-from src.config import settings
 from src.db.session import get_session
 from src.utils.rate_limiter import check_rate_limit
 

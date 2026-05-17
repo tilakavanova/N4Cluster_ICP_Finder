@@ -1,18 +1,23 @@
 """Restaurant CRUD and search endpoints."""
 
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select, func
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.db.session import get_session
-from src.db.models import Restaurant, ICPScore
 from src.api.schemas import (
-    RestaurantResponse, RestaurantDetail, NearbyResponse,
-    DiscoverResponse, DiscoverResultItem, DiscoverMeta,
+    DiscoverMeta,
+    DiscoverResponse,
+    DiscoverResultItem,
+    NearbyResponse,
+    RestaurantDetail,
+    RestaurantResponse,
 )
-from src.utils.geo import haversine_miles, bounding_box
+from src.db.models import ICPScore, Restaurant
+from src.db.session import get_session
+from src.utils.geo import bounding_box, haversine_miles
 
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
@@ -89,7 +94,8 @@ async def discover_restaurants(
     Results are persisted for future requests.
     """
     import time
-    from src.api.discover import find_cached_restaurants, crawl_and_persist
+
+    from src.api.discover import crawl_and_persist, find_cached_restaurants
 
     start = time.monotonic()
 

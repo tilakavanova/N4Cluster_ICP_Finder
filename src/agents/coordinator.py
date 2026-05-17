@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import BaseAgent, AgentResult, get_agent, list_agents, register_agent
+from src.agents.base import AgentResult, BaseAgent, get_agent, list_agents, register_agent
 from src.utils.logging import get_logger
 
 logger = get_logger("agents.coordinator")

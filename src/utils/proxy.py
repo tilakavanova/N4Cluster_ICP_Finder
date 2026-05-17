@@ -1,6 +1,7 @@
 """Proxy pool manager for crawlers."""
 
 import itertools
+
 from src.config import settings
 
 
