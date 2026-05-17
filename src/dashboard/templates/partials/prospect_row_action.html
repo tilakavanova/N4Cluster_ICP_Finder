@@ -1,0 +1,14 @@
+{% if lead_id %}
+<span class="inline-flex items-center gap-1.5">
+  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600">
+    Already a Lead
+  </span>
+  <a href="/dashboard/leads/{{ lead_id }}" class="text-xs text-cobalt-500 hover:underline">View &rarr;</a>
+</span>
+{% else %}
+<button type="button"
+        class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-xs font-medium px-2.5 py-1 rounded-md"
+        data-promote-single="{{ restaurant_id }}">
+  Promote to Lead
+</button>
+{% endif %}

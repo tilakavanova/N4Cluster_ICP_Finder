@@ -26,7 +26,11 @@ _SG_EVENT_HANDLER: dict[str, str] = {
 # Apple MPP fingerprint: Mozilla/5.0 without a real browser token
 _APPLE_MPP_UA_MARKER = "Mozilla/5.0"
 _APPLE_MPP_REAL_BROWSER_MARKERS = (
-    "Chrome/", "Firefox/", "Safari/", "Edge/", "Edg/",
+    "Chrome/",
+    "Firefox/",
+    "Safari/",
+    "Edge/",
+    "Edg/",
 )
 
 
@@ -71,6 +75,7 @@ def send_email_task(
         html_content: HTML body (URLs will be wrapped, pixel injected).
         text_content: Optional plain-text alternative.
     """
+
     async def _send():
         from src.db.session import async_session
         from src.services.email_service import send_outreach_email
@@ -122,6 +127,7 @@ def process_sendgrid_events(self, events: list[dict]):
     Args:
         events: List of SendGrid event dicts from the webhook payload.
     """
+
     async def _process():
         from sqlalchemy import select
         from sqlalchemy.exc import IntegrityError
@@ -148,16 +154,20 @@ def process_sendgrid_events(self, events: list[dict]):
                 )
 
                 # Build a stable dedup key
-                provider_event_id = f"sg:{sg_event_id}" if sg_event_id else f"sg:{sg_message_id}:{sg_event_type}:{occurred_ts_raw}"
+                provider_event_id = (
+                    f"sg:{sg_event_id}"
+                    if sg_event_id
+                    else f"sg:{sg_message_id}:{sg_event_type}:{occurred_ts_raw}"
+                )
 
                 # Deduplication check
                 existing = await session.execute(
-                    select(TrackerEvent).where(
-                        TrackerEvent.provider_event_id == provider_event_id
-                    )
+                    select(TrackerEvent).where(TrackerEvent.provider_event_id == provider_event_id)
                 )
                 if existing.scalar_one_or_none() is not None:
-                    logger.info("sendgrid_event_duplicate_skipped", provider_event_id=provider_event_id)
+                    logger.info(
+                        "sendgrid_event_duplicate_skipped", provider_event_id=provider_event_id
+                    )
                     skipped += 1
                     continue
 
@@ -189,22 +199,18 @@ def process_sendgrid_events(self, events: list[dict]):
                     metadata["sg_event_id"] = sg_event_id
 
                 # Detect Apple MPP proxy open
-                is_proxy_open = False
                 if sg_event_type == "open" and _is_apple_mpp(user_agent):
-                    is_proxy_open = True
                     metadata["apple_mpp"] = True
                     logger.info("apple_mpp_detected", sg_message_id=sg_message_id)
 
                 # NIF-228: classify bounce type (hard vs soft)
                 # SendGrid bounce events carry a `type` field: "bounce" = hard, "blocked" = soft
-                bounce_classification: str = "hard"
                 is_soft_bounce = False
                 if sg_event_type == "bounce":
                     sg_bounce_type = event.get("type", "bounce")
                     # "blocked" or type containing "soft" → soft bounce
                     if sg_bounce_type in ("blocked", "soft") or "soft" in sg_bounce_type.lower():
                         is_soft_bounce = True
-                        bounce_classification = "soft"
                         metadata["bounce_classification"] = "soft"
                     else:
                         metadata["bounce_classification"] = "hard"
@@ -220,7 +226,9 @@ def process_sendgrid_events(self, events: list[dict]):
                                 if sg_event_type == "bounce":
                                     if not is_soft_bounce:
                                         # Hard bounce: transition to BOUNCED
-                                        await handler(session, target_id, "email", bounce_type="hard")
+                                        await handler(
+                                            session, target_id, "email", bounce_type="hard"
+                                        )
                                     else:
                                         # Soft bounce: log only, no status transition
                                         logger.info(
@@ -229,7 +237,9 @@ def process_sendgrid_events(self, events: list[dict]):
                                             sg_bounce_type=event.get("type"),
                                         )
                                 elif sg_event_type == "dropped":
-                                    await handler(session, target_id, "email", error_reason="dropped")
+                                    await handler(
+                                        session, target_id, "email", error_reason="dropped"
+                                    )
                                 else:
                                     await handler(session, target_id, "email")
                             except Exception as exc:
@@ -313,6 +323,7 @@ def process_inbound_reply_task(self, inbound_data: dict):
     Args:
         inbound_data: Dict of inbound email fields from the SendGrid Inbound Parse webhook.
     """
+
     async def _process():
         from src.db.session import async_session
 

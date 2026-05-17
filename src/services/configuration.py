@@ -19,7 +19,10 @@ def validate_config(namespace: str, key: str, value, data_type: str) -> tuple[bo
     Returns (is_valid, error_message).
     """
     if data_type not in VALID_DATA_TYPES:
-        return False, f"Invalid data_type '{data_type}'. Must be one of: {', '.join(sorted(VALID_DATA_TYPES))}"
+        return (
+            False,
+            f"Invalid data_type '{data_type}'. Must be one of: {', '.join(sorted(VALID_DATA_TYPES))}",
+        )
 
     if not namespace or not namespace.strip():
         return False, "Namespace must not be empty"
@@ -134,9 +137,7 @@ async def set_config(
         old_value = config.value
         # Determine next version number
         version_count = await session.execute(
-            select(func.count(ConfigVersion.id)).where(
-                ConfigVersion.config_id == config.id
-            )
+            select(func.count(ConfigVersion.id)).where(ConfigVersion.config_id == config.id)
         )
         next_version = (version_count.scalar() or 0) + 1
 
@@ -258,9 +259,13 @@ async def create_override(
 
     valid_scope_types = {"market", "cuisine", "region"}
     if scope_type not in valid_scope_types:
-        raise ValueError(f"Invalid scope_type '{scope_type}'. Must be one of: {', '.join(sorted(valid_scope_types))}")
+        raise ValueError(
+            f"Invalid scope_type '{scope_type}'. Must be one of: {', '.join(sorted(valid_scope_types))}"
+        )
 
-    jsonb_value = override_value if isinstance(override_value, (dict, list)) else {"_value": override_value}
+    jsonb_value = (
+        override_value if isinstance(override_value, (dict, list)) else {"_value": override_value}
+    )
 
     override = ConfigOverride(
         config_id=config_id,
@@ -272,7 +277,12 @@ async def create_override(
     )
     session.add(override)
     await session.flush()
-    logger.info("config_override_created", config_id=str(config_id), scope_type=scope_type, scope_value=scope_value)
+    logger.info(
+        "config_override_created",
+        config_id=str(config_id),
+        scope_type=scope_type,
+        scope_value=scope_value,
+    )
 
     return {
         "id": str(override.id),

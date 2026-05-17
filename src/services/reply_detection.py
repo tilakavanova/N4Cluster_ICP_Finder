@@ -71,7 +71,9 @@ def detect_reply(inbound_email_data: dict) -> dict:
         if m:
             from_email = m.group(1).strip()
 
-    is_likely_reply = bool(in_reply_to or references or (subject and subject.lower().startswith("re:")))
+    is_likely_reply = bool(
+        in_reply_to or references or (subject and subject.lower().startswith("re:"))
+    )
 
     return {
         "in_reply_to": in_reply_to,
@@ -149,7 +151,9 @@ async def process_inbound_reply(session, reply_data: dict) -> dict:
     try:
         await cs.mark_as_replied(session, activity.target_id, "email")
     except Exception as exc:
-        logger.warning("reply_status_transition_failed", error=str(exc), activity_id=str(activity.id))
+        logger.warning(
+            "reply_status_transition_failed", error=str(exc), activity_id=str(activity.id)
+        )
 
     # Record TrackerEvent
     tracker = TrackerEvent(

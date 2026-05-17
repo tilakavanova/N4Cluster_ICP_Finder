@@ -24,7 +24,7 @@ from src.utils.logging import get_logger
 logger = get_logger("communication_status")
 
 
-class CommunicationStatus(str, Enum):
+class CommunicationStatus(str, Enum):  # noqa: UP042
     QUEUED = "queued"
     SENT = "sent"
     DELIVERED = "delivered"
@@ -181,9 +181,7 @@ async def get_communication_summary(
     }
     """
     # Get all targets for this lead
-    result = await session.execute(
-        select(OutreachTarget).where(OutreachTarget.lead_id == lead_id)
-    )
+    result = await session.execute(select(OutreachTarget).where(OutreachTarget.lead_id == lead_id))
     targets = list(result.scalars().all())
 
     by_status: dict[str, int] = {}
@@ -221,8 +219,7 @@ async def compute_engagement_level(
     - "none"   — no events at all
     """
     result = await session.execute(
-        select(TrackerEvent.event_type)
-        .where(TrackerEvent.lead_id == lead_id)
+        select(TrackerEvent.event_type).where(TrackerEvent.lead_id == lead_id)
     )
     event_types = [row[0] for row in result.all()]
 
@@ -248,9 +245,7 @@ async def mark_as_sent(
     external_message_id: str | None = None,
 ) -> bool:
     metadata = {"external_message_id": external_message_id} if external_message_id else {}
-    return await transition_status(
-        session, target_id, CommunicationStatus.SENT, channel, metadata
-    )
+    return await transition_status(session, target_id, CommunicationStatus.SENT, channel, metadata)
 
 
 async def mark_as_delivered(
@@ -258,9 +253,7 @@ async def mark_as_delivered(
     target_id: UUID,
     channel: str,
 ) -> bool:
-    return await transition_status(
-        session, target_id, CommunicationStatus.DELIVERED, channel
-    )
+    return await transition_status(session, target_id, CommunicationStatus.DELIVERED, channel)
 
 
 async def mark_as_opened(
@@ -268,9 +261,7 @@ async def mark_as_opened(
     target_id: UUID,
     channel: str,
 ) -> bool:
-    return await transition_status(
-        session, target_id, CommunicationStatus.OPENED, channel
-    )
+    return await transition_status(session, target_id, CommunicationStatus.OPENED, channel)
 
 
 async def mark_as_clicked(
@@ -278,9 +269,7 @@ async def mark_as_clicked(
     target_id: UUID,
     channel: str,
 ) -> bool:
-    return await transition_status(
-        session, target_id, CommunicationStatus.CLICKED, channel
-    )
+    return await transition_status(session, target_id, CommunicationStatus.CLICKED, channel)
 
 
 async def mark_as_bounced(
@@ -311,9 +300,7 @@ async def mark_as_opted_out(
     target_id: UUID,
     channel: str,
 ) -> bool:
-    return await transition_status(
-        session, target_id, CommunicationStatus.OPTED_OUT, channel
-    )
+    return await transition_status(session, target_id, CommunicationStatus.OPTED_OUT, channel)
 
 
 async def mark_as_replied(
@@ -321,6 +308,4 @@ async def mark_as_replied(
     target_id: UUID,
     channel: str,
 ) -> bool:
-    return await transition_status(
-        session, target_id, CommunicationStatus.REPLIED, channel
-    )
+    return await transition_status(session, target_id, CommunicationStatus.REPLIED, channel)

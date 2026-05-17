@@ -90,7 +90,9 @@ def _ranking_to_dict(ranking) -> dict:
         "completed_today": ranking.completed_today,
         "avg_completion_time_mins": ranking.avg_completion_time_mins,
         "active_items": ranking.active_items,
-        "last_activity_at": ranking.last_activity_at.isoformat() if ranking.last_activity_at else None,
+        "last_activity_at": ranking.last_activity_at.isoformat()
+        if ranking.last_activity_at
+        else None,
         "ranking_score": ranking.ranking_score,
         "created_at": ranking.created_at.isoformat() if ranking.created_at else None,
         "updated_at": ranking.updated_at.isoformat() if ranking.updated_at else None,

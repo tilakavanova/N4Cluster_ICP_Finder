@@ -35,9 +35,10 @@ def classify_lead(lead: Lead) -> str:
 
 def _build_lead_summary(lead: Lead) -> str:
     """Build human-readable lead summary."""
+    full_name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or "Unknown"
     lines = [
-        f"Name: {lead.first_name} {lead.last_name}",
-        f"Email: {lead.email}",
+        f"Name: {full_name}",
+        f"Email: {lead.email or '(no email)'}",
     ]
     if lead.company:
         lines.append(f"Company: {lead.company}")
@@ -68,8 +69,9 @@ async def send_slack_alert(lead: Lead, tier: str) -> bool:
     emoji = {"hot": ":fire:", "warm": ":sunny:", "cold": ":snowflake:"}.get(tier, ":bell:")
     summary = _build_lead_summary(lead)
 
+    display_name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or "Unknown"
     payload = {
-        "text": f"{emoji} *{tier.upper()} Lead* — {lead.first_name} {lead.last_name} ({lead.company or 'N/A'})",
+        "text": f"{emoji} *{tier.upper()} Lead* — {display_name} ({lead.company or 'N/A'})",
         "blocks": [
             {
                 "type": "header",

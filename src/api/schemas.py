@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 # --- Restaurant schemas ---
 
+
 class RestaurantBase(BaseModel):
     name: str
     address: str | None = None
@@ -45,6 +46,7 @@ class RestaurantDetail(RestaurantResponse):
 
 # --- Source Record schemas ---
 
+
 class SourceRecordResponse(BaseModel):
     id: UUID
     source: str
@@ -56,6 +58,7 @@ class SourceRecordResponse(BaseModel):
 
 
 # --- ICP Score schemas ---
+
 
 class ICPScoreResponse(BaseModel):
     id: UUID
@@ -77,6 +80,7 @@ class ICPScoreResponse(BaseModel):
 
 
 # --- Crawl Job schemas ---
+
 
 class CrawlJobCreate(BaseModel):
     source: str = Field(..., description="Crawler source: google_maps, yelp, delivery, website")
@@ -178,6 +182,7 @@ class LeadFilter(BaseModel):
 
 # --- Discover (real-time search) schemas ---
 
+
 class DiscoverResultItem(BaseModel):
     name: str
     address: str | None = None
@@ -209,6 +214,7 @@ class DiscoverResponse(BaseModel):
 
 
 # --- Query params ---
+
 
 class RestaurantFilter(BaseModel):
     city: str | None = None

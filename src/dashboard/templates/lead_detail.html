@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ lead.first_name }} {{ lead.last_name }}{% endblock %}
+{% block title %}{{ ((lead.first_name or "") ~ " " ~ (lead.last_name or "")).strip() or "Unnamed Lead" }}{% endblock %}
 
 {% block content %}
 <div class="mb-4">
@@ -12,8 +12,8 @@
     <div class="bg-white rounded-lg border border-slate-200 p-6">
       <div class="flex items-start justify-between mb-4">
         <div>
-          <h1 class="text-xl font-bold text-navy-950">{{ lead.first_name }} {{ lead.last_name }}</h1>
-          <p class="text-sm text-slate-500">{{ lead.email }}</p>
+          <h1 class="text-xl font-bold text-navy-950">{{ ((lead.first_name or "") ~ " " ~ (lead.last_name or "")).strip() or "Unnamed Lead" }}</h1>
+          <p class="text-sm text-slate-500">{{ lead.email or "—" }}</p>
         </div>
         <select
           class="rounded border border-slate-200 text-sm px-3 py-1.5 font-medium"
@@ -71,6 +71,11 @@
         </div>
       </div>
       {% endif %}
+    </div>
+
+    <!-- Qualification card (loaded via htmx; polls until terminal) -->
+    <div hx-get="/dashboard/leads/{{ lead.id }}/qualification" hx-trigger="load" hx-swap="outerHTML">
+      <div class="bg-white border border-slate-200 rounded-lg p-4 mb-4 text-sm text-slate-400">Loading qualification…</div>
     </div>
   </div>
 

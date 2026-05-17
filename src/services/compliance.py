@@ -47,7 +47,8 @@ async def export_lead_data(session: AsyncSession, lead_id: UUID) -> dict:
 
     # Stage history
     stage_result = await session.execute(
-        select(LeadStageHistory).where(LeadStageHistory.lead_id == lead_id)
+        select(LeadStageHistory)
+        .where(LeadStageHistory.lead_id == lead_id)
         .order_by(LeadStageHistory.changed_at.asc())
     )
     stages = [
@@ -62,7 +63,8 @@ async def export_lead_data(session: AsyncSession, lead_id: UUID) -> dict:
 
     # Assignment history
     assign_result = await session.execute(
-        select(LeadAssignmentHistory).where(LeadAssignmentHistory.lead_id == lead_id)
+        select(LeadAssignmentHistory)
+        .where(LeadAssignmentHistory.lead_id == lead_id)
         .order_by(LeadAssignmentHistory.changed_at.asc())
     )
     assignments = [
@@ -77,7 +79,8 @@ async def export_lead_data(session: AsyncSession, lead_id: UUID) -> dict:
 
     # Conversion events
     conv_result = await session.execute(
-        select(ConversionEvent).where(ConversionEvent.lead_id == lead_id)
+        select(ConversionEvent)
+        .where(ConversionEvent.lead_id == lead_id)
         .order_by(ConversionEvent.occurred_at.asc())
     )
     conversions = [
@@ -90,9 +93,7 @@ async def export_lead_data(session: AsyncSession, lead_id: UUID) -> dict:
     ]
 
     # Follow-up tasks
-    task_result = await session.execute(
-        select(FollowUpTask).where(FollowUpTask.lead_id == lead_id)
-    )
+    task_result = await session.execute(select(FollowUpTask).where(FollowUpTask.lead_id == lead_id))
     tasks = [
         {
             "title": t.title,
@@ -154,12 +155,14 @@ async def export_lead_data(session: AsyncSession, lead_id: UUID) -> dict:
     }
 
     # Audit the export
-    session.add(AuditLog(
-        action="gdpr_data_export",
-        entity_type="lead",
-        details={"lead_id": str(lead_id)},
-        performed_by="system",
-    ))
+    session.add(
+        AuditLog(
+            action="gdpr_data_export",
+            entity_type="lead",
+            details={"lead_id": str(lead_id)},
+            performed_by="system",
+        )
+    )
     await session.flush()
 
     logger.info("gdpr_data_exported", lead_id=str(lead_id))
@@ -215,17 +218,13 @@ async def erase_lead_data(
 
     # Delete tracker events
     te_result = await session.execute(
-        delete(TrackerEvent)
-        .where(TrackerEvent.lead_id == lead_id)
-        .returning(TrackerEvent.id)
+        delete(TrackerEvent).where(TrackerEvent.lead_id == lead_id).returning(TrackerEvent.id)
     )
     tracker_events_deleted = len(te_result.all())
 
     # Delete follow-up tasks
     task_result = await session.execute(
-        delete(FollowUpTask)
-        .where(FollowUpTask.lead_id == lead_id)
-        .returning(FollowUpTask.id)
+        delete(FollowUpTask).where(FollowUpTask.lead_id == lead_id).returning(FollowUpTask.id)
     )
     tasks_deleted = len(task_result.all())
 
@@ -271,20 +270,22 @@ async def erase_lead_data(
     lead.sms_opt_out = True
 
     # Audit log
-    session.add(AuditLog(
-        action="gdpr_erasure_full",
-        entity_type="lead",
-        details={
-            "lead_id": str(lead_id),
-            "hubspot_deleted": hubspot_deleted,
-            "targets_deleted": targets_deleted,
-            "activities_deleted": activities_deleted,
-            "tracker_events_deleted": tracker_events_deleted,
-            "tasks_deleted": tasks_deleted,
-            "conversion_events_deleted": conv_events_deleted,
-        },
-        performed_by=performed_by,
-    ))
+    session.add(
+        AuditLog(
+            action="gdpr_erasure_full",
+            entity_type="lead",
+            details={
+                "lead_id": str(lead_id),
+                "hubspot_deleted": hubspot_deleted,
+                "targets_deleted": targets_deleted,
+                "activities_deleted": activities_deleted,
+                "tracker_events_deleted": tracker_events_deleted,
+                "tasks_deleted": tasks_deleted,
+                "conversion_events_deleted": conv_events_deleted,
+            },
+            performed_by=performed_by,
+        )
+    )
     await session.flush()
 
     logger.info(
@@ -368,7 +369,7 @@ async def get_consent_status(session: AsyncSession, lead_id: UUID) -> dict:
     # Build consent map: latest entry per scope for this lead
     consents: dict[str, dict] = {}
     for log in logs:
-        details = log.details or {}
+        details: dict = log.details or {}
         if details.get("lead_id") != str(lead_id):
             continue
         scope = details.get("scope", "unknown")
@@ -401,9 +402,7 @@ async def cleanup_expired_data(
 
     # Clean old tracker events
     te_result = await session.execute(
-        delete(TrackerEvent)
-        .where(TrackerEvent.occurred_at < cutoff)
-        .returning(TrackerEvent.id)
+        delete(TrackerEvent).where(TrackerEvent.occurred_at < cutoff).returning(TrackerEvent.id)
     )
     tracker_deleted = len(te_result.all())
 
@@ -426,12 +425,14 @@ async def cleanup_expired_data(
         .where(
             and_(
                 AuditLog.created_at < cutoff,
-                ~AuditLog.action.in_([
-                    "consent_recorded",
-                    "gdpr_erasure",
-                    "gdpr_erasure_full",
-                    "gdpr_data_export",
-                ]),
+                ~AuditLog.action.in_(
+                    [
+                        "consent_recorded",
+                        "gdpr_erasure",
+                        "gdpr_erasure_full",
+                        "gdpr_data_export",
+                    ]
+                ),
             )
         )
         .returning(AuditLog.id)

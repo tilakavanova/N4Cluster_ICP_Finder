@@ -107,19 +107,28 @@ async def recalculate_scores(
     )
     all_records = sr_result.scalars().all()
 
-    sr_map = {}
+    sr_map: dict = {}
     for sr in all_records:
         rid = str(sr.restaurant_id)
-        sr_map.setdefault(rid, []).append({
-            "source": sr.source,
-            "raw_data": sr.raw_data,
-            "extracted_data": sr.extracted_data,
-        })
+        sr_map.setdefault(rid, []).append(
+            {
+                "source": sr.source,
+                "raw_data": sr.raw_data,
+                "extracted_data": sr.extracted_data,
+            }
+        )
 
-    rest_dicts = [
-        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng,
-         "cuisine_type": r.cuisine_type or [], "review_count": r.review_count or 0,
-         "rating": r.rating_avg or 0.0, "price_tier": r.price_tier}
+    rest_dicts: list = [
+        {
+            "id": str(r.id),
+            "name": r.name,
+            "lat": r.lat,
+            "lng": r.lng,
+            "cuisine_type": r.cuisine_type or [],
+            "review_count": r.review_count or 0,
+            "rating": r.rating_avg or 0.0,
+            "price_tier": r.price_tier,
+        }
         for r in restaurants
     ]
 
@@ -149,9 +158,13 @@ async def recalculate_scores(
             "scoring_version": score["scoring_version"],
             "scored_at": datetime.now(UTC),
         }
-        stmt = pg_insert(ICPScore).values(**values).on_conflict_do_update(
-            index_elements=["restaurant_id"],
-            set_={k: v for k, v in values.items() if k != "restaurant_id"},
+        stmt = (
+            pg_insert(ICPScore)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=["restaurant_id"],
+                set_={k: v for k, v in values.items() if k != "restaurant_id"},
+            )
         )
         await session.execute(stmt)
 
@@ -185,24 +198,26 @@ async def export_leads(
 
     leads = []
     for r, s in rows:
-        leads.append({
-            "name": r.name,
-            "address": r.address,
-            "city": r.city,
-            "state": r.state,
-            "zip_code": r.zip_code,
-            "phone": r.phone,
-            "website": r.website,
-            "cuisine_type": ", ".join(r.cuisine_type or []),
-            "icp_score": s.total_icp_score,
-            "fit_label": s.fit_label,
-            "is_independent": s.is_independent,
-            "has_delivery": s.has_delivery,
-            "delivery_platforms": ", ".join(s.delivery_platforms or []),
-            "has_pos": s.has_pos,
-            "pos_provider": s.pos_provider,
-            "geo_density_score": s.geo_density_score,
-        })
+        leads.append(
+            {
+                "name": r.name,
+                "address": r.address,
+                "city": r.city,
+                "state": r.state,
+                "zip_code": r.zip_code,
+                "phone": r.phone,
+                "website": r.website,
+                "cuisine_type": ", ".join(r.cuisine_type or []),
+                "icp_score": s.total_icp_score,
+                "fit_label": s.fit_label,
+                "is_independent": s.is_independent,
+                "has_delivery": s.has_delivery,
+                "delivery_platforms": ", ".join(s.delivery_platforms or []),
+                "has_pos": s.has_pos,
+                "pos_provider": s.pos_provider,
+                "geo_density_score": s.geo_density_score,
+            }
+        )
 
     if format == "json":
         return leads

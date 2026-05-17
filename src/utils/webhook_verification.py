@@ -111,7 +111,9 @@ def verify_hubspot_signature(
         return False
 
 
-def verify_webhook_request(request_body: bytes, headers: dict, provider: str, signing_key: str) -> bool:
+def verify_webhook_request(
+    request_body: bytes, headers: dict, provider: str, signing_key: str
+) -> bool:
     """Dispatch webhook verification to the appropriate provider.
 
     Args:
@@ -136,6 +138,8 @@ def verify_webhook_request(request_body: bytes, headers: dict, provider: str, si
         timestamp = lowered.get("x-hubspot-request-timestamp", "")
         # source_string must be pre-built by the caller (requires HTTP method + URL)
         source_string = headers.get("_hubspot_source_string", "")
-        return verify_hubspot_signature(request_body, signature, signing_key, source_string, timestamp)
+        return verify_hubspot_signature(
+            request_body, signature, signing_key, source_string, timestamp
+        )
 
     return False

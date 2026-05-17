@@ -13,7 +13,9 @@ from src.utils.logging import get_logger
 
 logger = get_logger("analytics")
 
-router = APIRouter(prefix="/leads/analytics", tags=["analytics"], dependencies=[Depends(require_auth)])
+router = APIRouter(
+    prefix="/leads/analytics", tags=["analytics"], dependencies=[Depends(require_auth)]
+)
 
 
 @router.get("/summary")
@@ -25,42 +27,52 @@ async def lead_summary(
     since = datetime.now(UTC) - timedelta(days=days)
 
     # Total leads
-    total = (await session.execute(
-        select(func.count(Lead.id)).where(Lead.created_at >= since)
-    )).scalar() or 0
+    total = (
+        await session.execute(select(func.count(Lead.id)).where(Lead.created_at >= since))
+    ).scalar() or 0
 
     # By source
-    by_source_rows = (await session.execute(
-        select(Lead.source, func.count(Lead.id))
-        .where(Lead.created_at >= since)
-        .group_by(Lead.source)
-    )).all()
+    by_source_rows = (
+        await session.execute(
+            select(Lead.source, func.count(Lead.id))
+            .where(Lead.created_at >= since)
+            .group_by(Lead.source)
+        )
+    ).all()
 
     # By status
-    by_status_rows = (await session.execute(
-        select(Lead.status, func.count(Lead.id))
-        .where(Lead.created_at >= since)
-        .group_by(Lead.status)
-    )).all()
+    by_status_rows = (
+        await session.execute(
+            select(Lead.status, func.count(Lead.id))
+            .where(Lead.created_at >= since)
+            .group_by(Lead.status)
+        )
+    ).all()
 
     # By fit label
-    by_fit_rows = (await session.execute(
-        select(Lead.icp_fit_label, func.count(Lead.id))
-        .where(Lead.created_at >= since)
-        .group_by(Lead.icp_fit_label)
-    )).all()
+    by_fit_rows = (
+        await session.execute(
+            select(Lead.icp_fit_label, func.count(Lead.id))
+            .where(Lead.created_at >= since)
+            .group_by(Lead.icp_fit_label)
+        )
+    ).all()
 
     # Conversion rates (won / total)
-    won = (await session.execute(
-        select(func.count(Lead.id))
-        .where(Lead.created_at >= since, Lead.status == "won")
-    )).scalar() or 0
+    won = (
+        await session.execute(
+            select(func.count(Lead.id)).where(Lead.created_at >= since, Lead.status == "won")
+        )
+    ).scalar() or 0
 
     # Match rate
-    matched = (await session.execute(
-        select(func.count(Lead.id))
-        .where(Lead.created_at >= since, Lead.restaurant_id.isnot(None))
-    )).scalar() or 0
+    matched = (
+        await session.execute(
+            select(func.count(Lead.id)).where(
+                Lead.created_at >= since, Lead.restaurant_id.isnot(None)
+            )
+        )
+    ).scalar() or 0
 
     return {
         "period_days": days,
@@ -87,16 +99,18 @@ async def lead_funnel(
     else:
         date_expr = cast(Lead.created_at, Date)
 
-    rows = (await session.execute(
-        select(
-            date_expr.label("period"),
-            Lead.status,
-            func.count(Lead.id).label("count"),
+    rows = (
+        await session.execute(
+            select(
+                date_expr.label("period"),
+                Lead.status,
+                func.count(Lead.id).label("count"),
+            )
+            .where(Lead.created_at >= since)
+            .group_by("period", Lead.status)
+            .order_by("period")
         )
-        .where(Lead.created_at >= since)
-        .group_by("period", Lead.status)
-        .order_by("period")
-    )).all()
+    ).all()
 
     # Group by period
     funnel: dict[str, dict[str, int]] = {}
@@ -108,10 +122,7 @@ async def lead_funnel(
     return {
         "period_days": days,
         "interval": interval,
-        "funnel": [
-            {"period": k, "stages": v}
-            for k, v in funnel.items()
-        ],
+        "funnel": [{"period": k, "stages": v} for k, v in funnel.items()],
     }
 
 
@@ -121,21 +132,23 @@ async def top_neighborhoods(
     session: AsyncSession = Depends(get_session),
 ):
     """Leads grouped by city/zip — top neighborhoods by lead volume."""
-    rows = (await session.execute(
-        select(
-            Restaurant.city,
-            Restaurant.state,
-            Restaurant.zip_code,
-            func.count(Lead.id).label("lead_count"),
-            func.avg(ICPScore.total_icp_score).label("avg_icp_score"),
+    rows = (
+        await session.execute(
+            select(
+                Restaurant.city,
+                Restaurant.state,
+                Restaurant.zip_code,
+                func.count(Lead.id).label("lead_count"),
+                func.avg(ICPScore.total_icp_score).label("avg_icp_score"),
+            )
+            .join(Restaurant, Lead.restaurant_id == Restaurant.id)
+            .outerjoin(ICPScore, Lead.icp_score_id == ICPScore.id)
+            .where(Restaurant.city.isnot(None))
+            .group_by(Restaurant.city, Restaurant.state, Restaurant.zip_code)
+            .order_by(func.count(Lead.id).desc())
+            .limit(limit)
         )
-        .join(Restaurant, Lead.restaurant_id == Restaurant.id)
-        .outerjoin(ICPScore, Lead.icp_score_id == ICPScore.id)
-        .where(Restaurant.city.isnot(None))
-        .group_by(Restaurant.city, Restaurant.state, Restaurant.zip_code)
-        .order_by(func.count(Lead.id).desc())
-        .limit(limit)
-    )).all()
+    ).all()
 
     return {
         "neighborhoods": [

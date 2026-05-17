@@ -44,10 +44,15 @@ class HubSpotService:
     async def sync_lead(self, lead: Lead) -> dict | None:
         """Create or update a HubSpot contact and deal for a lead.
 
-        Returns dict with hubspot_contact_id and hubspot_deal_id, or None if disabled.
+        Returns dict with hubspot_contact_id and hubspot_deal_id, or None if disabled
+        or if the lead lacks an email (HubSpot contacts are keyed by email).
         """
         if not self.enabled:
             logger.debug("hubspot_disabled")
+            return None
+
+        if not lead.email:
+            logger.warning("hubspot_sync_skipped_no_email", lead_id=str(lead.id))
             return None
 
         contact_id = await self._upsert_contact(lead)
@@ -107,13 +112,17 @@ class HubSpotService:
                 f"{HUBSPOT_API_BASE}/crm/v3/objects/contacts/search",
                 headers=_headers(),
                 json={
-                    "filterGroups": [{
-                        "filters": [{
-                            "propertyName": "email",
-                            "operator": "EQ",
-                            "value": lead.email,
-                        }]
-                    }]
+                    "filterGroups": [
+                        {
+                            "filters": [
+                                {
+                                    "propertyName": "email",
+                                    "operator": "EQ",
+                                    "value": lead.email,
+                                }
+                            ]
+                        }
+                    ]
                 },
             )
 
@@ -128,7 +137,11 @@ class HubSpotService:
                 if update_resp.status_code == 200:
                     logger.info("hubspot_contact_updated", contact_id=contact_id)
                     return contact_id
-                logger.error("hubspot_contact_update_failed", status=update_resp.status_code, body=update_resp.text)
+                logger.error(
+                    "hubspot_contact_update_failed",
+                    status=update_resp.status_code,
+                    body=update_resp.text,
+                )
                 return None
 
             # Create new contact
@@ -142,7 +155,11 @@ class HubSpotService:
                 logger.info("hubspot_contact_created", contact_id=contact_id)
                 return contact_id
 
-            logger.error("hubspot_contact_create_failed", status=create_resp.status_code, body=create_resp.text)
+            logger.error(
+                "hubspot_contact_create_failed",
+                status=create_resp.status_code,
+                body=create_resp.text,
+            )
             return None
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
@@ -150,7 +167,7 @@ class HubSpotService:
         """Create HubSpot deal linked to contact. Returns deal ID."""
         stage = _deal_stage_from_fit(lead.icp_fit_label)
         properties: dict[str, str] = {
-            "dealname": f"{lead.company or lead.first_name} - {lead.icp_fit_label or 'new'} lead",
+            "dealname": f"{lead.company or lead.first_name or 'Unknown'} - {lead.icp_fit_label or 'new'} lead",
             "dealstage": stage,
             "description": f"Source: {lead.source}",
         }
@@ -163,13 +180,17 @@ class HubSpotService:
                 headers=_headers(),
                 json={
                     "properties": properties,
-                    "associations": [{
-                        "to": {"id": contact_id},
-                        "types": [{
-                            "associationCategory": "HUBSPOT_DEFINED",
-                            "associationTypeId": 3,  # deal-to-contact
-                        }]
-                    }],
+                    "associations": [
+                        {
+                            "to": {"id": contact_id},
+                            "types": [
+                                {
+                                    "associationCategory": "HUBSPOT_DEFINED",
+                                    "associationTypeId": 3,  # deal-to-contact
+                                }
+                            ],
+                        }
+                    ],
                 },
             )
             if resp.status_code == 201:
@@ -219,7 +240,9 @@ class HubSpotService:
             )
             if resp.status_code == 200:
                 return resp.json()
-            logger.error("hubspot_get_contact_failed", contact_id=contact_id, status=resp.status_code)
+            logger.error(
+                "hubspot_get_contact_failed", contact_id=contact_id, status=resp.status_code
+            )
             return None
 
     # ------------------------------------------------------------------
@@ -280,7 +303,7 @@ class HubSpotService:
         elif engagement_type == "MEETING":
             metadata = {
                 "body": notes or "",
-                "title": f"Meeting - {lead.company or lead.first_name}",
+                "title": f"Meeting - {lead.company or lead.first_name or 'Unknown'}",
                 "startTime": timestamp_ms,
                 "endTime": timestamp_ms,
             }
@@ -392,13 +415,15 @@ class HubSpotService:
                 results = []
                 for item in data.get("results", []):
                     eng = item.get("engagement", {})
-                    results.append({
-                        "id": str(eng.get("id")),
-                        "type": eng.get("type"),
-                        "timestamp": eng.get("timestamp"),
-                        "created_at": eng.get("createdAt"),
-                        "metadata": item.get("metadata", {}),
-                    })
+                    results.append(
+                        {
+                            "id": str(eng.get("id")),
+                            "type": eng.get("type"),
+                            "timestamp": eng.get("timestamp"),
+                            "created_at": eng.get("createdAt"),
+                            "metadata": item.get("metadata", {}),
+                        }
+                    )
                 logger.info(
                     "hubspot_activities_fetched",
                     contact_id=contact_id,

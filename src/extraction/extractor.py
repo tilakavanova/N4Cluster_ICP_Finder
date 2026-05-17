@@ -28,7 +28,7 @@ class RestaurantExtractor:
             logger.warning("text_too_short_for_extraction", length=len(raw_text))
             return {}
 
-        truncated = raw_text[:_max_llm_chars()]
+        truncated = raw_text[: _max_llm_chars()]
         prompt = RESTAURANT_EXTRACTION_PROMPT.format(text=truncated)
 
         try:

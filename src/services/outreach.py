@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.db.models import (
     ICPScore,
@@ -36,15 +37,20 @@ async def create_campaign(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     created_by: str = "system",
+    status: str = "draft",
 ) -> OutreachCampaign:
     """Create a new outreach campaign."""
     if campaign_type not in VALID_CAMPAIGN_TYPES:
-        raise ValueError(f"Invalid campaign_type: {campaign_type}. Must be one of {VALID_CAMPAIGN_TYPES}")
+        raise ValueError(
+            f"Invalid campaign_type: {campaign_type}. Must be one of {VALID_CAMPAIGN_TYPES}"
+        )
+    if status not in VALID_CAMPAIGN_STATUSES:
+        raise ValueError(f"Invalid status: {status}. Must be one of {VALID_CAMPAIGN_STATUSES}")
 
     campaign = OutreachCampaign(
         name=name,
         campaign_type=campaign_type,
-        status="draft",
+        status=status,
         target_criteria=target_criteria or {},
         start_date=start_date,
         end_date=end_date,
@@ -52,7 +58,13 @@ async def create_campaign(
     )
     session.add(campaign)
     await session.flush()
-    logger.info("campaign_created", campaign_id=str(campaign.id), name=name, type=campaign_type)
+    logger.info(
+        "campaign_created",
+        campaign_id=str(campaign.id),
+        name=name,
+        type=campaign_type,
+        status=status,
+    )
     return campaign
 
 
@@ -143,7 +155,7 @@ async def select_targets(
     rows = result.all()
 
     targets = []
-    for idx, (restaurant, icp_score) in enumerate(rows):
+    for idx, (restaurant, _icp_score) in enumerate(rows):
         # Check if this restaurant is already a target in this campaign
         existing = await session.execute(
             select(OutreachTarget).where(
@@ -211,6 +223,10 @@ async def list_targets(
     query = (
         select(OutreachTarget)
         .where(OutreachTarget.campaign_id == campaign_id)
+        .options(
+            selectinload(OutreachTarget.restaurant),
+            selectinload(OutreachTarget.lead),
+        )
         .order_by(OutreachTarget.priority.desc())
     )
     if status:
@@ -250,7 +266,9 @@ async def log_activity(
 ) -> OutreachActivity:
     """Log an outreach activity against a target."""
     if activity_type not in VALID_ACTIVITY_TYPES:
-        raise ValueError(f"Invalid activity_type: {activity_type}. Must be one of {VALID_ACTIVITY_TYPES}")
+        raise ValueError(
+            f"Invalid activity_type: {activity_type}. Must be one of {VALID_ACTIVITY_TYPES}"
+        )
     if outcome and outcome not in VALID_OUTCOMES:
         raise ValueError(f"Invalid outcome: {outcome}. Must be one of {VALID_OUTCOMES}")
 

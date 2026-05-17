@@ -95,12 +95,14 @@ async def analyze_conversions(
 
         rate = round((converted / discovered) * 100.0, 2) if discovered > 0 else 0.0
 
-        buckets.append({
-            "score_range": label,
-            "discovered": discovered,
-            "converted": converted,
-            "conversion_rate": rate,
-        })
+        buckets.append(
+            {
+                "score_range": label,
+                "discovered": discovered,
+                "converted": converted,
+                "conversion_rate": rate,
+            }
+        )
 
     logger.info("conversion_analysis_complete", period=period)
     return {
@@ -151,7 +153,7 @@ async def suggest_weight_adjustments(
         profile = await session.get(ScoringProfile, profile_id)
     else:
         result = await session.execute(
-            select(ScoringProfile).where(ScoringProfile.is_active == True).limit(1)
+            select(ScoringProfile).where(ScoringProfile.is_active == True).limit(1)  # noqa: E712
         )
         profile = result.scalar_one_or_none()
 
@@ -186,7 +188,7 @@ async def suggest_weight_adjustments(
     def _avg_signals(explanations: list) -> dict[str, float]:
         totals: dict[str, list[float]] = {}
         for exp in explanations:
-            for item in (exp.signal_breakdown or []):
+            for item in exp.signal_breakdown or []:
                 sig = item.get("signal", "")
                 raw = item.get("raw_value", 0.0)
                 totals.setdefault(sig, []).append(raw)
@@ -205,7 +207,7 @@ async def suggest_weight_adjustments(
 
         # Find current weight from profile
         current_weight = 0.0
-        for s_cfg in (profile.signals or []):
+        for s_cfg in profile.signals or []:
             if s_cfg.get("name") == sig:
                 current_weight = s_cfg.get("weight", 0.0)
                 break
@@ -218,15 +220,17 @@ async def suggest_weight_adjustments(
         else:
             adjustment = 0.0
 
-        adjustments.append({
-            "signal": sig,
-            "current_weight": current_weight,
-            "converted_avg": round(c_avg, 4),
-            "non_converted_avg": round(nc_avg, 4),
-            "delta": delta,
-            "suggested_adjustment": adjustment,
-            "suggested_new_weight": round(current_weight + adjustment, 2),
-        })
+        adjustments.append(
+            {
+                "signal": sig,
+                "current_weight": current_weight,
+                "converted_avg": round(c_avg, 4),
+                "non_converted_avg": round(nc_avg, 4),
+                "delta": delta,
+                "suggested_adjustment": adjustment,
+                "suggested_new_weight": round(current_weight + adjustment, 2),
+            }
+        )
 
     logger.info(
         "weight_adjustments_suggested",
@@ -344,7 +348,9 @@ async def get_feedback_report(
     # Compute overall conversion rate
     total_discovered = sum(b["discovered"] for b in analysis["buckets"])
     total_converted = sum(b["converted"] for b in analysis["buckets"])
-    overall_rate = round((total_converted / total_discovered) * 100.0, 2) if total_discovered > 0 else 0.0
+    overall_rate = (
+        round((total_converted / total_discovered) * 100.0, 2) if total_discovered > 0 else 0.0
+    )
 
     return {
         "period": period,

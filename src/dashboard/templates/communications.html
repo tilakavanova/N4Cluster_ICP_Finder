@@ -115,7 +115,7 @@
                 {{ lead.name or 'Unknown' }}
               </a>
             </td>
-            <td class="py-2 text-slate-600">{{ lead.email }}</td>
+            <td class="py-2 text-slate-600">{{ lead.email or "—" }}</td>
             <td class="py-2 text-slate-600">{{ lead.company or '-' }}</td>
             <td class="py-2 text-right">
               <span class="inline-block px-2 py-0.5 rounded bg-cobalt-100 text-cobalt-700 text-xs font-medium">

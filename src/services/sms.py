@@ -209,12 +209,14 @@ class SMSService:
             # Rate limit guard
             if sent >= DAILY_SMS_LIMIT:
                 rate_limited += 1
-                details.append({
-                    "target_id": str(t_id),
-                    "status": "rate_limited",
-                    "message_uuid": None,
-                    "error": "Daily SMS limit reached",
-                })
+                details.append(
+                    {
+                        "target_id": str(t_id),
+                        "status": "rate_limited",
+                        "message_uuid": None,
+                        "error": "Daily SMS limit reached",
+                    }
+                )
                 continue
 
             # Apply simple {{key}} personalisation
@@ -232,12 +234,14 @@ class SMSService:
                 timezone_str=tz_str,
             )
 
-            details.append({
-                "target_id": str(t_id),
-                "status": result["status"],
-                "message_uuid": result.get("message_uuid"),
-                "error": result.get("error"),
-            })
+            details.append(
+                {
+                    "target_id": str(t_id),
+                    "status": result["status"],
+                    "message_uuid": result.get("message_uuid"),
+                    "error": result.get("error"),
+                }
+            )
 
             if result["status"] == "sent":
                 sent += 1

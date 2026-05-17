@@ -27,10 +27,7 @@ class WebsiteEnrichmentService:
         Returns summary of enrichment results.
         """
         # Find restaurants with website URL but no website source_record
-        has_website_sr = (
-            select(SourceRecord.restaurant_id)
-            .where(SourceRecord.source == "website")
-        )
+        has_website_sr = select(SourceRecord.restaurant_id).where(SourceRecord.source == "website")
         result = await self.session.execute(
             select(Restaurant)
             .where(
@@ -129,7 +126,11 @@ class WebsiteEnrichmentService:
         is_chain, chain_name = detect_chain(restaurant.name)
         if not is_chain and raw_text:
             # Check for franchise indicators in website text
-            franchise_keywords = ["franchise", "locations nationwide", "join our team at any location"]
+            franchise_keywords = [
+                "franchise",
+                "locations nationwide",
+                "join our team at any location",
+            ]
             text_lower = raw_text.lower()
             for kw in franchise_keywords:
                 if kw in text_lower:

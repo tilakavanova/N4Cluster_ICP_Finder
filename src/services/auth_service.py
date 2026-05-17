@@ -36,6 +36,7 @@ VALID_SCOPES = {
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _hash_secret(secret: str) -> str:
     """Return a bcrypt hash of *secret*."""
     return bcrypt.hashpw(secret.encode(), bcrypt.gensalt()).decode()
@@ -57,6 +58,7 @@ def _hash_token(token: str) -> str:
 # ---------------------------------------------------------------------------
 # Client management
 # ---------------------------------------------------------------------------
+
 
 async def create_client(
     name: str,
@@ -94,9 +96,7 @@ async def authenticate_client(
     db: AsyncSession,
 ) -> APIClient | None:
     """Return the APIClient if credentials are valid and client is active."""
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
 
     if client is None or not client.is_active:
@@ -106,9 +106,7 @@ async def authenticate_client(
 
     # Update last_used_at
     await db.execute(
-        update(APIClient)
-        .where(APIClient.id == client.id)
-        .values(last_used_at=datetime.now(UTC))
+        update(APIClient).where(APIClient.id == client.id).values(last_used_at=datetime.now(UTC))
     )
     await db.commit()
     return client
@@ -116,18 +114,12 @@ async def authenticate_client(
 
 async def deactivate_client(client_id: str, db: AsyncSession) -> bool:
     """Deactivate an API client. Returns True if client was found."""
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
     if client is None:
         return False
 
-    await db.execute(
-        update(APIClient)
-        .where(APIClient.id == client.id)
-        .values(is_active=False)
-    )
+    await db.execute(update(APIClient).where(APIClient.id == client.id).values(is_active=False))
     await db.commit()
     logger.info("api_client_deactivated", client_id=client_id)
     return True
@@ -138,9 +130,7 @@ async def rotate_client_secret(
     db: AsyncSession,
 ) -> str | None:
     """Rotate the client secret. Returns the new raw secret, or None if not found."""
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
     if client is None:
         return None
@@ -164,6 +154,7 @@ async def rotate_client_secret(
 # ---------------------------------------------------------------------------
 # Token lifecycle
 # ---------------------------------------------------------------------------
+
 
 def create_token(
     client: APIClient,
@@ -255,9 +246,7 @@ async def revoke_token(token_id: str, db: AsyncSession) -> bool:
         return False
 
     await db.execute(
-        update(APIToken)
-        .where(APIToken.id == tid)
-        .values(revoked_at=datetime.now(UTC))
+        update(APIToken).where(APIToken.id == tid).values(revoked_at=datetime.now(UTC))
     )
     await db.commit()
     logger.info("token_revoked", token_id=token_id)

@@ -37,8 +37,11 @@ router = APIRouter(
 
 # -- Pydantic schemas ---------------------------------------------------------
 
+
 class ConsentRequest(BaseModel):
-    scope: str = Field(..., description="Consent scope, e.g. 'marketing_email', 'data_processing', 'analytics'")
+    scope: str = Field(
+        ..., description="Consent scope, e.g. 'marketing_email', 'data_processing', 'analytics'"
+    )
     granted: bool = Field(..., description="Whether consent is granted or withdrawn")
 
 
@@ -52,6 +55,7 @@ class RetentionCleanupRequest(BaseModel):
 
 
 # -- Endpoints ----------------------------------------------------------------
+
 
 @router.post("/data-export/{lead_id}")
 async def data_export(

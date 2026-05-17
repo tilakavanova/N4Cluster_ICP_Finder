@@ -69,7 +69,9 @@ async def list_config_entries(
 async def get_config_value(
     namespace: str,
     key: str,
-    scope_type: str | None = Query(None, description="Override scope type (market, cuisine, region)"),
+    scope_type: str | None = Query(
+        None, description="Override scope type (market, cuisine, region)"
+    ),
     scope_value: str | None = Query(None, description="Override scope value"),
     session: AsyncSession = Depends(get_session),
 ):

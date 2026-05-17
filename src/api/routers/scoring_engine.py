@@ -190,9 +190,7 @@ async def add_rule(
 @router.get("/profiles/{profile_id}/rules")
 async def list_rules(profile_id: UUID, session: AsyncSession = Depends(get_session)):
     """List rules for a profile."""
-    result = await session.execute(
-        select(ScoringRule).where(ScoringRule.profile_id == profile_id)
-    )
+    result = await session.execute(select(ScoringRule).where(ScoringRule.profile_id == profile_id))
     return [
         {
             "id": str(r.id),
@@ -322,11 +320,11 @@ async def list_config_links(profile_id: UUID, session: AsyncSession = Depends(ge
     )
     return [
         {
-            "id": str(l.id),
-            "entity_type": l.entity_type,
-            "entity_value": l.entity_value,
+            "id": str(link.id),
+            "entity_type": link.entity_type,
+            "entity_value": link.entity_value,
         }
-        for l in result.scalars().all()
+        for link in result.scalars().all()
     ]
 
 

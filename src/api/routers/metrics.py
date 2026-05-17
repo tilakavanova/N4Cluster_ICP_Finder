@@ -24,12 +24,14 @@ _request_duration_sum: dict[str, float] = {}
 
 def record_request(method: str, path: str, status: int, duration_s: float) -> None:
     """Record a request metric (called from middleware)."""
-    key = f'{method}:{path}:{status}'
+    key = f"{method}:{path}:{status}"
     _request_counts[key] = _request_counts.get(key, 0) + 1
     _request_duration_sum[key] = _request_duration_sum.get(key, 0.0) + duration_s
 
 
-def _format_metric(name: str, help_text: str, metric_type: str, samples: list[tuple[str, float]]) -> str:
+def _format_metric(
+    name: str, help_text: str, metric_type: str, samples: list[tuple[str, float]]
+) -> str:
     """Format a single metric in Prometheus text exposition format."""
     lines = [
         f"# HELP {name} {help_text}",
@@ -54,12 +56,14 @@ async def prometheus_metrics():
         method, path, status = key.split(":", 2)
         req_samples.append((f'method="{method}",path="{path}",status="{status}"', float(count)))
     if req_samples:
-        sections.append(_format_metric(
-            "http_requests_total",
-            "Total number of HTTP requests",
-            "counter",
-            req_samples,
-        ))
+        sections.append(
+            _format_metric(
+                "http_requests_total",
+                "Total number of HTTP requests",
+                "counter",
+                req_samples,
+            )
+        )
 
     # Request duration
     dur_samples = []
@@ -67,53 +71,73 @@ async def prometheus_metrics():
         method, path, status = key.split(":", 2)
         dur_samples.append((f'method="{method}",path="{path}",status="{status}"', total))
     if dur_samples:
-        sections.append(_format_metric(
-            "http_request_duration_seconds_total",
-            "Total request duration in seconds",
-            "counter",
-            dur_samples,
-        ))
+        sections.append(
+            _format_metric(
+                "http_request_duration_seconds_total",
+                "Total request duration in seconds",
+                "counter",
+                dur_samples,
+            )
+        )
 
     # Database metrics (use a fresh session)
     try:
         async for session in get_session():
             # Restaurants total
-            restaurants_total = (await session.execute(
-                select(func.count()).select_from(Restaurant)
-            )).scalar() or 0
-            sections.append(_format_metric(
-                "restaurants_total", "Total number of restaurants", "gauge",
-                [("", float(restaurants_total))],
-            ))
+            restaurants_total = (
+                await session.execute(select(func.count()).select_from(Restaurant))
+            ).scalar() or 0
+            sections.append(
+                _format_metric(
+                    "restaurants_total",
+                    "Total number of restaurants",
+                    "gauge",
+                    [("", float(restaurants_total))],
+                )
+            )
 
             # Leads total
-            leads_total = (await session.execute(
-                select(func.count()).select_from(Lead)
-            )).scalar() or 0
-            sections.append(_format_metric(
-                "leads_total", "Total number of leads", "gauge",
-                [("", float(leads_total))],
-            ))
+            leads_total = (
+                await session.execute(select(func.count()).select_from(Lead))
+            ).scalar() or 0
+            sections.append(
+                _format_metric(
+                    "leads_total",
+                    "Total number of leads",
+                    "gauge",
+                    [("", float(leads_total))],
+                )
+            )
 
             # Active campaigns
-            active_campaigns = (await session.execute(
-                select(func.count()).select_from(OutreachCampaign).where(
-                    OutreachCampaign.status == "active"
+            active_campaigns = (
+                await session.execute(
+                    select(func.count())
+                    .select_from(OutreachCampaign)
+                    .where(OutreachCampaign.status == "active")
                 )
-            )).scalar() or 0
-            sections.append(_format_metric(
-                "active_campaigns", "Number of active outreach campaigns", "gauge",
-                [("", float(active_campaigns))],
-            ))
+            ).scalar() or 0
+            sections.append(
+                _format_metric(
+                    "active_campaigns",
+                    "Number of active outreach campaigns",
+                    "gauge",
+                    [("", float(active_campaigns))],
+                )
+            )
 
             # Average ICP score
-            avg_icp = (await session.execute(
-                select(func.avg(ICPScore.total_icp_score))
-            )).scalar() or 0.0
-            sections.append(_format_metric(
-                "icp_scores_avg", "Average ICP score across all restaurants", "gauge",
-                [("", round(float(avg_icp), 2))],
-            ))
+            avg_icp = (
+                await session.execute(select(func.avg(ICPScore.total_icp_score)))
+            ).scalar() or 0.0
+            sections.append(
+                _format_metric(
+                    "icp_scores_avg",
+                    "Average ICP score across all restaurants",
+                    "gauge",
+                    [("", round(float(avg_icp), 2))],
+                )
+            )
 
             break  # only need one session iteration
     except Exception as exc:

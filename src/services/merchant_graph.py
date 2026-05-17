@@ -77,7 +77,9 @@ async def ensure_entity(session: AsyncSession, restaurant_id: UUID) -> MerchantE
 
 
 async def build_relationships_for_entity(
-    session: AsyncSession, entity_id: UUID, max_rels: int = 20,
+    session: AsyncSession,
+    entity_id: UUID,
+    max_rels: int = 20,
 ) -> list[MerchantRelationship]:
     """Build relationships for a merchant entity based on shared attributes."""
     entity = await session.get(MerchantEntity, entity_id)
@@ -103,7 +105,11 @@ async def build_relationships_for_entity(
         )
         for peer in peers.scalars().all():
             rel = await _upsert_relationship(
-                session, entity_id, peer.id, REL_SAME_NEIGHBORHOOD, 0.8,
+                session,
+                entity_id,
+                peer.id,
+                REL_SAME_NEIGHBORHOOD,
+                0.8,
             )
             if rel:
                 new_rels.append(rel)
@@ -122,7 +128,11 @@ async def build_relationships_for_entity(
             )
             for peer in peers.scalars().all():
                 rel = await _upsert_relationship(
-                    session, entity_id, peer.id, REL_SAME_CUISINE, 0.6,
+                    session,
+                    entity_id,
+                    peer.id,
+                    REL_SAME_CUISINE,
+                    0.6,
                     metadata={"cuisine": cuisine},
                 )
                 if rel:
@@ -141,7 +151,11 @@ async def build_relationships_for_entity(
         )
         for peer in peers.scalars().all():
             rel = await _upsert_relationship(
-                session, entity_id, peer.id, REL_SAME_CHAIN, 1.0,
+                session,
+                entity_id,
+                peer.id,
+                REL_SAME_CHAIN,
+                1.0,
             )
             if rel:
                 new_rels.append(rel)
@@ -152,8 +166,10 @@ async def build_relationships_for_entity(
 
 async def _upsert_relationship(
     session: AsyncSession,
-    source_id: UUID, target_id: UUID,
-    rel_type: str, strength: float,
+    source_id: UUID,
+    target_id: UUID,
+    rel_type: str,
+    strength: float,
     metadata: dict | None = None,
 ) -> MerchantRelationship | None:
     """Create relationship if it doesn't exist."""
@@ -212,14 +228,18 @@ async def query_graph(
     connected_ids = set()
     edges = []
     for rel in relationships:
-        peer_id = rel.target_entity_id if rel.source_entity_id == entity_id else rel.source_entity_id
+        peer_id = (
+            rel.target_entity_id if rel.source_entity_id == entity_id else rel.source_entity_id
+        )
         connected_ids.add(peer_id)
-        edges.append({
-            "relationship_type": rel.relationship_type,
-            "strength": rel.strength,
-            "peer_entity_id": str(peer_id),
-            "metadata": rel.metadata_,
-        })
+        edges.append(
+            {
+                "relationship_type": rel.relationship_type,
+                "strength": rel.strength,
+                "peer_entity_id": str(peer_id),
+                "metadata": rel.metadata_,
+            }
+        )
 
     # Fetch connected entities with restaurants
     connected = []
@@ -231,15 +251,17 @@ async def query_graph(
         )
         for peer in peer_result.unique().scalars().all():
             r = peer.restaurant
-            connected.append({
-                "entity_id": str(peer.id),
-                "restaurant_id": str(peer.restaurant_id),
-                "name": r.name if r else None,
-                "city": r.city if r else None,
-                "zip_code": r.zip_code if r else None,
-                "tags": peer.tags,
-                "enrichment": peer.enrichment_data,
-            })
+            connected.append(
+                {
+                    "entity_id": str(peer.id),
+                    "restaurant_id": str(peer.restaurant_id),
+                    "name": r.name if r else None,
+                    "city": r.city if r else None,
+                    "zip_code": r.zip_code if r else None,
+                    "tags": peer.tags,
+                    "enrichment": peer.enrichment_data,
+                }
+            )
 
     return {
         "entity": {
@@ -258,9 +280,7 @@ async def query_graph(
 
 async def build_graph_for_zip(session: AsyncSession, zip_code: str) -> int:
     """Build graph entities and relationships for all restaurants in a zip code."""
-    result = await session.execute(
-        select(Restaurant.id).where(Restaurant.zip_code == zip_code)
-    )
+    result = await session.execute(select(Restaurant.id).where(Restaurant.zip_code == zip_code))
     restaurant_ids = [r[0] for r in result.all()]
 
     count = 0

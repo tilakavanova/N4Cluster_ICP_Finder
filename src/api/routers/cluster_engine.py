@@ -45,7 +45,9 @@ class LaunchCampaignBody(BaseModel):
 
 
 class FeedbackBody(BaseModel):
-    feedback_type: str = Field(..., pattern="^(expansion_success|expansion_failure|quality_rating)$")
+    feedback_type: str = Field(
+        ..., pattern="^(expansion_success|expansion_failure|quality_rating)$"
+    )
     details: dict | None = None
     submitted_by: str = "system"
 

@@ -28,14 +28,14 @@ class ICPScorer:
 
     def __init__(self):
         self.weights = {
-            "independent": settings.weight_independent,           # 15%
+            "independent": settings.weight_independent,  # 15%
             "platform_dependency": settings.weight_platform_dependency,  # 20%
-            "pos": settings.weight_pos,                           # 12%
-            "density": settings.weight_density,                   # 12%
-            "volume": settings.weight_volume,                     # 15%
-            "cuisine_fit": settings.weight_cuisine_fit,           # 10%
-            "price_point": settings.weight_price_point,           # 8%
-            "engagement": settings.weight_engagement,             # 8%
+            "pos": settings.weight_pos,  # 12%
+            "density": settings.weight_density,  # 12%
+            "volume": settings.weight_volume,  # 15%
+            "cuisine_fit": settings.weight_cuisine_fit,  # 10%
+            "price_point": settings.weight_price_point,  # 8%
+            "engagement": settings.weight_engagement,  # 8%
             "communication_engagement": settings.weight_communication_engagement,  # 0% default (NIF-236)
         }
 
@@ -120,8 +120,7 @@ class ICPScorer:
 
         # Weighted composite score (0-100)
         total_score = sum(
-            active_weights.get(k, 0.0) * (v if v is not None else 0.0)
-            for k, v in signals.items()
+            active_weights.get(k, 0.0) * (v if v is not None else 0.0) for k, v in signals.items()
         )
 
         # Apply disqualifier penalties

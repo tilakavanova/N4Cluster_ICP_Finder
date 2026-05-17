@@ -26,6 +26,7 @@ def _get_redis() -> Any:
         return _redis_instance
     try:
         import redis as _redis_lib  # provided by celery[redis]
+
         client = _redis_lib.Redis.from_url(
             settings.redis_url,
             decode_responses=True,
@@ -77,8 +78,10 @@ def _track_tokens(provider: str, input_tokens: int, output_tokens: int) -> None:
     if day not in _in_memory_fallback:
         _in_memory_fallback.clear()  # drop stale days
         _in_memory_fallback[day] = {
-            "openai_input": 0, "openai_output": 0,
-            "anthropic_input": 0, "anthropic_output": 0,
+            "openai_input": 0,
+            "openai_output": 0,
+            "anthropic_input": 0,
+            "anthropic_output": 0,
         }
     _in_memory_fallback[day][f"{provider}_input"] += input_tokens
     _in_memory_fallback[day][f"{provider}_output"] += output_tokens
@@ -175,12 +178,14 @@ class LLMClient:
     def _get_openai(self):
         if self._openai_client is None and settings.openai_api_key:
             from openai import AsyncOpenAI
+
             self._openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
         return self._openai_client
 
     def _get_anthropic(self):
         if self._anthropic_client is None and settings.anthropic_api_key:
             from anthropic import AsyncAnthropic
+
             self._anthropic_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
         return self._anthropic_client
 
@@ -211,7 +216,10 @@ class LLMClient:
         response = await client.chat.completions.create(
             model=settings.llm_model,
             messages=[
-                {"role": "system", "content": "You are a data extraction assistant. Return only valid JSON."},
+                {
+                    "role": "system",
+                    "content": "You are a data extraction assistant. Return only valid JSON.",
+                },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,

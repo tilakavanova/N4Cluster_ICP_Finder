@@ -32,9 +32,12 @@ router = APIRouter(
 
 # -- Pydantic schemas ---------------------------------------------------------
 
+
 class SuggestAdjustmentsRequest(BaseModel):
     period: str = Field(..., description="Period string, e.g. '2026-04' or '2026-W15'")
-    profile_id: UUID | None = Field(None, description="Scoring profile ID (uses active default if omitted)")
+    profile_id: UUID | None = Field(
+        None, description="Scoring profile ID (uses active default if omitted)"
+    )
 
 
 class WeightAdjustment(BaseModel):
@@ -49,6 +52,7 @@ class ApplyAdjustmentsRequest(BaseModel):
 
 
 # -- Endpoints ----------------------------------------------------------------
+
 
 @router.get("/report")
 async def feedback_report(

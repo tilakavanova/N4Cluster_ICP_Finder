@@ -58,8 +58,9 @@ async def compute_neighborhood_score(
 
     # Top cuisines
     cuisine_result = await session.execute(
-        select(func.unnest(Restaurant.cuisine_type).label("cuisine"))
-        .where(Restaurant.zip_code == zip_code)
+        select(func.unnest(Restaurant.cuisine_type).label("cuisine")).where(
+            Restaurant.zip_code == zip_code
+        )
     )
     cuisines = [r.cuisine for r in cuisine_result.all() if r.cuisine]
     top_cuisines = [c for c, _ in Counter(cuisines).most_common(5)]
@@ -74,7 +75,9 @@ async def compute_neighborhood_score(
     icp_signal = (avg_icp / 100.0) * 30  # up to 30 pts
     independence_signal = independent_ratio * 25  # up to 25 pts
     delivery_signal = delivery_coverage * 20  # up to 20 pts
-    opportunity_score = round(density_signal + icp_signal + independence_signal + delivery_signal, 2)
+    opportunity_score = round(
+        density_signal + icp_signal + independence_signal + delivery_signal, 2
+    )
 
     return {
         "zip_code": zip_code,
@@ -98,9 +101,7 @@ async def refresh_neighborhood(session: AsyncSession, zip_code: str) -> Neighbor
     if not data:
         return None
 
-    result = await session.execute(
-        select(Neighborhood).where(Neighborhood.zip_code == zip_code)
-    )
+    result = await session.execute(select(Neighborhood).where(Neighborhood.zip_code == zip_code))
     neighborhood = result.scalar_one_or_none()
 
     if neighborhood:
@@ -161,25 +162,25 @@ async def compare_neighborhoods(
     zip_codes: list[str],
 ) -> dict:
     """Compare multiple neighborhoods side by side (NIF-121)."""
-    result = await session.execute(
-        select(Neighborhood).where(Neighborhood.zip_code.in_(zip_codes))
-    )
+    result = await session.execute(select(Neighborhood).where(Neighborhood.zip_code.in_(zip_codes)))
     neighborhoods = {n.zip_code: n for n in result.scalars().all()}
 
     comparisons = []
     for zc in zip_codes:
         n = neighborhoods.get(zc)
         if n:
-            comparisons.append({
-                "zip_code": n.zip_code,
-                "name": n.name,
-                "restaurant_count": n.restaurant_count,
-                "avg_icp_score": n.avg_icp_score,
-                "opportunity_score": n.opportunity_score,
-                "independent_ratio": n.independent_ratio,
-                "delivery_coverage": n.delivery_coverage,
-                "top_cuisines": n.top_cuisines or [],
-            })
+            comparisons.append(
+                {
+                    "zip_code": n.zip_code,
+                    "name": n.name,
+                    "restaurant_count": n.restaurant_count,
+                    "avg_icp_score": n.avg_icp_score,
+                    "opportunity_score": n.opportunity_score,
+                    "independent_ratio": n.independent_ratio,
+                    "delivery_coverage": n.delivery_coverage,
+                    "top_cuisines": n.top_cuisines or [],
+                }
+            )
         else:
             comparisons.append({"zip_code": zc, "error": "not_found"})
 
@@ -187,7 +188,13 @@ async def compare_neighborhoods(
     valid = [c for c in comparisons if "error" not in c]
     winners = {}
     if valid:
-        for metric in ["opportunity_score", "avg_icp_score", "restaurant_count", "independent_ratio", "delivery_coverage"]:
+        for metric in [
+            "opportunity_score",
+            "avg_icp_score",
+            "restaurant_count",
+            "independent_ratio",
+            "delivery_coverage",
+        ]:
             best = max(valid, key=lambda x: x.get(metric, 0))
             winners[metric] = best["zip_code"]
 
@@ -200,9 +207,7 @@ async def compare_neighborhoods(
 async def refresh_all_neighborhoods(session: AsyncSession) -> int:
     """Recompute scores for all zip codes with restaurants."""
     result = await session.execute(
-        select(Restaurant.zip_code)
-        .where(Restaurant.zip_code.isnot(None))
-        .distinct()
+        select(Restaurant.zip_code).where(Restaurant.zip_code.isnot(None)).distinct()
     )
     zip_codes = [r[0] for r in result.all()]
 

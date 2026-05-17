@@ -18,7 +18,7 @@ logger = get_logger("tcpa")
 
 # TCPA quiet-hours window: before 8 AM or after 9 PM in the recipient's local timezone
 QUIET_HOUR_START = 21  # 9 PM
-QUIET_HOUR_END = 8     # 8 AM
+QUIET_HOUR_END = 8  # 8 AM
 
 
 def check_quiet_hours(timezone_str: str | None) -> bool:
@@ -33,6 +33,7 @@ def check_quiet_hours(timezone_str: str | None) -> bool:
     """
     try:
         import zoneinfo
+
         tz = zoneinfo.ZoneInfo(timezone_str) if timezone_str else UTC
     except Exception:
         tz = UTC

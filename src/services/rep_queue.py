@@ -135,7 +135,7 @@ async def complete_item(
     item.status = "completed"
     item.completed_at = now
     if outcome:
-        ctx = item.context_data or {}
+        ctx: dict = item.context_data or {}
         ctx["outcome"] = outcome
         item.context_data = ctx
     await session.flush()
@@ -158,7 +158,7 @@ async def skip_item(
 
     item.status = "skipped"
     if reason:
-        ctx = item.context_data or {}
+        ctx: dict = item.context_data or {}
         ctx["skip_reason"] = reason
         item.context_data = ctx
     await session.flush()
@@ -172,9 +172,7 @@ async def get_rep_ranking(
     rep_id: str,
 ) -> RepQueueRanking:
     """Get or create rep performance ranking, recalculating stats."""
-    result = await session.execute(
-        select(RepQueueRanking).where(RepQueueRanking.rep_id == rep_id)
-    )
+    result = await session.execute(select(RepQueueRanking).where(RepQueueRanking.rep_id == rep_id))
     ranking = result.scalar_one_or_none()
 
     if not ranking:
@@ -247,10 +245,9 @@ async def populate_queue(
     limit: int = 50,
 ) -> dict:
     """Auto-populate a rep's queue from restaurants matching filters."""
-    query = (
-        select(Restaurant.id, ICPScore.total_icp_score, ICPScore.fit_label, ICPScore.engagement_recency)
-        .outerjoin(ICPScore, ICPScore.restaurant_id == Restaurant.id)
-    )
+    query = select(
+        Restaurant.id, ICPScore.total_icp_score, ICPScore.fit_label, ICPScore.engagement_recency
+    ).outerjoin(ICPScore, ICPScore.restaurant_id == Restaurant.id)
 
     if filters:
         if filters.get("city"):
@@ -267,13 +264,10 @@ async def populate_queue(
             query = query.where(Restaurant.is_chain == filters["is_chain"])
 
     # Exclude restaurants already in this rep's queue (pending/claimed)
-    existing_subq = (
-        select(RepQueueItem.restaurant_id)
-        .where(
-            and_(
-                RepQueueItem.rep_id == rep_id,
-                RepQueueItem.status.in_(["pending", "claimed"]),
-            )
+    existing_subq = select(RepQueueItem.restaurant_id).where(
+        and_(
+            RepQueueItem.rep_id == rep_id,
+            RepQueueItem.status.in_(["pending", "claimed"]),
         )
     )
     query = query.where(Restaurant.id.notin_(existing_subq))
@@ -330,32 +324,32 @@ async def _fetch_engagement_data(
 
     # Fetch tracker events via lead_id if available
     if lead_id:
-        result = await session.execute(
-            select(TrackerEvent).where(TrackerEvent.lead_id == lead_id)
-        )
+        result = await session.execute(select(TrackerEvent).where(TrackerEvent.lead_id == lead_id))
         for ev in result.scalars().all():
-            tracker_events.append({
-                "event_type": ev.event_type,
-                "channel": ev.channel,
-                "occurred_at": ev.occurred_at,
-                "event_metadata": ev.event_metadata or {},
-            })
+            tracker_events.append(
+                {
+                    "event_type": ev.event_type,
+                    "channel": ev.channel,
+                    "occurred_at": ev.occurred_at,
+                    "event_metadata": ev.event_metadata or {},
+                }
+            )
 
     # Fetch outreach activities via outreach targets for this restaurant
-    target_q = select(OutreachTarget.id).where(
-        OutreachTarget.restaurant_id == restaurant_id
-    )
+    target_q = select(OutreachTarget.id).where(OutreachTarget.restaurant_id == restaurant_id)
     result = await session.execute(
-        select(OutreachActivity).where(
-            OutreachActivity.target_id.in_(target_q)
-        ).order_by(OutreachActivity.performed_at.desc())
+        select(OutreachActivity)
+        .where(OutreachActivity.target_id.in_(target_q))
+        .order_by(OutreachActivity.performed_at.desc())
     )
     for act in result.scalars().all():
-        outreach_activities.append({
-            "activity_type": act.activity_type,
-            "outcome": act.outcome,
-            "performed_at": act.performed_at,
-        })
+        outreach_activities.append(
+            {
+                "activity_type": act.activity_type,
+                "outcome": act.outcome,
+                "performed_at": act.performed_at,
+            }
+        )
 
     return tracker_events, outreach_activities
 
@@ -382,7 +376,9 @@ def _determine_action(
         "recommended_action": action,
         "intent_label": intent_label,
         "last_activity_type": last_activity_type,
-        "days_since_contact": round(days_since_contact, 1) if days_since_contact is not None else None,
+        "days_since_contact": round(days_since_contact, 1)
+        if days_since_contact is not None
+        else None,
         "icp_score": icp_score,
         "fit_label": fit_label,
     }
@@ -393,12 +389,14 @@ async def _enrich_item_with_action(
     item: RepQueueItem,
 ) -> dict:
     """Compute next-best-action for a single queue item and return enrichment data."""
-    ctx = item.context_data or {}
+    ctx: dict = item.context_data or {}
     icp_score = float(ctx.get("icp_score", 0.0))
     fit_label = ctx.get("fit_label", "unknown")
 
     tracker_events, outreach_activities = await _fetch_engagement_data(
-        session, item.restaurant_id, item.lead_id,
+        session,
+        item.restaurant_id,
+        item.lead_id,
     )
 
     # Compute intent score
@@ -419,8 +417,11 @@ async def _enrich_item_with_action(
             days_since_contact = (now - performed).total_seconds() / 86400.0
 
     action_data = _determine_action(
-        intent_label, last_activity_type, days_since_contact,
-        icp_score, fit_label,
+        intent_label,
+        last_activity_type,
+        days_since_contact,
+        icp_score,
+        fit_label,
     )
     action_data["intent_score"] = score_val
 

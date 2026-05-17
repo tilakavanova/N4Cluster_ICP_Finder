@@ -69,38 +69,44 @@ async def _import_and_score(data: list[dict], session: AsyncSession) -> dict:
             cuisine = [c.strip() for c in cuisine.split(",")]
 
         # Upsert restaurant
-        stmt = insert(Restaurant).values(
-            name=name,
-            address=address,
-            city=entry.get("city"),
-            state=entry.get("state"),
-            zip_code=entry.get("zip_code"),
-            lat=entry.get("lat"),
-            lng=entry.get("lng"),
-            phone=entry.get("phone"),
-            website=entry.get("website"),
-            cuisine_type=cuisine,
-            is_chain=entry.get("is_chain", False),
-            chain_name=entry.get("chain_name"),
-        ).on_conflict_do_update(
-            constraint="uq_restaurant_name_address",
-            set_={
-                "city": entry.get("city"),
-                "state": entry.get("state"),
-                "lat": entry.get("lat"),
-                "lng": entry.get("lng"),
-                "phone": entry.get("phone"),
-                "website": entry.get("website"),
-                "cuisine_type": cuisine,
-                "updated_at": datetime.now(UTC),
-            },
+        stmt = (
+            insert(Restaurant)
+            .values(
+                name=name,
+                address=address,
+                city=entry.get("city"),
+                state=entry.get("state"),
+                zip_code=entry.get("zip_code"),
+                lat=entry.get("lat"),
+                lng=entry.get("lng"),
+                phone=entry.get("phone"),
+                website=entry.get("website"),
+                cuisine_type=cuisine,
+                is_chain=entry.get("is_chain", False),
+                chain_name=entry.get("chain_name"),
+            )
+            .on_conflict_do_update(
+                constraint="uq_restaurant_name_address",
+                set_={
+                    "city": entry.get("city"),
+                    "state": entry.get("state"),
+                    "lat": entry.get("lat"),
+                    "lng": entry.get("lng"),
+                    "phone": entry.get("phone"),
+                    "website": entry.get("website"),
+                    "cuisine_type": cuisine,
+                    "updated_at": datetime.now(UTC),
+                },
+            )
         )
         await session.execute(stmt)
 
         # Fetch the restaurant
-        rest = (await session.execute(
-            select(Restaurant).where(Restaurant.name == name, Restaurant.address == address)
-        )).scalar_one_or_none()
+        rest = (
+            await session.execute(
+                select(Restaurant).where(Restaurant.name == name, Restaurant.address == address)
+            )
+        ).scalar_one_or_none()
 
         if not rest:
             continue
@@ -120,21 +126,25 @@ async def _import_and_score(data: list[dict], session: AsyncSession) -> dict:
         source_records = []
         if entry.get("has_delivery"):
             for platform in entry.get("delivery_platforms", ["unknown"]):
-                source_records.append({
-                    "source": platform,
-                    "has_delivery": True,
-                    "delivery_platform": platform,
-                    "extracted_data": entry,
-                })
+                source_records.append(
+                    {
+                        "source": platform,
+                        "has_delivery": True,
+                        "delivery_platform": platform,
+                        "extracted_data": entry,
+                    }
+                )
         if entry.get("has_pos"):
-            source_records.append({
-                "source": "website",
-                "raw_data": {"raw_text": f"Powered by {entry.get('pos_provider', 'POS')}"},
-                "extracted_data": {
-                    "has_pos": True,
-                    "pos_provider": entry.get("pos_provider"),
-                },
-            })
+            source_records.append(
+                {
+                    "source": "website",
+                    "raw_data": {"raw_text": f"Powered by {entry.get('pos_provider', 'POS')}"},
+                    "extracted_data": {
+                        "has_pos": True,
+                        "pos_provider": entry.get("pos_provider"),
+                    },
+                }
+            )
         if not source_records:
             source_records.append({"source": "manual_import", "extracted_data": entry})
 
@@ -151,36 +161,40 @@ async def _import_and_score(data: list[dict], session: AsyncSession) -> dict:
         score = icp_scorer.score_restaurant(restaurant_dict, source_records, density_score=density)
 
         # Upsert ICP score
-        score_stmt = insert(ICPScore).values(
-            restaurant_id=rest.id,
-            is_independent=score["is_independent"],
-            has_delivery=score["has_delivery"],
-            delivery_platforms=score["delivery_platforms"],
-            has_pos=score["has_pos"],
-            pos_provider=score["pos_provider"],
-            geo_density_score=score["geo_density_score"],
-            review_volume=score["review_volume"],
-            rating_avg=score["rating_avg"],
-            total_icp_score=score["total_icp_score"],
-            fit_label=score["fit_label"],
-            scoring_version=score["scoring_version"],
-            scored_at=datetime.now(UTC),
-        ).on_conflict_do_update(
-            index_elements=["restaurant_id"],
-            set_={
-                "is_independent": score["is_independent"],
-                "has_delivery": score["has_delivery"],
-                "delivery_platforms": score["delivery_platforms"],
-                "has_pos": score["has_pos"],
-                "pos_provider": score["pos_provider"],
-                "geo_density_score": score["geo_density_score"],
-                "review_volume": score["review_volume"],
-                "rating_avg": score["rating_avg"],
-                "total_icp_score": score["total_icp_score"],
-                "fit_label": score["fit_label"],
-                "scoring_version": score["scoring_version"],
-                "scored_at": datetime.now(UTC),
-            },
+        score_stmt = (
+            insert(ICPScore)
+            .values(
+                restaurant_id=rest.id,
+                is_independent=score["is_independent"],
+                has_delivery=score["has_delivery"],
+                delivery_platforms=score["delivery_platforms"],
+                has_pos=score["has_pos"],
+                pos_provider=score["pos_provider"],
+                geo_density_score=score["geo_density_score"],
+                review_volume=score["review_volume"],
+                rating_avg=score["rating_avg"],
+                total_icp_score=score["total_icp_score"],
+                fit_label=score["fit_label"],
+                scoring_version=score["scoring_version"],
+                scored_at=datetime.now(UTC),
+            )
+            .on_conflict_do_update(
+                index_elements=["restaurant_id"],
+                set_={
+                    "is_independent": score["is_independent"],
+                    "has_delivery": score["has_delivery"],
+                    "delivery_platforms": score["delivery_platforms"],
+                    "has_pos": score["has_pos"],
+                    "pos_provider": score["pos_provider"],
+                    "geo_density_score": score["geo_density_score"],
+                    "review_volume": score["review_volume"],
+                    "rating_avg": score["rating_avg"],
+                    "total_icp_score": score["total_icp_score"],
+                    "fit_label": score["fit_label"],
+                    "scoring_version": score["scoring_version"],
+                    "scored_at": datetime.now(UTC),
+                },
+            )
         )
         await session.execute(score_stmt)
         scored += 1

@@ -107,22 +107,24 @@ async def find_cached_restaurants(
     for r in candidates:
         dist = haversine_miles(center_lat, center_lng, r.lat, r.lng)
         if dist <= radius_miles:
-            results.append({
-                "name": r.name,
-                "address": r.address,
-                "city": r.city,
-                "state": r.state,
-                "zip_code": r.zip_code,
-                "lat": r.lat,
-                "lng": r.lng,
-                "phone": r.phone,
-                "website": r.website,
-                "cuisine": ", ".join(r.cuisine_type or []),
-                "rating": None,
-                "review_count": None,
-                "distance_miles": round(dist, 2),
-                "source": "google_maps",
-            })
+            results.append(
+                {
+                    "name": r.name,
+                    "address": r.address,
+                    "city": r.city,
+                    "state": r.state,
+                    "zip_code": r.zip_code,
+                    "lat": r.lat,
+                    "lng": r.lng,
+                    "phone": r.phone,
+                    "website": r.website,
+                    "cuisine": ", ".join(r.cuisine_type or []),
+                    "rating": None,
+                    "review_count": None,
+                    "distance_miles": round(dist, 2),
+                    "source": "google_maps",
+                }
+            )
 
     results.sort(key=lambda x: x["distance_miles"])
     return results[:limit], "cached"
@@ -171,37 +173,43 @@ async def crawl_and_persist(
         cuisine_list = [cuisine_raw] if cuisine_raw and cuisine_raw != "Restaurant" else []
 
         try:
-            stmt = insert(Restaurant).values(
-                name=name,
-                address=address or None,
-                city=record.get("city"),
-                state=record.get("state"),
-                zip_code=record.get("zip_code"),
-                lat=record.get("lat"),
-                lng=record.get("lng"),
-                phone=record.get("phone"),
-                website=record.get("website"),
-                cuisine_type=cuisine_list,
-            ).on_conflict_do_update(
-                constraint="uq_restaurant_name_address",
-                set_={
-                    "lat": record.get("lat"),
-                    "lng": record.get("lng"),
-                    "phone": record.get("phone"),
-                    "website": record.get("website"),
-                    "updated_at": datetime.now(UTC),
-                },
+            stmt = (
+                insert(Restaurant)
+                .values(
+                    name=name,
+                    address=address or None,
+                    city=record.get("city"),
+                    state=record.get("state"),
+                    zip_code=record.get("zip_code"),
+                    lat=record.get("lat"),
+                    lng=record.get("lng"),
+                    phone=record.get("phone"),
+                    website=record.get("website"),
+                    cuisine_type=cuisine_list,
+                )
+                .on_conflict_do_update(
+                    constraint="uq_restaurant_name_address",
+                    set_={
+                        "lat": record.get("lat"),
+                        "lng": record.get("lng"),
+                        "phone": record.get("phone"),
+                        "website": record.get("website"),
+                        "updated_at": datetime.now(UTC),
+                    },
+                )
             )
             await session.execute(stmt)
             await session.flush()
 
             # Fetch persisted restaurant for source record
-            rest = (await session.execute(
-                select(Restaurant).where(
-                    Restaurant.name == name,
-                    Restaurant.address == (address or None),
+            rest = (
+                await session.execute(
+                    select(Restaurant).where(
+                        Restaurant.name == name,
+                        Restaurant.address == (address or None),
+                    )
                 )
-            )).scalar_one_or_none()
+            ).scalar_one_or_none()
 
             if rest:
                 sr = SourceRecord(
@@ -213,22 +221,24 @@ async def crawl_and_persist(
                 )
                 session.add(sr)
 
-            persisted.append({
-                "name": name,
-                "address": address,
-                "city": record.get("city"),
-                "state": record.get("state"),
-                "zip_code": record.get("zip_code"),
-                "lat": record.get("lat"),
-                "lng": record.get("lng"),
-                "phone": record.get("phone"),
-                "website": record.get("website"),
-                "cuisine": cuisine_raw,
-                "rating": record.get("rating"),
-                "review_count": record.get("review_count"),
-                "distance_miles": None,
-                "source": "google_maps",
-            })
+            persisted.append(
+                {
+                    "name": name,
+                    "address": address,
+                    "city": record.get("city"),
+                    "state": record.get("state"),
+                    "zip_code": record.get("zip_code"),
+                    "lat": record.get("lat"),
+                    "lng": record.get("lng"),
+                    "phone": record.get("phone"),
+                    "website": record.get("website"),
+                    "cuisine": cuisine_raw,
+                    "rating": record.get("rating"),
+                    "review_count": record.get("review_count"),
+                    "distance_miles": None,
+                    "source": "google_maps",
+                }
+            )
         except Exception as e:
             logger.warning("persist_error", name=name, error=str(e))
             continue

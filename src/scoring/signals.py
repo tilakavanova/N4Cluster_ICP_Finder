@@ -9,17 +9,52 @@ logger = get_logger("scoring.signals")
 
 # Known national chain restaurants — these are NOT ideal customers
 KNOWN_CHAINS = {
-    "mcdonald's", "burger king", "wendy's", "taco bell", "subway",
-    "domino's", "pizza hut", "papa john's", "kfc", "chick-fil-a",
-    "popeyes", "sonic", "arby's", "jack in the box", "panda express",
-    "chipotle", "five guys", "panera bread", "olive garden",
-    "applebee's", "chili's", "red lobster", "outback steakhouse",
-    "denny's", "ihop", "waffle house", "dunkin'", "starbucks",
-    "wingstop", "jimmy john's", "jersey mike's", "firehouse subs",
-    "sweetgreen", "cava", "shake shack", "in-n-out",
-    "el pollo loco", "del taco", "carl's jr", "hardee's",
-    "buffalo wild wings", "cracker barrel", "bob evans",
-    "golden corral", "texas roadhouse", "longhorn steakhouse",
+    "mcdonald's",
+    "burger king",
+    "wendy's",
+    "taco bell",
+    "subway",
+    "domino's",
+    "pizza hut",
+    "papa john's",
+    "kfc",
+    "chick-fil-a",
+    "popeyes",
+    "sonic",
+    "arby's",
+    "jack in the box",
+    "panda express",
+    "chipotle",
+    "five guys",
+    "panera bread",
+    "olive garden",
+    "applebee's",
+    "chili's",
+    "red lobster",
+    "outback steakhouse",
+    "denny's",
+    "ihop",
+    "waffle house",
+    "dunkin'",
+    "starbucks",
+    "wingstop",
+    "jimmy john's",
+    "jersey mike's",
+    "firehouse subs",
+    "sweetgreen",
+    "cava",
+    "shake shack",
+    "in-n-out",
+    "el pollo loco",
+    "del taco",
+    "carl's jr",
+    "hardee's",
+    "buffalo wild wings",
+    "cracker barrel",
+    "bob evans",
+    "golden corral",
+    "texas roadhouse",
+    "longhorn steakhouse",
 }
 
 # Modern cloud-based POS systems — preferred for integration
@@ -27,18 +62,30 @@ MODERN_POS = {"toast", "square", "clover", "revel", "spoton", "touchbistro"}
 LEGACY_POS = {"aloha", "micros", "ncr silver", "heartland"}
 
 POS_PROVIDERS = {
-    "toast": "Toast", "square": "Square", "clover": "Clover",
-    "lightspeed": "Lightspeed", "aloha": "Aloha (NCR)",
-    "micros": "Oracle MICROS", "revel": "Revel Systems",
-    "touchbistro": "TouchBistro", "upserve": "Upserve",
-    "spoton": "SpotOn", "heartland": "Heartland",
-    "ncr silver": "NCR Silver", "shopify": "Shopify POS",
+    "toast": "Toast",
+    "square": "Square",
+    "clover": "Clover",
+    "lightspeed": "Lightspeed",
+    "aloha": "Aloha (NCR)",
+    "micros": "Oracle MICROS",
+    "revel": "Revel Systems",
+    "touchbistro": "TouchBistro",
+    "upserve": "Upserve",
+    "spoton": "SpotOn",
+    "heartland": "Heartland",
+    "ncr silver": "NCR Silver",
+    "shopify": "Shopify POS",
 }
 
 # Fine dining / ultra-premium indicators — penalized
 FINE_DINING_KEYWORDS = {
-    "fine dining", "upscale", "prix fixe", "tasting menu",
-    "michelin", "haute cuisine", "omakase",
+    "fine dining",
+    "upscale",
+    "prix fixe",
+    "tasting menu",
+    "michelin",
+    "haute cuisine",
+    "omakase",
 }
 
 
@@ -315,7 +362,11 @@ def communication_engagement_score(
 
         if at == "email_reply" or outcome == "replied":
             replies += 1
-        elif at == "meeting" or outcome in ("meeting_booked", "meeting_scheduled", "demo_scheduled"):
+        elif at == "meeting" or outcome in (
+            "meeting_booked",
+            "meeting_scheduled",
+            "demo_scheduled",
+        ):
             meetings += 1
 
     # Compute rates (avoid division by zero)
@@ -325,12 +376,7 @@ def communication_engagement_score(
     reply_rate = min(replies / max(total_activities, 1), 1.0)
     meeting_rate = min(meetings / max(total_activities, 1), 1.0)
 
-    score = (
-        0.30 * open_rate
-        + 0.30 * click_rate
-        + 0.25 * reply_rate
-        + 0.15 * meeting_rate
-    )
+    score = 0.30 * open_rate + 0.30 * click_rate + 0.25 * reply_rate + 0.15 * meeting_rate
     return min(round(score, 4), 1.0)
 
 
@@ -368,7 +414,16 @@ def intent_score(
     has_meeting = False
 
     # High-intent link keywords
-    _PRICING_KEYWORDS = {"pricing", "demo", "schedule", "book", "trial", "signup", "sign-up", "plan"}
+    _PRICING_KEYWORDS = {
+        "pricing",
+        "demo",
+        "schedule",
+        "book",
+        "trial",
+        "signup",
+        "sign-up",
+        "plan",
+    }
 
     for ev in events:
         et = (ev.get("event_type") or "").lower()
@@ -387,7 +442,9 @@ def intent_score(
         if at == "email_reply" or outcome == "replied":
             has_reply = True
         if at == "meeting" or outcome in (
-            "meeting_booked", "meeting_scheduled", "demo_scheduled",
+            "meeting_booked",
+            "meeting_scheduled",
+            "demo_scheduled",
         ):
             has_meeting = True
 

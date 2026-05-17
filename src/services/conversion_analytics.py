@@ -11,7 +11,14 @@ from src.utils.logging import get_logger
 
 logger = get_logger("conversion_analytics")
 
-VALID_EVENT_TYPES = {"discovered", "contacted", "demo_scheduled", "pilot_started", "converted", "churned"}
+VALID_EVENT_TYPES = {
+    "discovered",
+    "contacted",
+    "demo_scheduled",
+    "pilot_started",
+    "converted",
+    "churned",
+}
 
 
 async def record_event(
@@ -24,7 +31,9 @@ async def record_event(
 ) -> ConversionEvent:
     """Record a conversion funnel event (NIF-148)."""
     if event_type not in VALID_EVENT_TYPES:
-        raise ValueError(f"Invalid event_type '{event_type}'. Must be one of: {', '.join(sorted(VALID_EVENT_TYPES))}")
+        raise ValueError(
+            f"Invalid event_type '{event_type}'. Must be one of: {', '.join(sorted(VALID_EVENT_TYPES))}"
+        )
 
     event = ConversionEvent(
         restaurant_id=restaurant_id,
@@ -103,18 +112,22 @@ async def calculate_funnel(
 
     # Compute average days to convert
     # For restaurants that have both "discovered" and "converted" events in this period
-    avg_days_query = select(
-        func.avg(
-            extract("epoch", func.max(ConversionEvent.occurred_at))
-            - extract("epoch", func.min(ConversionEvent.occurred_at))
-        ) / 86400.0
-    ).where(
-        and_(
-            *base_filter,
-            ConversionEvent.event_type.in_(["discovered", "converted"]),
+    avg_days_query = (
+        select(
+            func.avg(
+                extract("epoch", func.max(ConversionEvent.occurred_at))
+                - extract("epoch", func.min(ConversionEvent.occurred_at))
+            )
+            / 86400.0
         )
-    ).group_by(ConversionEvent.restaurant_id).having(
-        func.count(func.distinct(ConversionEvent.event_type)) == 2
+        .where(
+            and_(
+                *base_filter,
+                ConversionEvent.event_type.in_(["discovered", "converted"]),
+            )
+        )
+        .group_by(ConversionEvent.restaurant_id)
+        .having(func.count(func.distinct(ConversionEvent.event_type)) == 2)
     )
     avg_result = await session.execute(select(func.avg(avg_days_query.subquery().c[0])))
     avg_days = avg_result.scalar() or 0.0
@@ -138,7 +151,9 @@ async def calculate_funnel(
     funnel.last_calculated_at = now
 
     await session.flush()
-    logger.info("funnel_calculated", period=period, zip_code=zip_code, conversion_rate=conversion_rate)
+    logger.info(
+        "funnel_calculated", period=period, zip_code=zip_code, conversion_rate=conversion_rate
+    )
     return funnel
 
 

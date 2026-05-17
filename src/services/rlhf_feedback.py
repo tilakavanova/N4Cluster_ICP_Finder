@@ -74,15 +74,12 @@ async def get_feedback_summary(
     agent_name: str,
 ) -> dict[str, Any]:
     """Get feedback summary stats for an agent."""
-    q = (
-        select(
-            func.count().label("total"),
-            func.avg(AgentFeedback.rating).label("avg_rating"),
-            func.min(AgentFeedback.rating).label("min_rating"),
-            func.max(AgentFeedback.rating).label("max_rating"),
-        )
-        .where(AgentFeedback.agent_name == agent_name)
-    )
+    q = select(
+        func.count().label("total"),
+        func.avg(AgentFeedback.rating).label("avg_rating"),
+        func.min(AgentFeedback.rating).label("min_rating"),
+        func.max(AgentFeedback.rating).label("max_rating"),
+    ).where(AgentFeedback.agent_name == agent_name)
     row = (await session.execute(q)).one()
 
     return {

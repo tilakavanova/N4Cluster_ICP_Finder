@@ -28,7 +28,9 @@ router = APIRouter(prefix="/leads", tags=["leads"], dependencies=[Depends(requir
 
 
 @router.post("", response_model=LeadResponse, status_code=201)
-async def create_lead(request: Request, payload: LeadCreate, session: AsyncSession = Depends(get_session)):
+async def create_lead(
+    request: Request, payload: LeadCreate, session: AsyncSession = Depends(get_session)
+):
     """Create a new lead. Deduplicates by email — updates existing lead if found."""
     # Check for existing lead with same email
     existing = await session.execute(
@@ -208,9 +210,7 @@ async def erase_lead_pii(
 
     # ── 2. Delete TrackerEvents linked to this lead ──────────────────────────
     te_result = await session.execute(
-        delete(TrackerEvent)
-        .where(TrackerEvent.lead_id == lead_id)
-        .returning(TrackerEvent.id)
+        delete(TrackerEvent).where(TrackerEvent.lead_id == lead_id).returning(TrackerEvent.id)
     )
     tracker_events_deleted = len(te_result.all())
 

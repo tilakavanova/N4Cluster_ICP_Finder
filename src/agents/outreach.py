@@ -25,8 +25,8 @@ CHANNEL_PRIORITY = {
 # Send-time windows by day of week (hour ranges, UTC)
 OPTIMAL_SEND_WINDOWS = {
     "email": {"start_hour": 9, "end_hour": 11},  # 9-11 AM local
-    "sms": {"start_hour": 10, "end_hour": 14},    # 10 AM - 2 PM local
-    "call": {"start_hour": 14, "end_hour": 16},   # 2-4 PM local
+    "sms": {"start_hour": 10, "end_hour": 14},  # 10 AM - 2 PM local
+    "call": {"start_hour": 14, "end_hour": 16},  # 2-4 PM local
 }
 
 
@@ -54,7 +54,9 @@ class OutreachAgent(BaseAgent):
             return AgentResult(success=False, errors=["lead_id or restaurant_id required"])
 
         # Channel selection
-        channel = preferred_channel if preferred_channel in CHANNEL_PRIORITY else _select_channel(context)
+        channel = (
+            preferred_channel if preferred_channel in CHANNEL_PRIORITY else _select_channel(context)
+        )
 
         # Send-time prediction
         send_window = OPTIMAL_SEND_WINDOWS.get(channel, OPTIMAL_SEND_WINDOWS["email"])

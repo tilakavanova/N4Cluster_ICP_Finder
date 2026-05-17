@@ -51,37 +51,45 @@ async def _score_restaurants_inline(session: AsyncSession) -> int:
     """Score all unscored restaurants. Runs after crawl."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    from src.db.models import ICPScore
-    from src.db.models import SourceRecord as SR
+    from src.db.models import ICPScore, SourceRecord
     from src.scoring.geo_density import compute_density_scores
     from src.scoring.icp_scorer import icp_scorer
 
     # Find restaurants without ICP scores
     scored_ids = select(ICPScore.restaurant_id)
-    result = await session.execute(
-        select(Restaurant).where(Restaurant.id.notin_(scored_ids))
-    )
+    result = await session.execute(select(Restaurant).where(Restaurant.id.notin_(scored_ids)))
     unscored = result.scalars().all()
     if not unscored:
         return 0
 
     rest_ids = [r.id for r in unscored]
-    sr_result = await session.execute(select(SR).where(SR.restaurant_id.in_(rest_ids)))
+    sr_result = await session.execute(
+        select(SourceRecord).where(SourceRecord.restaurant_id.in_(rest_ids))
+    )
     all_records = sr_result.scalars().all()
 
-    sr_map = {}
+    sr_map: dict = {}
     for sr in all_records:
         rid = str(sr.restaurant_id)
-        sr_map.setdefault(rid, []).append({
-            "source": sr.source,
-            "raw_data": sr.raw_data,
-            "extracted_data": sr.extracted_data,
-        })
+        sr_map.setdefault(rid, []).append(
+            {
+                "source": sr.source,
+                "raw_data": sr.raw_data,
+                "extracted_data": sr.extracted_data,
+            }
+        )
 
-    rest_dicts = [
-        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng,
-         "cuisine_type": r.cuisine_type or [], "review_count": r.review_count or 0,
-         "rating": r.rating_avg or 0.0, "price_tier": r.price_tier}
+    rest_dicts: list = [
+        {
+            "id": str(r.id),
+            "name": r.name,
+            "lat": r.lat,
+            "lng": r.lng,
+            "cuisine_type": r.cuisine_type or [],
+            "review_count": r.review_count or 0,
+            "rating": r.rating_avg or 0.0,
+            "price_tier": r.price_tier,
+        }
         for r in unscored
     ]
 
@@ -90,9 +98,13 @@ async def _score_restaurants_inline(session: AsyncSession) -> int:
 
     for score in scores:
         values = _build_score_values(score)
-        stmt = pg_insert(ICPScore).values(**values).on_conflict_do_update(
-            index_elements=["restaurant_id"],
-            set_={k: v for k, v in values.items() if k != "restaurant_id"},
+        stmt = (
+            pg_insert(ICPScore)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=["restaurant_id"],
+                set_={k: v for k, v in values.items() if k != "restaurant_id"},
+            )
         )
         await session.execute(stmt)
 
@@ -145,52 +157,60 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                 review_count = record.get("review_count", 0) or 0
                 price_tier = record.get("price_tier")
 
-                stmt = insert(Restaurant).values(
-                    name=name,
-                    address=address or None,
-                    city=record.get("city"),
-                    state=record.get("state"),
-                    zip_code=record.get("zip_code"),
-                    lat=record.get("lat"),
-                    lng=record.get("lng"),
-                    phone=record.get("phone"),
-                    website=record.get("website"),
-                    cuisine_type=cuisine,
-                    rating_avg=rating,
-                    review_count=review_count,
-                    price_tier=price_tier,
-                ).on_conflict_do_update(
-                    constraint="uq_restaurant_name_address",
-                    set_={
-                        "lat": record.get("lat"),
-                        "lng": record.get("lng"),
-                        "phone": record.get("phone"),
-                        "website": record.get("website"),
-                        "cuisine_type": cuisine,
-                        "rating_avg": rating,
-                        "review_count": review_count,
-                        "price_tier": price_tier,
-                        "updated_at": datetime.now(UTC),
-                    },
+                stmt = (
+                    insert(Restaurant)
+                    .values(
+                        name=name,
+                        address=address or None,
+                        city=record.get("city"),
+                        state=record.get("state"),
+                        zip_code=record.get("zip_code"),
+                        lat=record.get("lat"),
+                        lng=record.get("lng"),
+                        phone=record.get("phone"),
+                        website=record.get("website"),
+                        cuisine_type=cuisine,
+                        rating_avg=rating,
+                        review_count=review_count,
+                        price_tier=price_tier,
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_restaurant_name_address",
+                        set_={
+                            "lat": record.get("lat"),
+                            "lng": record.get("lng"),
+                            "phone": record.get("phone"),
+                            "website": record.get("website"),
+                            "cuisine_type": cuisine,
+                            "rating_avg": rating,
+                            "review_count": review_count,
+                            "price_tier": price_tier,
+                            "updated_at": datetime.now(UTC),
+                        },
+                    )
                 )
                 await session.execute(stmt)
                 await session.flush()
 
-                rest = (await session.execute(
-                    select(Restaurant).where(
-                        Restaurant.name == name,
-                        Restaurant.address == (address or None),
+                rest = (
+                    await session.execute(
+                        select(Restaurant).where(
+                            Restaurant.name == name,
+                            Restaurant.address == (address or None),
+                        )
                     )
-                )).scalar_one_or_none()
+                ).scalar_one_or_none()
 
                 if rest:
-                    session.add(SourceRecord(
-                        restaurant_id=rest.id,
-                        source=record.get("source", source),
-                        source_url=record.get("source_url"),
-                        raw_data=record,
-                        crawled_at=datetime.now(UTC),
-                    ))
+                    session.add(
+                        SourceRecord(
+                            restaurant_id=rest.id,
+                            source=record.get("source", source),
+                            source_url=record.get("source_url"),
+                            raw_data=record,
+                            crawled_at=datetime.now(UTC),
+                        )
+                    )
                     count += 1
 
             await session.commit()
@@ -207,7 +227,9 @@ async def _run_crawl_inline(source: str, query: str, location: str, job_id: str)
                 job.finished_at = datetime.now(UTC)
                 await session.commit()
 
-            logger.info("inline_crawl_complete", source=source, items=count, scored=scored, job_id=job_id)
+            logger.info(
+                "inline_crawl_complete", source=source, items=count, scored=scored, job_id=job_id
+            )
 
         except Exception as e:
             logger.error("inline_crawl_failed", source=source, error=str(e), job_id=job_id)
@@ -239,7 +261,6 @@ async def create_crawl_job(
 
     if job_in.source == "all":
         # Multi-source crawl: run google_maps, yelp, delivery sequentially
-        total_items = 0
         async with async_session() as s:
             j = await s.get(CrawlJob, job.id)
             if j:
@@ -324,6 +345,7 @@ async def enrich_websites(
 ):
     """Crawl restaurant websites to detect POS systems and chain indicators."""
     from src.services.website_enrichment import WebsiteEnrichmentService
+
     service = WebsiteEnrichmentService(session)
     result = await service.enrich_batch(limit=limit)
     return result

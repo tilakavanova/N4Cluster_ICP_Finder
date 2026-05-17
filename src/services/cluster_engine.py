@@ -77,15 +77,15 @@ async def detect_clusters(
 
     # Simple clustering: group restaurants within radius of each other
     assigned = set()
-    clusters_created = []
+    clusters_created: list = []
 
-    for i, anchor in enumerate(restaurants):
+    for _i, anchor in enumerate(restaurants):
         if anchor.id in assigned:
             continue
 
         # Find neighbors within radius
         neighbors = []
-        for j, other in enumerate(restaurants):
+        for _j, other in enumerate(restaurants):
             if other.id in assigned or other.id == anchor.id:
                 continue
             dist = haversine_distance(anchor.lat, anchor.lng, other.lat, other.lng)
@@ -154,10 +154,15 @@ async def detect_clusters(
         )
         cluster.avg_icp_score = round(float(avg_result.scalar() or 0.0), 4)
 
-        await _record_event(session, cluster.id, "detected", {
-            "restaurant_count": len(group),
-            "zip_codes": zip_codes_set,
-        })
+        await _record_event(
+            session,
+            cluster.id,
+            "detected",
+            {
+                "restaurant_count": len(group),
+                "zip_codes": zip_codes_set,
+            },
+        )
 
         clusters_created.append(cluster)
 
@@ -199,11 +204,16 @@ async def identify_anchors(
     await session.flush()
 
     for anchor in anchors:
-        await _record_event(session, cluster_id, "member_added", {
-            "restaurant_id": str(anchor.restaurant_id),
-            "role": "anchor",
-            "icp_score": anchor.icp_score_at_join,
-        })
+        await _record_event(
+            session,
+            cluster_id,
+            "member_added",
+            {
+                "restaurant_id": str(anchor.restaurant_id),
+                "role": "anchor",
+                "icp_score": anchor.icp_score_at_join,
+            },
+        )
 
     logger.info("anchors_identified", cluster=str(cluster_id), count=len(anchors))
     return anchors
@@ -249,8 +259,10 @@ async def plan_expansion(
         if not restaurant.lat or not restaurant.lng:
             continue
         dist = haversine_distance(
-            cluster.center_lat, cluster.center_lng,
-            restaurant.lat, restaurant.lng,
+            cluster.center_lat,
+            cluster.center_lng,
+            restaurant.lat,
+            restaurant.lng,
         )
         if dist <= radius_km:
             priority = float(icp_score or 0.0) * 0.7 + (1.0 - dist / radius_km) * 30.0
@@ -286,9 +298,14 @@ async def plan_expansion(
         cluster.status = "expanding"
 
     await session.flush()
-    await _record_event(session, cluster_id, "expanded", {
-        "plans_created": len(plans),
-    })
+    await _record_event(
+        session,
+        cluster_id,
+        "expanded",
+        {
+            "plans_created": len(plans),
+        },
+    )
 
     logger.info("expansion_planned", cluster=str(cluster_id), plans=len(plans))
     return plans
@@ -336,7 +353,9 @@ async def estimate_flywheel(
     # Feedback score: positive feedback ratio
     feedback_result = await session.execute(
         select(
-            func.count(ClusterFeedback.id).filter(ClusterFeedback.feedback_type == "expansion_success"),
+            func.count(ClusterFeedback.id).filter(
+                ClusterFeedback.feedback_type == "expansion_success"
+            ),
             func.count(ClusterFeedback.id),
         ).where(ClusterFeedback.cluster_id == cluster_id)
     )
@@ -382,11 +401,13 @@ async def get_recommendations(
     anchor_count = anchor_result.scalar() or 0
 
     if anchor_count == 0:
-        recommendations.append({
-            "action": "identify_anchors",
-            "priority": "high",
-            "description": "Identify anchor merchants to serve as cluster foundation.",
-        })
+        recommendations.append(
+            {
+                "action": "identify_anchors",
+                "priority": "high",
+                "description": "Identify anchor merchants to serve as cluster foundation.",
+            }
+        )
 
     # Check if expansion plan exists
     plan_result = await session.execute(
@@ -397,19 +418,23 @@ async def get_recommendations(
     plan_count = plan_result.scalar() or 0
 
     if plan_count == 0 and anchor_count > 0:
-        recommendations.append({
-            "action": "plan_expansion",
-            "priority": "high",
-            "description": "Create expansion plan to grow the cluster.",
-        })
+        recommendations.append(
+            {
+                "action": "plan_expansion",
+                "priority": "high",
+                "description": "Create expansion plan to grow the cluster.",
+            }
+        )
 
     # Check flywheel score
     if cluster.flywheel_score < 30.0:
-        recommendations.append({
-            "action": "improve_flywheel",
-            "priority": "medium",
-            "description": f"Flywheel score is low ({cluster.flywheel_score}). Add more high-ICP merchants.",
-        })
+        recommendations.append(
+            {
+                "action": "improve_flywheel",
+                "priority": "medium",
+                "description": f"Flywheel score is low ({cluster.flywheel_score}). Add more high-ICP merchants.",
+            }
+        )
 
     # Check if campaign should be launched
     planned_result = await session.execute(
@@ -423,19 +448,23 @@ async def get_recommendations(
     planned_count = planned_result.scalar() or 0
 
     if planned_count >= 3:
-        recommendations.append({
-            "action": "launch_campaign",
-            "priority": "medium",
-            "description": f"{planned_count} expansion targets ready. Consider launching a campaign.",
-        })
+        recommendations.append(
+            {
+                "action": "launch_campaign",
+                "priority": "medium",
+                "description": f"{planned_count} expansion targets ready. Consider launching a campaign.",
+            }
+        )
 
     # Check if recalculation is needed
     if cluster.status == "expanding":
-        recommendations.append({
-            "action": "recalculate",
-            "priority": "low",
-            "description": "Cluster is expanding — recalculate scores for updated metrics.",
-        })
+        recommendations.append(
+            {
+                "action": "recalculate",
+                "priority": "low",
+                "description": "Cluster is expanding — recalculate scores for updated metrics.",
+            }
+        )
 
     logger.info("recommendations_generated", cluster=str(cluster_id), count=len(recommendations))
     return recommendations
@@ -453,12 +482,14 @@ async def launch_campaign(
 
     # Get planned expansion targets
     plan_result = await session.execute(
-        select(ClusterExpansionPlan).where(
+        select(ClusterExpansionPlan)
+        .where(
             and_(
                 ClusterExpansionPlan.cluster_id == cluster_id,
                 ClusterExpansionPlan.status == "planned",
             )
-        ).order_by(ClusterExpansionPlan.sequence_order)
+        )
+        .order_by(ClusterExpansionPlan.sequence_order)
     )
     plans = list(plan_result.scalars().all())
 
@@ -493,13 +524,20 @@ async def launch_campaign(
 
     await session.flush()
 
-    await _record_event(session, cluster_id, "campaign_launched", {
-        "campaign_id": str(campaign.id),
-        "campaign_type": campaign_type,
-        "target_count": len(plans),
-    })
+    await _record_event(
+        session,
+        cluster_id,
+        "campaign_launched",
+        {
+            "campaign_id": str(campaign.id),
+            "campaign_type": campaign_type,
+            "target_count": len(plans),
+        },
+    )
 
-    logger.info("campaign_launched", cluster=str(cluster_id), campaign=str(campaign.id), targets=len(plans))
+    logger.info(
+        "campaign_launched", cluster=str(cluster_id), campaign=str(campaign.id), targets=len(plans)
+    )
     return campaign
 
 
@@ -546,8 +584,8 @@ async def recalculate_cluster(
     for member, current_score in members_result.all():
         member.icp_score_at_join = current_score or 0.0
 
-    # Recalculate flywheel
-    flywheel = await estimate_flywheel(session, cluster_id)
+    # Recalculate flywheel (side-effects only — updates cluster fields)
+    await estimate_flywheel(session, cluster_id)
 
     # Update status based on metrics
     if cluster.restaurant_count >= 10 and cluster.flywheel_score >= 60.0:
@@ -557,11 +595,16 @@ async def recalculate_cluster(
 
     await session.flush()
 
-    await _record_event(session, cluster_id, "recalculated", {
-        "restaurant_count": cluster.restaurant_count,
-        "avg_icp_score": cluster.avg_icp_score,
-        "flywheel_score": cluster.flywheel_score,
-    })
+    await _record_event(
+        session,
+        cluster_id,
+        "recalculated",
+        {
+            "restaurant_count": cluster.restaurant_count,
+            "avg_icp_score": cluster.avg_icp_score,
+            "flywheel_score": cluster.flywheel_score,
+        },
+    )
 
     logger.info("cluster_recalculated", cluster=str(cluster_id), score=cluster.avg_icp_score)
     return cluster

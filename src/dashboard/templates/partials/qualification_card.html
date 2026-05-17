@@ -1,0 +1,51 @@
+<div id="qualification-card-{{ lead.id }}"
+     class="bg-white border border-slate-200 rounded-lg p-4 mb-4"
+     {% if not final %}hx-get="/dashboard/leads/{{ lead.id }}/qualification" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <h3 class="text-sm font-semibold text-navy-950 mb-2">Qualification</h3>
+
+  {% if qualification is none %}
+  <div class="flex items-center gap-2 text-sm text-slate-500">
+    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle>
+      <path fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a10 10 0 1010 10h-2a8 8 0 01-8 8z" class="opacity-75"></path>
+    </svg>
+    Qualifying&hellip;
+  </div>
+  {% else %}
+  <div class="flex items-center gap-3 mb-2">
+    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+      {% if qualification.qualification_status == 'qualified' %}bg-green-50 text-green-700
+      {% elif qualification.qualification_status == 'needs_review' %}bg-yellow-50 text-yellow-700
+      {% elif qualification.qualification_status == 'not_qualified' %}bg-red-50 text-red-700
+      {% else %}bg-slate-100 text-slate-600{% endif %}">
+      {{ qualification.qualification_status|replace('_', ' ')|title }}
+    </span>
+    <span class="text-xs text-slate-500">
+      Confidence: <strong>{{ "%.0f"|format(qualification.confidence_score * 100) }}%</strong>
+    </span>
+  </div>
+
+  {% if qualification.signals_summary %}
+  <div class="flex flex-wrap gap-1 mb-2">
+    {% for s in qualification.signals_summary[:3] %}
+    <span class="bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded">{{ s }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if qualification.qualification_status == 'needs_review' %}
+  <div class="flex gap-2 mt-2">
+    <button class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-2.5 py-1 rounded-md"
+            hx-patch="/dashboard/qualification/{{ qualification.id }}/review"
+            hx-vals='{"decision": "approved"}'
+            hx-target="#qualification-card-{{ lead.id }}"
+            hx-swap="outerHTML">Approve</button>
+    <button class="bg-red-500 hover:bg-red-600 text-white text-xs font-medium px-2.5 py-1 rounded-md"
+            hx-patch="/dashboard/qualification/{{ qualification.id }}/review"
+            hx-vals='{"decision": "rejected"}'
+            hx-target="#qualification-card-{{ lead.id }}"
+            hx-swap="outerHTML">Reject</button>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>

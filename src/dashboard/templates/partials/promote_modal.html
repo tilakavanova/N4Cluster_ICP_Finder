@@ -1,0 +1,75 @@
+<div id="promote-modal" class="hidden fixed inset-0 z-40 bg-slate-900/50 flex items-center justify-center">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+    <h3 class="text-lg font-semibold text-navy-950 mb-1">Promote to Leads</h3>
+    <p class="text-sm text-slate-500 mb-4"><span id="promote-modal-count">0</span> restaurant(s) selected</p>
+
+    <form id="promote-form" method="post" action="/dashboard/prospects/promote"
+          hx-post="/dashboard/prospects/promote" hx-swap="none"
+          hx-on::after-request="document.getElementById('promote-modal').classList.add('hidden')">
+      <div id="promote-form-ids"></div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-slate-600 mb-1">Campaign</label>
+        <select name="campaign_id" id="promote-campaign-select"
+                class="w-full rounded-md border border-slate-300 text-sm px-3 py-2"
+                onchange="document.getElementById('promote-new-campaign').classList.toggle('hidden', this.value !== '__new__')">
+          <optgroup label="Active campaigns">
+            {% for c in active_campaigns %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+          </optgroup>
+          <optgroup label="Drafts">
+            {% for c in draft_campaigns %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+          </optgroup>
+          <option value="__new__">+ Create new campaign…</option>
+          <option value="">— None (add to campaign later) —</option>
+        </select>
+      </div>
+
+      <div id="promote-new-campaign" class="hidden mb-4 p-3 border border-slate-200 rounded">
+        <label class="block text-xs font-medium text-slate-600 mb-1">New campaign name</label>
+        <input type="text" name="new_campaign_name" class="w-full rounded-md border border-slate-300 text-sm px-3 py-2 mb-2">
+
+        <label class="block text-xs font-medium text-slate-600 mb-1">Channel</label>
+        <div class="flex gap-3 mb-2 text-sm">
+          <label><input type="radio" name="new_campaign_type" value="email" checked> Email</label>
+          <label><input type="radio" name="new_campaign_type" value="call"> Call</label>
+          <label><input type="radio" name="new_campaign_type" value="sms"> SMS</label>
+          <label><input type="radio" name="new_campaign_type" value="multi"> Multi</label>
+        </div>
+
+        <label class="block text-xs font-medium text-slate-600 mb-1">Status</label>
+        <div class="flex gap-3 text-sm">
+          <label><input type="radio" name="new_campaign_status" value="draft" checked> Save as draft</label>
+          <label><input type="radio" name="new_campaign_status" value="active"> Activate immediately</label>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-slate-600 mb-1">Owner (optional)</label>
+        <input type="text" name="owner" class="w-full rounded-md border border-slate-300 text-sm px-3 py-2">
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-slate-600 mb-1">Notes (optional)</label>
+        <textarea name="notes" class="w-full rounded-md border border-slate-300 text-sm px-3 py-2" rows="2"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button type="button" class="text-sm text-slate-600 hover:text-slate-900 px-3 py-1.5"
+                onclick="document.getElementById('promote-modal').classList.add('hidden')">Cancel</button>
+        <button type="submit" class="bg-cobalt-500 hover:bg-cobalt-600 text-white text-sm font-semibold px-4 py-1.5 rounded-md">
+          Promote and qualify
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+window.__promoteSeed = function(ids) {
+  document.getElementById('promote-modal-count').textContent = ids.length;
+  const holder = document.getElementById('promote-form-ids');
+  holder.innerHTML = ids.map(id =>
+    `<input type="hidden" name="restaurant_ids" value="${id}">`
+  ).join('');
+};
+</script>

@@ -101,7 +101,11 @@ async def discover_restaurants(
 
     # Try cached data first
     cached_results, source_type = await find_cached_restaurants(
-        session, location, radius_miles, cuisine, limit,
+        session,
+        location,
+        radius_miles,
+        cuisine,
+        limit,
     )
 
     if cached_results:
@@ -125,7 +129,7 @@ async def discover_restaurants(
         raise HTTPException(
             status_code=404,
             detail=f"No restaurants found for location '{location}'. "
-                   f"Ensure GOOGLE_PLACES_API_KEY is set and the location is valid.",
+            f"Ensure GOOGLE_PLACES_API_KEY is set and the location is valid.",
         )
 
     return DiscoverResponse(
