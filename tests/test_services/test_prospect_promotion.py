@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.services.prospect_promotion import PromotionResult, promote_prospects
+from src.services.prospect_promotion import NewCampaignSpec, PromotionResult, promote_prospects
 
 
 @pytest.mark.asyncio
@@ -99,3 +99,32 @@ async def test_promote_attaches_to_existing_campaign(
     assert len(targets) == 1
     assert targets[0].restaurant_id == sample_restaurant_with_icp_score.id
     assert str(targets[0].lead_id) == result.lead_ids[0]
+
+
+@pytest.mark.asyncio
+async def test_promote_creates_new_campaign_inline(
+    db_session, sample_restaurant_with_icp_score
+):
+    from src.services.outreach import list_campaigns, list_targets
+    spec = NewCampaignSpec(name="Boston Pilot May", campaign_type="email", status="draft")
+
+    result = await promote_prospects(
+        db_session,
+        restaurant_ids=[sample_restaurant_with_icp_score.id],
+        campaign_id=None,
+        new_campaign=spec,
+        owner=None,
+        notes=None,
+        actor="rep@example.com",
+    )
+
+    assert result.promoted == 1
+    assert result.campaign_id is not None
+
+    campaigns = await list_campaigns(db_session)
+    matched = [c for c in campaigns if c.name == "Boston Pilot May"]
+    assert len(matched) == 1
+    assert matched[0].status == "draft"
+
+    targets = await list_targets(db_session, matched[0].id)
+    assert len(targets) == 1

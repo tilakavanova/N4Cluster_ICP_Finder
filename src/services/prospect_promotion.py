@@ -47,8 +47,19 @@ async def promote_prospects(
 
     result = PromotionResult()
 
-    # new_campaign creation lands here in Task B7; for now only existing campaigns.
+    # Inline campaign creation
     effective_campaign_id = campaign_id
+    if new_campaign is not None:
+        from src.services.outreach import create_campaign as _create_campaign
+        campaign = await _create_campaign(
+            session,
+            name=new_campaign.name,
+            campaign_type=new_campaign.campaign_type,
+            status=new_campaign.status,
+            created_by=actor,
+        )
+        effective_campaign_id = campaign.id
+
     if effective_campaign_id:
         result.campaign_id = str(effective_campaign_id)
 
