@@ -1453,9 +1453,8 @@ async def update_campaign_status_route(
     try:
         campaign = await update_campaign(session, campaign_id, status=status)
         await session.commit()
-        return HTMLResponse(
-            f'<span class="badge badge-{status}">{status}</span>'
-        )
+        html = templates.get_template("partials/campaign_status_pill.html").render(campaign=campaign)
+        return HTMLResponse(html)
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
 

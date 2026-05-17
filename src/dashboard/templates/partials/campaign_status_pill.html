@@ -1,0 +1,9 @@
+<span id="campaign-status-{{ campaign.id }}"
+      class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+      {% if campaign.status == 'active' %}bg-green-50 text-green-700
+      {% elif campaign.status == 'draft' %}bg-slate-100 text-slate-600
+      {% elif campaign.status == 'paused' %}bg-yellow-50 text-yellow-700
+      {% elif campaign.status == 'completed' %}bg-blue-50 text-blue-700
+      {% else %}bg-slate-100 text-slate-600{% endif %}">
+  {{ campaign.status|title }}
+</span>

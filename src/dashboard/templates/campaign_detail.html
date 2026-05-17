@@ -8,27 +8,31 @@
       <button class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
         hx-patch="/dashboard/outreach/campaigns/{{ campaign.id }}/status"
         hx-vals='{"status": "active"}'
-        hx-swap="none">
+        hx-target="#campaign-status-{{ campaign.id }}"
+        hx-swap="outerHTML">
         Activate
       </button>
       {% elif campaign.status == 'active' %}
       <button class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
         hx-patch="/dashboard/outreach/campaigns/{{ campaign.id }}/status"
         hx-vals='{"status": "paused"}'
-        hx-swap="none">
+        hx-target="#campaign-status-{{ campaign.id }}"
+        hx-swap="outerHTML">
         Pause
       </button>
       <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
         hx-patch="/dashboard/outreach/campaigns/{{ campaign.id }}/status"
         hx-vals='{"status": "completed"}'
-        hx-swap="none">
+        hx-target="#campaign-status-{{ campaign.id }}"
+        hx-swap="outerHTML">
         Complete
       </button>
       {% elif campaign.status == 'paused' %}
       <button class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
         hx-patch="/dashboard/outreach/campaigns/{{ campaign.id }}/status"
         hx-vals='{"status": "active"}'
-        hx-swap="none">
+        hx-target="#campaign-status-{{ campaign.id }}"
+        hx-swap="outerHTML">
         Resume
       </button>
       {% endif %}
@@ -43,7 +47,7 @@
     </div>
     <div>
       <div class="text-xs text-slate-500">Status</div>
-      <div class="text-sm font-medium text-navy-950">{{ campaign.status|default('draft')|title }}</div>
+      {% include "partials/campaign_status_pill.html" %}
     </div>
     <div>
       <div class="text-xs text-slate-500">Created By</div>

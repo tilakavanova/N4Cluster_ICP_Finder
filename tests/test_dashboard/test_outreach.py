@@ -120,3 +120,21 @@ async def test_create_campaign_form_persists_start_date(
     assert campaign.start_date is not None
     assert campaign.start_date.month == 6
     assert campaign.end_date.day == 30
+
+
+@pytest.mark.asyncio
+async def test_status_patch_returns_rendered_pill(
+    async_client, db_session, logged_in_session
+):
+    from src.services.outreach import create_campaign
+    c = await create_campaign(db_session, name="StatusTest", campaign_type="email")
+    await db_session.commit()
+
+    response = await async_client.patch(
+        f"/dashboard/outreach/campaigns/{c.id}/status",
+        data={"status": "active"},
+    )
+    assert response.status_code == 200
+    assert "Active" in response.text
+    # The response should contain a styled pill (e.g., bg-green-50 class)
+    assert "bg-green" in response.text or "green" in response.text
