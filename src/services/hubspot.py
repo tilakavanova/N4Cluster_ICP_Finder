@@ -44,10 +44,15 @@ class HubSpotService:
     async def sync_lead(self, lead: Lead) -> dict | None:
         """Create or update a HubSpot contact and deal for a lead.
 
-        Returns dict with hubspot_contact_id and hubspot_deal_id, or None if disabled.
+        Returns dict with hubspot_contact_id and hubspot_deal_id, or None if disabled
+        or if the lead lacks an email (HubSpot contacts are keyed by email).
         """
         if not self.enabled:
             logger.debug("hubspot_disabled")
+            return None
+
+        if not lead.email:
+            logger.warning("hubspot_sync_skipped_no_email", lead_id=str(lead.id))
             return None
 
         contact_id = await self._upsert_contact(lead)
@@ -150,7 +155,7 @@ class HubSpotService:
         """Create HubSpot deal linked to contact. Returns deal ID."""
         stage = _deal_stage_from_fit(lead.icp_fit_label)
         properties: dict[str, str] = {
-            "dealname": f"{lead.company or lead.first_name} - {lead.icp_fit_label or 'new'} lead",
+            "dealname": f"{lead.company or lead.first_name or 'Unknown'} - {lead.icp_fit_label or 'new'} lead",
             "dealstage": stage,
             "description": f"Source: {lead.source}",
         }
@@ -280,7 +285,7 @@ class HubSpotService:
         elif engagement_type == "MEETING":
             metadata = {
                 "body": notes or "",
-                "title": f"Meeting - {lead.company or lead.first_name}",
+                "title": f"Meeting - {lead.company or lead.first_name or 'Unknown'}",
                 "startTime": timestamp_ms,
                 "endTime": timestamp_ms,
             }

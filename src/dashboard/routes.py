@@ -287,7 +287,8 @@ async def export_leads_csv(
     ])
     for lead in leads:
         writer.writerow([
-            lead.first_name, lead.last_name, lead.email, lead.company or "",
+            lead.first_name or "", lead.last_name or "", lead.email or "",
+            lead.company or "",
             lead.business_type or "", lead.locations or "", lead.interest or "",
             lead.source, lead.status, lead.icp_total_score or "",
             lead.icp_fit_label or "", lead.matched_restaurant_name or "",
