@@ -43,3 +43,32 @@ async def test_promote_single_restaurant_creates_lead(
     assert lead.lifecycle_stage == "new"
     assert lead.icp_total_score == 85.0
     assert lead.matched_restaurant_name == sample_restaurant_with_icp_score.name
+
+
+@pytest.mark.asyncio
+async def test_promote_skips_already_lead(db_session, sample_restaurant_with_icp_score):
+    from src.db.models import Lead
+    existing = Lead(
+        first_name="Jane",
+        last_name="Doe",
+        email="jane@example.com",
+        source="manual",
+        status="new",
+        lifecycle_stage="new",
+        restaurant_id=sample_restaurant_with_icp_score.id,
+    )
+    db_session.add(existing)
+    await db_session.flush()
+
+    result = await promote_prospects(
+        db_session,
+        restaurant_ids=[sample_restaurant_with_icp_score.id],
+        campaign_id=None,
+        new_campaign=None,
+        owner=None,
+        notes=None,
+        actor="rep@example.com",
+    )
+
+    assert result.promoted == 0
+    assert result.skipped_already_lead == 1
