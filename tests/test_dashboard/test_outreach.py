@@ -123,6 +123,30 @@ async def test_create_campaign_form_persists_start_date(
 
 
 @pytest.mark.asyncio
+async def test_campaign_detail_shows_restaurant_name_and_lead_link(
+    async_client, db_session, logged_in_session, sample_restaurant_with_icp_score
+):
+    from src.services.outreach import create_campaign, add_target
+    from src.db.models import Lead
+    c = await create_campaign(db_session, name="DetailTest", campaign_type="email")
+    lead = Lead(
+        source="manual", status="new", lifecycle_stage="new",
+        restaurant_id=sample_restaurant_with_icp_score.id,
+    )
+    db_session.add(lead)
+    await db_session.flush()
+    await add_target(db_session, c.id, sample_restaurant_with_icp_score.id, lead_id=lead.id)
+    await db_session.commit()
+
+    response = await async_client.get(f"/dashboard/outreach/campaigns/{c.id}")
+    assert response.status_code == 200
+    # Restaurant name appears
+    assert sample_restaurant_with_icp_score.name in response.text
+    # Lead link appears
+    assert f"/dashboard/leads/{lead.id}" in response.text
+
+
+@pytest.mark.asyncio
 async def test_status_patch_returns_rendered_pill(
     async_client, db_session, logged_in_session
 ):
