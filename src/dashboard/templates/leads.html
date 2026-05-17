@@ -84,8 +84,8 @@
     <tbody class="divide-y divide-slate-100">
       {% for lead in leads %}
       <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='/dashboard/leads/{{ lead.id }}'">
-        <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ lead.first_name }} {{ lead.last_name }}</td>
-        <td class="px-4 py-3 text-sm text-slate-600">{{ lead.email }}</td>
+        <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ ((lead.first_name or "") ~ " " ~ (lead.last_name or "")).strip() or "Unnamed Lead" }}</td>
+        <td class="px-4 py-3 text-sm text-slate-600">{{ lead.email or "—" }}</td>
         <td class="px-4 py-3 text-sm text-slate-600">{{ lead.company or "—" }}</td>
         <td class="px-4 py-3">
           <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
