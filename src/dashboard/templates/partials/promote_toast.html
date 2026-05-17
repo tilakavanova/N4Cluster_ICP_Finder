@@ -1,0 +1,16 @@
+<div id="promote-toast" class="fixed top-4 right-4 z-50 bg-navy-950 text-white rounded-lg shadow-lg px-4 py-3 max-w-sm"
+     hx-swap-oob="true">
+  <div class="text-sm">
+    Promoted <strong>{{ result.promoted }}</strong> {{ "lead" if result.promoted == 1 else "leads" }}
+    {% if result.skipped_already_lead %} · Skipped {{ result.skipped_already_lead }} already-Leads{% endif %}
+    {% if result.failed %} · Failed {{ result.failed|length }}{% endif %}
+    {% if result.qualification_task_ids %} · Qualification running{% endif %}
+    {% if result.reused_qualifications %} · Reused {{ result.reused_qualifications }} qualifications{% endif %}
+    {% if result.campaign_id %} · Added to <em>{{ campaign_name }}</em>{% endif %}
+  </div>
+  {% if result.lead_ids %}
+  <a href="/dashboard/leads?ids={{ result.lead_ids|join(',') }}" class="text-cobalt-300 text-xs underline mt-1 inline-block">
+    View Leads &rarr;
+  </a>
+  {% endif %}
+</div>

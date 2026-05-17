@@ -1071,6 +1071,95 @@ async def export_prospects_csv(
     )
 
 
+# ── Prospect → Lead promotion (NIF-284) ───────────────────────
+
+MAX_BULK_PROMOTE = 100
+
+
+@router.post("/prospects/promote", response_class=HTMLResponse)
+async def promote_prospects_route(
+    request: Request,
+    restaurant_ids: list[str] = Form(default=[]),
+    campaign_id: str = Form(""),
+    new_campaign_name: str = Form(""),
+    new_campaign_type: str = Form("email"),
+    new_campaign_status: str = Form("draft"),
+    owner: str = Form(""),
+    notes: str = Form(""),
+    session: AsyncSession = Depends(get_session),
+):
+    """Promote one or more restaurants from the Prospect Finder into Leads.
+
+    Returns an HTMX-friendly payload: a toast partial plus per-row OOB swaps
+    replacing each promoted restaurant's action button with an "Already a
+    Lead" badge.
+    """
+    if not _require_login(request):
+        return RedirectResponse(url="/dashboard/login", status_code=303)
+
+    if not restaurant_ids:
+        return HTMLResponse("Select at least one restaurant", status_code=400)
+    if len(restaurant_ids) > MAX_BULK_PROMOTE:
+        return HTMLResponse(
+            f"Select {MAX_BULK_PROMOTE} or fewer; for larger batches use the batch-by-city flow.",
+            status_code=400,
+        )
+
+    from src.services.prospect_promotion import NewCampaignSpec, promote_prospects
+
+    rids = [UUID(r) for r in restaurant_ids]
+    new_campaign = None
+    if new_campaign_name.strip():
+        new_campaign = NewCampaignSpec(
+            name=new_campaign_name.strip(),
+            campaign_type=new_campaign_type,
+            status=new_campaign_status,
+        )
+
+    actor = request.session.get("username") or "dashboard"
+    result = await promote_prospects(
+        session=session,
+        restaurant_ids=rids,
+        campaign_id=UUID(campaign_id) if campaign_id else None,
+        new_campaign=new_campaign,
+        owner=owner.strip() or None,
+        notes=notes.strip() or None,
+        actor=actor,
+    )
+    await session.commit()
+
+    # Build response: toast + per-row action partials for the promoted restaurants.
+    campaign_name = ""
+    if result.campaign_id:
+        from src.services.outreach import get_campaign
+
+        c = await get_campaign(session, UUID(result.campaign_id))
+        campaign_name = c.name if c else ""
+
+    toast_html = templates.get_template("partials/promote_toast.html").render(
+        result=result, campaign_name=campaign_name
+    )
+
+    # Build {restaurant_id: rendered_action_partial} for promoted rows only.
+    row_partials: dict[str, str] = {}
+    if result.lead_ids:
+        promoted_leads = (
+            await session.execute(
+                select(Lead).where(Lead.id.in_([UUID(lid) for lid in result.lead_ids]))
+            )
+        ).scalars().all()
+        for lead in promoted_leads:
+            row_partials[str(lead.restaurant_id)] = templates.get_template(
+                "partials/prospect_row_action.html"
+            ).render(restaurant_id=str(lead.restaurant_id), lead_id=str(lead.id))
+
+    oob_blocks = "\n".join(
+        f'<div hx-swap-oob="outerHTML:#prospect-action-{rid}">{partial}</div>'
+        for rid, partial in row_partials.items()
+    )
+    return HTMLResponse(toast_html + "\n" + oob_blocks)
+
+
 # ── Neighborhoods (NIF-202) ───────────────────────────────────
 
 
