@@ -1,7 +1,7 @@
 """Add agent framework, anomaly detection, and RLHF feedback tables (NIF-265-274).
 
 Revision ID: 027
-Revises: 025
+Revises: 026
 Create Date: 2026-04-27
 """
 from alembic import op
@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 # revision identifiers
 revision = "027"
-down_revision = "025"
+down_revision = "026"
 branch_labels = None
 depends_on = None
 

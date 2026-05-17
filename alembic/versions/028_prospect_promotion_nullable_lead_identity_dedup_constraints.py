@@ -5,11 +5,12 @@ contact info yet) and adds partial unique on leads.restaurant_id plus
 unique on outreach_targets(campaign_id, restaurant_id) for promotion
 idempotency.
 
-This revision also merges the two prior heads (026 and 027), which both
-branched off 025.
+Lineage note: 026 and 027 originally both pointed to 025 (parallel heads).
+This was linearized so 027 now follows 026, and 028 follows 027 — a single
+linear chain that `alembic upgrade head` can walk without ambiguity.
 
 Revision ID: 028
-Revises: 026, 027
+Revises: 027
 Create Date: 2026-05-16
 """
 
@@ -18,7 +19,7 @@ import sqlalchemy as sa
 
 
 revision = "028"
-down_revision = ("026", "027")
+down_revision = "027"
 branch_labels = None
 depends_on = None
 
