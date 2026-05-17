@@ -4,6 +4,7 @@ import asyncio
 import os
 
 import pytest
+import pytest_asyncio
 
 # Prevent real DB/Redis connections during tests
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///test.db")
@@ -15,6 +16,57 @@ def event_loop():
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
+
+
+# ── Async DB session fixture ─────────────────────────────────────────────
+#
+# Tests that exercise real SQLAlchemy ORM code (services, etc.) need an
+# AsyncSession bound to an actual database. We use in-memory SQLite via
+# aiosqlite. The models use Postgres-specific column types (JSONB, UUID,
+# ARRAY) — we register dialect compilers so SQLAlchemy emits SQLite-
+# compatible DDL for those types during table creation in tests.
+
+
+def _register_sqlite_compat_types():
+    """Make Postgres-specific column types compile under SQLite."""
+    from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+    from sqlalchemy.ext.compiler import compiles
+
+    @compiles(JSONB, "sqlite")
+    def _compile_jsonb_sqlite(type_, compiler, **kw):  # noqa: ARG001
+        return "JSON"
+
+    @compiles(UUID, "sqlite")
+    def _compile_uuid_sqlite(type_, compiler, **kw):  # noqa: ARG001
+        return "CHAR(36)"
+
+    @compiles(ARRAY, "sqlite")
+    def _compile_array_sqlite(type_, compiler, **kw):  # noqa: ARG001
+        return "JSON"
+
+
+_register_sqlite_compat_types()
+
+
+@pytest_asyncio.fixture
+async def db_session():
+    """Yield a fresh in-memory SQLite AsyncSession with all tables created."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from src.db.models import Base
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        try:
+            yield session
+        finally:
+            await session.rollback()
+
+    await engine.dispose()
 
 
 @pytest.fixture

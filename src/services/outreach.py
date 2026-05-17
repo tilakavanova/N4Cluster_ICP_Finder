@@ -32,15 +32,18 @@ async def create_campaign(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     created_by: str = "system",
+    status: str = "draft",
 ) -> OutreachCampaign:
     """Create a new outreach campaign."""
     if campaign_type not in VALID_CAMPAIGN_TYPES:
         raise ValueError(f"Invalid campaign_type: {campaign_type}. Must be one of {VALID_CAMPAIGN_TYPES}")
+    if status not in VALID_CAMPAIGN_STATUSES:
+        raise ValueError(f"Invalid status: {status}. Must be one of {VALID_CAMPAIGN_STATUSES}")
 
     campaign = OutreachCampaign(
         name=name,
         campaign_type=campaign_type,
-        status="draft",
+        status=status,
         target_criteria=target_criteria or {},
         start_date=start_date,
         end_date=end_date,
@@ -48,7 +51,7 @@ async def create_campaign(
     )
     session.add(campaign)
     await session.flush()
-    logger.info("campaign_created", campaign_id=str(campaign.id), name=name, type=campaign_type)
+    logger.info("campaign_created", campaign_id=str(campaign.id), name=name, type=campaign_type, status=status)
     return campaign
 
 
