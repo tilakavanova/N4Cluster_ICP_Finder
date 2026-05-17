@@ -28,7 +28,9 @@ def event_loop():
 
 
 def _register_sqlite_compat_types():
-    """Make Postgres-specific column types compile under SQLite."""
+    """Make Postgres-specific column types compile and bind under SQLite."""
+    import json
+
     from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
     from sqlalchemy.ext.compiler import compiles
 
@@ -43,6 +45,35 @@ def _register_sqlite_compat_types():
     @compiles(ARRAY, "sqlite")
     def _compile_array_sqlite(type_, compiler, **kw):  # noqa: ARG001
         return "JSON"
+
+    # ARRAY columns store Python lists; SQLite (via aiosqlite) can't bind lists
+    # natively. Override bind_processor/result_processor on the ARRAY class so
+    # values are JSON-serialized when going to SQLite and parsed coming back.
+    _orig_array_bind = ARRAY.bind_processor
+    _orig_array_result = ARRAY.result_processor
+
+    def _array_bind_processor(self, dialect):
+        if dialect.name == "sqlite":
+            def process(value):
+                if value is None:
+                    return None
+                return json.dumps(list(value))
+            return process
+        return _orig_array_bind(self, dialect)
+
+    def _array_result_processor(self, dialect, coltype):
+        if dialect.name == "sqlite":
+            def process(value):
+                if value is None:
+                    return None
+                if isinstance(value, (list, tuple)):
+                    return list(value)
+                return json.loads(value)
+            return process
+        return _orig_array_result(self, dialect, coltype)
+
+    ARRAY.bind_processor = _array_bind_processor
+    ARRAY.result_processor = _array_result_processor
 
 
 _register_sqlite_compat_types()
@@ -69,24 +100,47 @@ async def db_session():
     await engine.dispose()
 
 
-@pytest.fixture
-def sample_restaurant():
-    return {
-        "id": "test-uuid-1234",
-        "name": "Joe's Pizza",
-        "address": "123 Main St",
-        "city": "New York",
-        "state": "NY",
-        "zip_code": "10001",
-        "lat": 40.7128,
-        "lng": -74.0060,
-        "phone": "(555) 123-4567",
-        "website": "https://joespizza.example.com",
-        "cuisine_type": ["Pizza", "Italian"],
-        "is_chain": False,
-        "review_count": 250,
-        "rating": 4.5,
-    }
+# ── ORM-backed fixtures (require db_session) ─────────────────────────────
+#
+# Tests that exercise real SQLAlchemy ORM code request these fixtures, which
+# yield persisted rows in the in-memory SQLite DB.
+
+
+@pytest_asyncio.fixture
+async def sample_restaurant(db_session):
+    from src.db.models import Restaurant
+
+    restaurant = Restaurant(
+        name="Joe's Pizza",
+        address="123 Main St",
+        city="New York",
+        state="NY",
+        zip_code="10001",
+    )
+    db_session.add(restaurant)
+    await db_session.flush()
+    return restaurant
+
+
+@pytest_asyncio.fixture
+async def sample_lead(db_session, sample_restaurant):
+    from src.db.models import Lead
+
+    lead = Lead(
+        # first_name/last_name/email are NULLable in DB after migration 028,
+        # but the ORM model still declares them NOT NULL, so create_all on
+        # SQLite emits NOT NULL — supply minimal stub values to satisfy it.
+        first_name="Test",
+        last_name="Lead",
+        email="test.lead@example.com",
+        source="prospect_promotion",
+        status="new",
+        lifecycle_stage="prospect",
+        restaurant_id=sample_restaurant.id,
+    )
+    db_session.add(lead)
+    await db_session.flush()
+    return lead
 
 
 @pytest.fixture

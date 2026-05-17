@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.db.models import (
     OutreachCampaign, OutreachTarget, OutreachActivity, OutreachPerformance,
@@ -210,6 +211,10 @@ async def list_targets(
     query = (
         select(OutreachTarget)
         .where(OutreachTarget.campaign_id == campaign_id)
+        .options(
+            selectinload(OutreachTarget.restaurant),
+            selectinload(OutreachTarget.lead),
+        )
         .order_by(OutreachTarget.priority.desc())
     )
     if status:
