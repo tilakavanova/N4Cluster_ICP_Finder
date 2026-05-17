@@ -1,0 +1,45 @@
+"""Tests for the prospect_promotion orchestrator service (NIF-284)."""
+
+import pytest
+
+from src.services.prospect_promotion import PromotionResult, promote_prospects
+
+
+@pytest.mark.asyncio
+async def test_promote_single_restaurant_creates_lead(
+    db_session, sample_restaurant_with_icp_score
+):
+    result = await promote_prospects(
+        db_session,
+        restaurant_ids=[sample_restaurant_with_icp_score.id],
+        campaign_id=None,
+        new_campaign=None,
+        owner="rep@example.com",
+        notes=None,
+        actor="rep@example.com",
+    )
+
+    assert isinstance(result, PromotionResult)
+    assert result.promoted == 1
+    assert result.skipped_already_lead == 0
+    assert len(result.lead_ids) == 1
+    assert result.campaign_id is None
+
+    # Verify Lead exists with expected fields
+    from sqlalchemy import select
+
+    from src.db.models import Lead
+
+    leads = (
+        await db_session.execute(
+            select(Lead).where(Lead.restaurant_id == sample_restaurant_with_icp_score.id)
+        )
+    ).scalars().all()
+    assert len(leads) == 1
+    lead = leads[0]
+    assert lead.source == "prospect_finder"
+    assert lead.owner == "rep@example.com"
+    assert lead.status == "new"
+    assert lead.lifecycle_stage == "new"
+    assert lead.icp_total_score == 85.0
+    assert lead.matched_restaurant_name == sample_restaurant_with_icp_score.name

@@ -91,9 +91,9 @@ class Lead(Base):
     __tablename__ = "leads"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    first_name = Column(Text, nullable=False)
-    last_name = Column(Text, nullable=False)
-    email = Column(Text, nullable=False, index=True)
+    first_name = Column(Text)
+    last_name = Column(Text)
+    email = Column(Text, index=True)
     company = Column(Text)
     business_type = Column(Text)
     locations = Column(Text)
