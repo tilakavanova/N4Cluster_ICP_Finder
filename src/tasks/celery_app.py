@@ -17,6 +17,7 @@ celery_app = Celery(
         "src.tasks.email_tasks",
         "src.tasks.hubspot_tasks",
         "src.tasks.engagement_tasks",
+        "src.tasks.qualification_tasks",
     ],
 )
 

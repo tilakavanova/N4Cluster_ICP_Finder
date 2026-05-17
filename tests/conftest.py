@@ -123,6 +123,39 @@ async def sample_restaurant(db_session):
 
 
 @pytest_asyncio.fixture
+async def sample_restaurant_with_icp_score(db_session):
+    """A Restaurant with an associated ICPScore, suitable for qualification."""
+    from src.db.models import ICPScore, Restaurant
+
+    rest = Restaurant(
+        name="Test Pizza Co",
+        address="123 Test St",
+        city="Boston",
+        state="MA",
+        zip_code="02115",
+        is_chain=False,
+        review_count=250,
+        rating_avg=4.5,
+    )
+    db_session.add(rest)
+    await db_session.flush()
+
+    icp = ICPScore(
+        restaurant_id=rest.id,
+        total_icp_score=85.0,
+        is_independent=True,
+        has_delivery=True,
+        delivery_platform_count=2,
+        delivery_platforms=["doordash", "ubereats"],
+        review_volume=250,
+        fit_label="excellent",
+    )
+    db_session.add(icp)
+    await db_session.flush()
+    return rest
+
+
+@pytest_asyncio.fixture
 async def sample_lead(db_session, sample_restaurant):
     from src.db.models import Lead
 
@@ -234,3 +267,18 @@ def multiple_restaurants_for_density():
         {"id": f"r{i}", "name": f"Restaurant {i}", "lat": 40.71 + i * 0.001, "lng": -74.00 + i * 0.001}
         for i in range(10)
     ]
+
+
+# ── Celery configuration for tests ───────────────────────────────────────
+#
+# Run Celery tasks synchronously in the test process so we can call
+# `.apply()` / `.delay()` and observe results without a running broker.
+
+
+@pytest.fixture(autouse=True)
+def celery_eager(monkeypatch):
+    """Run Celery tasks synchronously in tests."""
+    from src.tasks.celery_app import celery_app
+
+    monkeypatch.setattr(celery_app.conf, "task_always_eager", True)
+    monkeypatch.setattr(celery_app.conf, "task_eager_propagates", True)
