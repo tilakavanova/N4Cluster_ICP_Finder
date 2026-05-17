@@ -72,6 +72,11 @@
       </div>
       {% endif %}
     </div>
+
+    <!-- Qualification card (loaded via htmx; polls until terminal) -->
+    <div hx-get="/dashboard/leads/{{ lead.id }}/qualification" hx-trigger="load" hx-swap="outerHTML">
+      <div class="bg-white border border-slate-200 rounded-lg p-4 mb-4 text-sm text-slate-400">Loading qualification…</div>
+    </div>
   </div>
 
   <!-- ICP Score sidebar -->

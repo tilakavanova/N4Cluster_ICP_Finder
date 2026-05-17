@@ -214,3 +214,24 @@ async def test_qualification_card_shows_qualifying_state_when_no_result(
     assert "Qualifying" in body
     # Polling attribute present since result is not final
     assert 'hx-trigger="every 3s"' in body
+
+
+@pytest.mark.asyncio
+async def test_lead_detail_includes_qualification_card_slot(
+    async_client, db_session, sample_restaurant_with_icp_score, logged_in_session
+):
+    from src.db.models import Lead
+    lead = Lead(
+        source="prospect_finder",
+        status="new",
+        lifecycle_stage="new",
+        restaurant_id=sample_restaurant_with_icp_score.id,
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    response = await async_client.get(f"/dashboard/leads/{lead.id}")
+    assert response.status_code == 200
+    body = response.text
+    assert f"/dashboard/leads/{lead.id}/qualification" in body
+    assert "Loading qualification" in body
