@@ -80,3 +80,17 @@ async def test_outreach_dashboard_uses_correct_detail_url(
     assert f"/dashboard/outreach/campaigns/{c.id}" in response.text
     # And NOT the broken /detail suffix
     assert f"/dashboard/outreach/campaigns/{c.id}/detail" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_outreach_dashboard_renders_response_rate_column(
+    async_client, db_session, logged_in_session
+):
+    from src.services.outreach import create_campaign
+    await create_campaign(db_session, name="Stats Test", campaign_type="email")
+    await db_session.commit()
+
+    response = await async_client.get("/dashboard/outreach")
+    assert response.status_code == 200
+    assert "Response Rate" in response.text
+    assert "Conversion" in response.text

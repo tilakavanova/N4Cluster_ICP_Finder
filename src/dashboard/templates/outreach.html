@@ -73,62 +73,59 @@
             <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Campaign</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Type</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Created By</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Dates</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Targets</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Response Rate</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Conversion</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Created</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          {% for c in campaigns %}
+          {% for cs in campaign_stats %}
           <tr class="hover:bg-slate-50">
-            <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ c.name }}</td>
+            <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ cs.campaign.name }}</td>
             <td class="px-4 py-3">
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-                {% if c.campaign_type == 'email' %}bg-cobalt-500/10 text-cobalt-600
-                {% elif c.campaign_type == 'call' %}bg-teal-500/10 text-teal-600
-                {% elif c.campaign_type == 'sms' %}bg-amber-500/10 text-amber-600
+                {% if cs.campaign.campaign_type == 'email' %}bg-cobalt-500/10 text-cobalt-600
+                {% elif cs.campaign.campaign_type == 'call' %}bg-teal-500/10 text-teal-600
+                {% elif cs.campaign.campaign_type == 'sms' %}bg-amber-500/10 text-amber-600
                 {% else %}bg-purple-500/10 text-purple-600{% endif %}">
-                {{ c.campaign_type|default('unknown')|title }}
+                {{ cs.campaign.campaign_type|default('unknown')|title }}
               </span>
             </td>
             <td class="px-4 py-3">
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-                {% if c.status == 'active' %}bg-green-50 text-green-700
-                {% elif c.status == 'draft' %}bg-slate-100 text-slate-600
-                {% elif c.status == 'paused' %}bg-yellow-50 text-yellow-700
-                {% elif c.status == 'completed' %}bg-blue-50 text-blue-700
+                {% if cs.campaign.status == 'active' %}bg-green-50 text-green-700
+                {% elif cs.campaign.status == 'draft' %}bg-slate-100 text-slate-600
+                {% elif cs.campaign.status == 'paused' %}bg-yellow-50 text-yellow-700
+                {% elif cs.campaign.status == 'completed' %}bg-blue-50 text-blue-700
                 {% else %}bg-slate-100 text-slate-600{% endif %}">
-                {{ c.status|default('draft')|title }}
+                {{ cs.campaign.status|default('draft')|title }}
               </span>
             </td>
-            <td class="px-4 py-3 text-sm text-slate-600">{{ c.created_by|default('&mdash;') }}</td>
-            <td class="px-4 py-3 text-xs text-slate-500">
-              {% if c.start_date %}{{ c.start_date.strftime('%b %d') if c.start_date else '' }}{% endif %}
-              {% if c.start_date and c.end_date %} &ndash; {% endif %}
-              {% if c.end_date %}{{ c.end_date.strftime('%b %d') if c.end_date else '' }}{% endif %}
-              {% if not c.start_date and not c.end_date %}&mdash;{% endif %}
-            </td>
-            <td class="px-4 py-3 text-xs text-slate-500">{{ c.created_at.strftime('%b %d') if c.created_at else '&mdash;' }}</td>
+            <td class="px-4 py-3 text-sm font-medium text-navy-950">{{ cs.performance.total_targets|default(0) if cs.performance else 0 }}</td>
+            <td class="px-4 py-3 text-sm text-navy-950">{{ "%.1f"|format(cs.performance.response_rate|default(0)) if cs.performance else "—" }}%</td>
+            <td class="px-4 py-3 text-sm text-green-700">{{ "%.1f"|format(cs.performance.conversion_rate|default(0)) if cs.performance else "—" }}%</td>
+            <td class="px-4 py-3 text-xs text-slate-500">{{ cs.campaign.created_at.strftime('%b %d') if cs.campaign.created_at else '&mdash;' }}</td>
             <td class="px-4 py-3">
               <button class="text-xs text-cobalt-500 hover:text-cobalt-600 font-medium"
-                hx-get="/dashboard/outreach/campaigns/{{ c.id }}"
-                hx-target="#campaign-detail-{{ c.id }}"
+                hx-get="/dashboard/outreach/campaigns/{{ cs.campaign.id }}"
+                hx-target="#campaign-detail-{{ cs.campaign.id }}"
                 hx-swap="innerHTML">
                 Details
               </button>
             </td>
           </tr>
-          <tr id="campaign-detail-row-{{ c.id }}">
-            <td colspan="7" class="px-0 py-0">
-              <div id="campaign-detail-{{ c.id }}">
+          <tr id="campaign-detail-row-{{ cs.campaign.id }}">
+            <td colspan="8" class="px-0 py-0">
+              <div id="campaign-detail-{{ cs.campaign.id }}">
                 {# Campaign detail loaded via HTMX #}
               </div>
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">No campaigns yet. Create your first campaign to start outreach.</td>
+            <td colspan="8" class="px-4 py-12 text-center text-sm text-slate-500">No campaigns yet. Create your first campaign to start outreach.</td>
           </tr>
           {% endfor %}
         </tbody>
