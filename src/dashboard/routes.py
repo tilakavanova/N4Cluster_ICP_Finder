@@ -1024,12 +1024,18 @@ async def prospect_finder(
             "avg_distance": sum(distances) / len(distances) if distances else None,
         }
 
+    from src.services.outreach import list_campaigns
+    active_campaigns = await list_campaigns(session, status="active")
+    draft_campaigns = await list_campaigns(session, status="draft")
+
     html = templates.get_template("prospects.html").render(
         prospects=prospects,
         stats=stats,
         filters=filters,
         searched=searched,
         active_tab="prospects",
+        active_campaigns=active_campaigns,
+        draft_campaigns=draft_campaigns,
     )
     return HTMLResponse(html)
 

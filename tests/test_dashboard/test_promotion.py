@@ -181,6 +181,18 @@ async def test_prospects_page_renders_with_action_column(
 
 
 @pytest.mark.asyncio
+async def test_prospects_page_includes_bulk_toolbar_and_modal(
+    async_client, logged_in_session
+):
+    response = await async_client.get("/dashboard/prospects?zip_code=02115")
+    assert response.status_code == 200
+    body = response.text
+    assert 'id="bulk-toolbar"' in body
+    assert 'id="promote-modal"' in body
+    assert "Promote Selected to Leads" in body or "promote-form" in body
+
+
+@pytest.mark.asyncio
 async def test_qualification_card_shows_qualifying_state_when_no_result(
     async_client, db_session, sample_restaurant_with_icp_score, logged_in_session
 ):
