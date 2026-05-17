@@ -72,3 +72,30 @@ async def test_promote_skips_already_lead(db_session, sample_restaurant_with_icp
 
     assert result.promoted == 0
     assert result.skipped_already_lead == 1
+
+
+@pytest.mark.asyncio
+async def test_promote_attaches_to_existing_campaign(
+    db_session, sample_restaurant_with_icp_score
+):
+    from src.services.outreach import create_campaign, list_targets
+    campaign = await create_campaign(db_session, name="Existing", campaign_type="email")
+    await db_session.flush()
+
+    result = await promote_prospects(
+        db_session,
+        restaurant_ids=[sample_restaurant_with_icp_score.id],
+        campaign_id=campaign.id,
+        new_campaign=None,
+        owner=None,
+        notes=None,
+        actor="rep@example.com",
+    )
+
+    assert result.promoted == 1
+    assert result.campaign_id == str(campaign.id)
+
+    targets = await list_targets(db_session, campaign.id)
+    assert len(targets) == 1
+    assert targets[0].restaurant_id == sample_restaurant_with_icp_score.id
+    assert str(targets[0].lead_id) == result.lead_ids[0]

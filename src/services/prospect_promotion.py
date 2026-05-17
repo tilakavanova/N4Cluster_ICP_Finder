@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import ICPScore, Lead, Restaurant
+from src.db.models import ICPScore, Lead, OutreachTarget, Restaurant
 from src.utils.logging import get_logger
 
 logger = get_logger("prospect_promotion")
@@ -47,10 +47,17 @@ async def promote_prospects(
 
     result = PromotionResult()
 
+    # new_campaign creation lands here in Task B7; for now only existing campaigns.
+    effective_campaign_id = campaign_id
+    if effective_campaign_id:
+        result.campaign_id = str(effective_campaign_id)
+
     for rid in restaurant_ids:
         try:
             async with session.begin_nested():
-                await _promote_one(session, rid, owner, actor, result)
+                await _promote_one(
+                    session, rid, effective_campaign_id, owner, actor, result
+                )
         except IntegrityError:
             # Race: another request created a Lead for this restaurant between our
             # pre-flight check and the flush inside _promote_one. The SAVEPOINT was
@@ -77,6 +84,7 @@ async def promote_prospects(
 async def _promote_one(
     session: AsyncSession,
     restaurant_id: UUID,
+    campaign_id: UUID | None,
     owner: str | None,
     actor: str,
     result: PromotionResult,
@@ -127,6 +135,30 @@ async def _promote_one(
 
     result.promoted += 1
     result.lead_ids.append(str(lead.id))
+
+    # Attach to campaign if requested. Scoped to its own SAVEPOINT so a dup-attach
+    # (UNIQUE(campaign_id, restaurant_id)) only rolls back the target insert,
+    # leaving the just-created Lead intact within the outer savepoint.
+    if campaign_id is not None:
+        try:
+            async with session.begin_nested():
+                target = OutreachTarget(
+                    campaign_id=campaign_id,
+                    restaurant_id=restaurant_id,
+                    lead_id=lead.id,
+                    status="pending",
+                    communication_status="queued",
+                    priority=int(icp.total_icp_score) if icp and icp.total_icp_score else 0,
+                )
+                session.add(target)
+        except IntegrityError:
+            # Dup attach — benign no-op; the inner SAVEPOINT auto-rolled-back the
+            # OutreachTarget insert without affecting the Lead row.
+            logger.info(
+                "campaign_attach_skipped_duplicate",
+                restaurant_id=str(restaurant_id),
+                campaign_id=str(campaign_id),
+            )
 
     # Data-quality warning — Restaurant has no email column, only phone.
     if not restaurant.phone:
