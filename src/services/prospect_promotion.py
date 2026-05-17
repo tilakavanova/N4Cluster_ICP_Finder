@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import ICPScore, Lead, Restaurant
@@ -49,8 +49,25 @@ async def promote_prospects(
 
     for rid in restaurant_ids:
         try:
-            await _promote_one(session, rid, owner, actor, result)
-        except Exception as exc:
+            async with session.begin_nested():
+                await _promote_one(session, rid, owner, actor, result)
+        except IntegrityError:
+            # Race: another request created a Lead for this restaurant between our
+            # pre-flight check and the flush inside _promote_one. The SAVEPOINT was
+            # auto-rolled-back when the begin_nested() block exited with the exception,
+            # so the outer transaction (and previously-promoted Leads) remain intact.
+            # Re-check for the existing Lead now that the conflicting row is visible.
+            re_existing = (
+                await session.execute(select(Lead).where(Lead.restaurant_id == rid))
+            ).scalar_one_or_none()
+            if re_existing is not None:
+                result.skipped_already_lead += 1
+            else:
+                logger.exception("promote_one_integrity_error", restaurant_id=str(rid))
+                result.failed.append(
+                    {"restaurant_id": str(rid), "reason": "integrity_error"}
+                )
+        except (ValueError, SQLAlchemyError) as exc:
             logger.exception("promote_one_failed", restaurant_id=str(rid))
             result.failed.append({"restaurant_id": str(rid), "reason": str(exc)})
 
@@ -100,31 +117,21 @@ async def _promote_one(
         icp_score_id=icp.id if icp else None,
         icp_total_score=icp.total_icp_score if icp else None,
         icp_fit_label=icp.fit_label if icp else None,
-        is_independent=getattr(icp, "is_independent", None),
-        has_delivery=getattr(icp, "has_delivery", None),
+        is_independent=icp.is_independent if icp else None,
+        has_delivery=icp.has_delivery if icp else None,
     )
     session.add(lead)
-
-    try:
-        await session.flush()
-    except IntegrityError:
-        await session.rollback()
-        # Race: another request created the Lead between our pre-flight check and insert.
-        re_existing = (
-            await session.execute(select(Lead).where(Lead.restaurant_id == restaurant_id))
-        ).scalar_one_or_none()
-        if re_existing is not None:
-            result.skipped_already_lead += 1
-            return
-        raise
+    # IntegrityError on flush propagates to the caller, where the surrounding
+    # session.begin_nested() SAVEPOINT auto-rolls-back and the race is recovered.
+    await session.flush()
 
     result.promoted += 1
     result.lead_ids.append(str(lead.id))
 
-    # Data-quality warning
-    if not restaurant.phone and not getattr(restaurant, "email", None):
+    # Data-quality warning — Restaurant has no email column, only phone.
+    if not restaurant.phone:
         result.data_warnings.append(
-            {"restaurant_id": str(restaurant_id), "warning": "no_contact_info"}
+            {"restaurant_id": str(restaurant_id), "warning": "no_phone"}
         )
 
     logger.info("prospect_promoted", restaurant_id=str(restaurant_id), lead_id=str(lead.id))
