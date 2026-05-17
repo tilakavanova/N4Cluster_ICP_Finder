@@ -252,3 +252,43 @@ async def test_promote_reuses_existing_qualification(
     ).scalar_one()
     assert lead.lifecycle_stage == "qualified"
     assert lead.status == "qualified"
+
+
+@pytest.mark.asyncio
+async def test_promote_bulk_mixed_outcomes(db_session):
+    """5 restaurants: 3 fresh promote, 1 already-Lead, 1 missing."""
+    from uuid import uuid4
+    from src.db.models import Restaurant, ICPScore, Lead
+
+    fresh = []
+    for i in range(3):
+        r = Restaurant(name=f"Fresh {i}", address=f"{i} St", city="Boston", state="MA")
+        db_session.add(r)
+        await db_session.flush()
+        db_session.add(ICPScore(restaurant_id=r.id, total_icp_score=70.0, fit_label="good"))
+        fresh.append(r)
+
+    already = Restaurant(name="Already", address="X St", city="Boston", state="MA")
+    db_session.add(already)
+    await db_session.flush()
+    db_session.add(Lead(
+        source="manual", status="new", lifecycle_stage="new", restaurant_id=already.id,
+    ))
+    await db_session.flush()
+
+    missing_id = uuid4()
+
+    result = await promote_prospects(
+        db_session,
+        restaurant_ids=[r.id for r in fresh] + [already.id, missing_id],
+        campaign_id=None,
+        new_campaign=None,
+        owner=None,
+        notes=None,
+        actor="rep@example.com",
+    )
+
+    assert result.promoted == 3
+    assert result.skipped_already_lead == 1
+    assert len(result.failed) == 1
+    assert str(missing_id) in result.failed[0]["restaurant_id"]
