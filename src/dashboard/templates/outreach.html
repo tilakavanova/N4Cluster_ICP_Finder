@@ -112,7 +112,7 @@
             <td class="px-4 py-3 text-xs text-slate-500">{{ c.created_at.strftime('%b %d') if c.created_at else '&mdash;' }}</td>
             <td class="px-4 py-3">
               <button class="text-xs text-cobalt-500 hover:text-cobalt-600 font-medium"
-                hx-get="/dashboard/outreach/campaigns/{{ c.id }}/detail"
+                hx-get="/dashboard/outreach/campaigns/{{ c.id }}"
                 hx-target="#campaign-detail-{{ c.id }}"
                 hx-swap="innerHTML">
                 Details
