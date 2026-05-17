@@ -177,4 +177,34 @@ async def _promote_one(
             {"restaurant_id": str(restaurant_id), "warning": "no_phone"}
         )
 
+    # Qualification dispatch — reuse a non-expired qualified/needs_review result
+    # if present, otherwise dispatch a Celery task to qualify this restaurant.
+    from datetime import datetime, timezone
+
+    from src.services.qualification import get_latest_qualification
+
+    existing_qual = await get_latest_qualification(session, restaurant_id)
+    reuse = (
+        existing_qual is not None
+        and existing_qual.qualification_status in {"qualified", "needs_review"}
+        and (
+            existing_qual.expires_at is None
+            or existing_qual.expires_at > datetime.now(timezone.utc)
+        )
+    )
+    if reuse:
+        result.reused_qualifications += 1
+        # If reused result is qualified, advance the Lead's lifecycle stage now
+        # (mirrors what qualify_restaurant_task would do upon a qualified verdict).
+        if existing_qual.qualification_status == "qualified":
+            lead.lifecycle_stage = "qualified"
+            lead.status = "qualified"
+    else:
+        from src.tasks.qualification_tasks import qualify_restaurant_task
+
+        async_result = qualify_restaurant_task.delay(
+            str(restaurant_id), str(lead.id)
+        )
+        result.qualification_task_ids.append(async_result.id)
+
     logger.info("prospect_promoted", restaurant_id=str(restaurant_id), lead_id=str(lead.id))
