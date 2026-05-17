@@ -20,9 +20,7 @@ logger = get_logger("tasks.qualification")
     max_retries=3,
     default_retry_delay=60,
 )
-def qualify_restaurant_task(
-    self, restaurant_id: str, lead_id: str | None = None
-) -> dict:
+def qualify_restaurant_task(self, restaurant_id: str, lead_id: str | None = None) -> dict:
     """Run qualification for a single restaurant and link result to a Lead if provided.
 
     Args:
@@ -65,7 +63,5 @@ def qualify_restaurant_task(
     try:
         return run_async(_run())
     except Exception as exc:
-        logger.error(
-            "qualify_task_failed", restaurant_id=restaurant_id, error=str(exc)
-        )
+        logger.error("qualify_task_failed", restaurant_id=restaurant_id, error=str(exc))
         raise self.retry(exc=exc)

@@ -25,6 +25,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Token endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.post("/token")
 async def issue_token(
     client_id: str = Form(...),
@@ -40,9 +41,7 @@ async def issue_token(
     # Requested scopes — intersect with what the client is allowed
     requested = [s.strip() for s in scope.split() if s.strip()]
     effective_scopes = (
-        [s for s in requested if s in (client.scopes or [])]
-        if requested
-        else (client.scopes or [])
+        [s for s in requested if s in (client.scopes or [])] if requested else (client.scopes or [])
     )
 
     expires_in = 60 * 60  # 1 hour
@@ -78,9 +77,7 @@ async def refresh_token(
 
     from src.db.auth_models import APIClient
 
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
     if client is None or not client.is_active:
         raise HTTPException(status_code=401, detail="Client no longer active")
@@ -100,6 +97,7 @@ async def refresh_token(
 # ---------------------------------------------------------------------------
 # Client management (admin-only)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/clients", status_code=201)
 async def create_client(

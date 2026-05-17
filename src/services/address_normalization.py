@@ -107,15 +107,16 @@ async def geocode_restaurant(
     restaurant_id: UUID,
 ) -> dict:
     """Normalize address and update lat/lng for a specific restaurant."""
-    result = await session.execute(
-        select(Restaurant).where(Restaurant.id == restaurant_id)
-    )
+    result = await session.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
     restaurant = result.scalar_one_or_none()
     if not restaurant:
         return {"error": f"Restaurant {restaurant_id} not found"}
 
     if not restaurant.address:
-        return {"error": "Restaurant has no address to normalize", "restaurant_id": str(restaurant_id)}
+        return {
+            "error": "Restaurant has no address to normalize",
+            "restaurant_id": str(restaurant_id),
+        }
 
     normalized = await normalize_address(
         address=restaurant.address,
@@ -198,7 +199,9 @@ async def batch_normalize(
             results.append({"restaurant_id": str(restaurant.id), "error": str(exc)})
             logger.error("batch_normalize_error", restaurant_id=str(restaurant.id), error=str(exc))
 
-    logger.info("batch_normalize_complete", processed=processed, errors=errors, total=len(restaurants))
+    logger.info(
+        "batch_normalize_complete", processed=processed, errors=errors, total=len(restaurants)
+    )
     return {
         "total": len(restaurants),
         "processed": processed,

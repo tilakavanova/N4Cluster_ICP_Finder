@@ -27,6 +27,7 @@ router = APIRouter(
 
 # -- Schemas -------------------------------------------------------------------
 
+
 class CreatePromptBody(BaseModel):
     name: str
     prompt_text: str
@@ -52,6 +53,7 @@ class RollbackBody(BaseModel):
 
 # -- Helpers -------------------------------------------------------------------
 
+
 def _template_to_dict(t) -> dict:
     return {
         "id": str(t.id),
@@ -70,6 +72,7 @@ def _template_to_dict(t) -> dict:
 
 
 # -- Endpoints -----------------------------------------------------------------
+
 
 @router.get("")
 async def list_active_prompts(

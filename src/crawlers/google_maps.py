@@ -33,7 +33,9 @@ class GoogleMapsCrawler(BaseCrawler):
     async def crawl(self, query: str, location: str) -> AsyncIterator[dict]:
         """Crawl Google Places API for restaurant listings."""
         if not settings.google_places_api_key:
-            raise ValueError("GOOGLE_PLACES_API_KEY is not set. Add it to your environment variables.")
+            raise ValueError(
+                "GOOGLE_PLACES_API_KEY is not set. Add it to your environment variables."
+            )
 
         search_text = f"{query} in {location}"
         self.logger.info("starting_crawl", query=search_text)

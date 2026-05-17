@@ -160,7 +160,9 @@ async def record_sms_consent(
     )
 
 
-@router.get("/consent/{phone_number}", response_model=ConsentResponse, dependencies=[Depends(require_auth)])
+@router.get(
+    "/consent/{phone_number}", response_model=ConsentResponse, dependencies=[Depends(require_auth)]
+)
 async def get_consent_status(
     phone_number: str,
     session: AsyncSession = Depends(get_session),

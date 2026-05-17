@@ -58,7 +58,11 @@ def _walk(obj: Any, *, in_pii_key: bool = False) -> Any:
         for k, v in obj.items():
             k_lower = k.lower() if isinstance(k, str) else k
             if k_lower in _ALL_PII_KEYS:
-                result[k] = _mask_value(k, v) if not isinstance(v, (dict, list)) else _walk(v, in_pii_key=True)
+                result[k] = (
+                    _mask_value(k, v)
+                    if not isinstance(v, (dict, list))
+                    else _walk(v, in_pii_key=True)
+                )
             else:
                 result[k] = _walk(v)
         return result

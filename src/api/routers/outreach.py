@@ -71,7 +71,9 @@ class TargetSelect(BaseModel):
 
 class ActivityCreate(BaseModel):
     activity_type: str = Field(pattern="^(email_sent|call_made|sms_sent|meeting|note)$")
-    outcome: str | None = Field(default=None, pattern="^(no_answer|interested|not_interested|callback|converted)$")
+    outcome: str | None = Field(
+        default=None, pattern="^(no_answer|interested|not_interested|callback|converted)$"
+    )
     notes: str | None = None
     performed_by: str = "system"
 

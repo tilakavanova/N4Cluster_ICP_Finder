@@ -57,9 +57,7 @@ async def savings_calculator(
     Used by the N4ClusterDotcom pricing page interactive calculator.
     """
     # Try to find restaurant in DB
-    query = select(Restaurant).where(
-        func.lower(Restaurant.name).contains(company.lower().strip())
-    )
+    query = select(Restaurant).where(func.lower(Restaurant.name).contains(company.lower().strip()))
     if city:
         query = query.where(func.lower(Restaurant.city) == city.lower().strip())
     query = query.limit(1)
@@ -91,11 +89,13 @@ async def savings_calculator(
             for p in icp_score.delivery_platforms:
                 p_lower = p.lower()
                 default = DEFAULTS["platforms"].get(p_lower)
-                detected_platforms.append({
-                    "id": p_lower,
-                    "name": default["name"] if default else p,
-                    "commission_pct": default["commission_pct"] if default else 0.25,
-                })
+                detected_platforms.append(
+                    {
+                        "id": p_lower,
+                        "name": default["name"] if default else p,
+                        "commission_pct": default["commission_pct"] if default else 0.25,
+                    }
+                )
 
         # If no platforms detected from ICP, check source records
         if not detected_platforms and delivery_records:
@@ -105,18 +105,24 @@ async def savings_calculator(
                 if src not in seen and src in DEFAULTS["platforms"]:
                     seen.add(src)
                     default = DEFAULTS["platforms"][src]
-                    detected_platforms.append({
-                        "id": src,
-                        "name": default["name"],
-                        "commission_pct": default["commission_pct"],
-                    })
+                    detected_platforms.append(
+                        {
+                            "id": src,
+                            "name": default["name"],
+                            "commission_pct": default["commission_pct"],
+                        }
+                    )
 
         # Calculate savings
         monthly_revenue = avg_order * monthly_orders
-        total_commission = sum(
-            monthly_revenue * p["commission_pct"] / max(len(detected_platforms), 1)
-            for p in detected_platforms
-        ) if detected_platforms else monthly_revenue * 0.25
+        total_commission = (
+            sum(
+                monthly_revenue * p["commission_pct"] / max(len(detected_platforms), 1)
+                for p in detected_platforms
+            )
+            if detected_platforms
+            else monthly_revenue * 0.25
+        )
         n4_monthly_cost = monthly_orders * DEFAULTS["n4cluster_fee_per_order"]
         monthly_savings = total_commission - n4_monthly_cost
 

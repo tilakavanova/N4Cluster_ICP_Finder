@@ -12,7 +12,9 @@ logger = get_logger("tasks.score")
 @celery_app.task(name="src.tasks.score_tasks.score_restaurants")
 def score_restaurants(restaurant_ids: list[str] | None = None):
     """Compute ICP scores for restaurants."""
-    logger.info("score_task_started", restaurant_ids_count=len(restaurant_ids) if restaurant_ids else "all")
+    logger.info(
+        "score_task_started", restaurant_ids_count=len(restaurant_ids) if restaurant_ids else "all"
+    )
 
     async def _score():
         from datetime import datetime
@@ -44,12 +46,14 @@ def score_restaurants(restaurant_ids: list[str] | None = None):
             sr_map = {}
             for sr in all_records:
                 rid = str(sr.restaurant_id)
-                sr_map.setdefault(rid, []).append({
-                    "source": sr.source,
-                    "source_url": sr.source_url,
-                    "raw_data": sr.raw_data,
-                    "extracted_data": sr.extracted_data,
-                })
+                sr_map.setdefault(rid, []).append(
+                    {
+                        "source": sr.source,
+                        "source_url": sr.source_url,
+                        "raw_data": sr.raw_data,
+                        "extracted_data": sr.extracted_data,
+                    }
+                )
 
             rest_dicts = [
                 {
@@ -68,36 +72,40 @@ def score_restaurants(restaurant_ids: list[str] | None = None):
             scores = icp_scorer.score_batch(rest_dicts, sr_map, density_scores)
 
             for score in scores:
-                stmt = insert(ICPScore).values(
-                    restaurant_id=score["restaurant_id"],
-                    is_independent=score["is_independent"],
-                    has_delivery=score["has_delivery"],
-                    delivery_platforms=score["delivery_platforms"],
-                    has_pos=score["has_pos"],
-                    pos_provider=score["pos_provider"],
-                    geo_density_score=score["geo_density_score"],
-                    review_volume=score["review_volume"],
-                    rating_avg=score["rating_avg"],
-                    total_icp_score=score["total_icp_score"],
-                    fit_label=score["fit_label"],
-                    scoring_version=score["scoring_version"],
-                    scored_at=datetime.now(UTC),
-                ).on_conflict_do_update(
-                    index_elements=["restaurant_id"],
-                    set_={
-                        "is_independent": score["is_independent"],
-                        "has_delivery": score["has_delivery"],
-                        "delivery_platforms": score["delivery_platforms"],
-                        "has_pos": score["has_pos"],
-                        "pos_provider": score["pos_provider"],
-                        "geo_density_score": score["geo_density_score"],
-                        "review_volume": score["review_volume"],
-                        "rating_avg": score["rating_avg"],
-                        "total_icp_score": score["total_icp_score"],
-                        "fit_label": score["fit_label"],
-                        "scoring_version": score["scoring_version"],
-                        "scored_at": datetime.now(UTC),
-                    },
+                stmt = (
+                    insert(ICPScore)
+                    .values(
+                        restaurant_id=score["restaurant_id"],
+                        is_independent=score["is_independent"],
+                        has_delivery=score["has_delivery"],
+                        delivery_platforms=score["delivery_platforms"],
+                        has_pos=score["has_pos"],
+                        pos_provider=score["pos_provider"],
+                        geo_density_score=score["geo_density_score"],
+                        review_volume=score["review_volume"],
+                        rating_avg=score["rating_avg"],
+                        total_icp_score=score["total_icp_score"],
+                        fit_label=score["fit_label"],
+                        scoring_version=score["scoring_version"],
+                        scored_at=datetime.now(UTC),
+                    )
+                    .on_conflict_do_update(
+                        index_elements=["restaurant_id"],
+                        set_={
+                            "is_independent": score["is_independent"],
+                            "has_delivery": score["has_delivery"],
+                            "delivery_platforms": score["delivery_platforms"],
+                            "has_pos": score["has_pos"],
+                            "pos_provider": score["pos_provider"],
+                            "geo_density_score": score["geo_density_score"],
+                            "review_volume": score["review_volume"],
+                            "rating_avg": score["rating_avg"],
+                            "total_icp_score": score["total_icp_score"],
+                            "fit_label": score["fit_label"],
+                            "scoring_version": score["scoring_version"],
+                            "scored_at": datetime.now(UTC),
+                        },
+                    )
                 )
                 await session.execute(stmt)
 

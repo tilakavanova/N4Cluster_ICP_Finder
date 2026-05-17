@@ -62,8 +62,12 @@ def _evaluate_delivery(icp: ICPScore | None) -> tuple[float, str, str]:
         impact = "positive"
     else:
         impact = "neutral"
-    platforms = icp.delivery_platforms or []
-    return value, impact, f"{platform_count} delivery platform(s): {', '.join(platforms) if platforms else 'unknown'}"
+    platforms: list = icp.delivery_platforms or []
+    return (
+        value,
+        impact,
+        f"{platform_count} delivery platform(s): {', '.join(platforms) if platforms else 'unknown'}",
+    )
 
 
 def _evaluate_independence(icp: ICPScore | None, restaurant: Restaurant) -> tuple[float, str, str]:
@@ -118,21 +122,25 @@ def _compute_qualification(
         weight = SIGNAL_WEIGHTS[signal_name]
         weighted_sum += value * weight
 
-        signals.append({
-            "signal": signal_name,
-            "value": round(value, 3),
-            "weight": weight,
-            "impact": impact,
-            "explanation": explanation,
-        })
+        signals.append(
+            {
+                "signal": signal_name,
+                "value": round(value, 3),
+                "weight": weight,
+                "impact": impact,
+                "explanation": explanation,
+            }
+        )
 
-        explanations_data.append({
-            "factor_name": signal_name,
-            "factor_value": str(round(value, 3)),
-            "impact": impact,
-            "weight": weight,
-            "explanation_text": explanation,
-        })
+        explanations_data.append(
+            {
+                "factor_name": signal_name,
+                "factor_value": str(round(value, 3)),
+                "impact": impact,
+                "weight": weight,
+                "explanation_text": explanation,
+            }
+        )
 
     confidence = round(min(max(weighted_sum, 0.0), 1.0), 4)
 
@@ -156,16 +164,16 @@ async def qualify_restaurant(
         raise ValueError(f"Restaurant {restaurant_id} not found")
 
     # Load ICP score
-    result = await session.execute(
-        select(ICPScore).where(ICPScore.restaurant_id == restaurant_id)
-    )
+    result = await session.execute(select(ICPScore).where(ICPScore.restaurant_id == restaurant_id))
     icp = result.scalar_one_or_none()
 
     status, confidence, signals, explanations_data = _compute_qualification(restaurant, icp)
 
     now = datetime.now(UTC)
     qualified_at = now if status == "qualified" else None
-    expires_at = (now + timedelta(days=QUALIFICATION_EXPIRY_DAYS)) if status == "qualified" else None
+    expires_at = (
+        (now + timedelta(days=QUALIFICATION_EXPIRY_DAYS)) if status == "qualified" else None
+    )
 
     qual_result = QualificationResult(
         restaurant_id=restaurant_id,

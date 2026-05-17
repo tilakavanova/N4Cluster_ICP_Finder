@@ -26,7 +26,9 @@ class DeliveryCrawler(BaseCrawler):
             async for record in self._crawl_serpapi(query, location):
                 yield record
         else:
-            raise ValueError("Need YELP_FUSION_API_KEY or SERPAPI_API_KEY for delivery crawling. Add at least one to your environment variables.")
+            raise ValueError(
+                "Need YELP_FUSION_API_KEY or SERPAPI_API_KEY for delivery crawling. Add at least one to your environment variables."
+            )
 
     async def _crawl_yelp_delivery(self, query: str, location: str) -> AsyncIterator[dict]:
         """Find delivery-enabled restaurants via Yelp Fusion API."""
@@ -119,7 +121,6 @@ class DeliveryCrawler(BaseCrawler):
             for result in results:
                 link = result.get("link", "").lower()
                 title = result.get("title", "")
-                snippet = result.get("snippet", "")
 
                 platforms = []
                 if "doordash.com" in link:

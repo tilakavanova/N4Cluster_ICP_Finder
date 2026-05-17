@@ -93,12 +93,14 @@ class ClosingAgent(BaseAgent):
         sequence = []
         for step in DEFAULT_FOLLOWUP_SEQUENCE:
             scheduled = now + timedelta(days=step["day"])
-            sequence.append({
-                "day": step["day"],
-                "scheduled_at": scheduled.isoformat(),
-                "channel": step["channel"],
-                "action": step["action"],
-            })
+            sequence.append(
+                {
+                    "day": step["day"],
+                    "scheduled_at": scheduled.isoformat(),
+                    "channel": step["channel"],
+                    "action": step["action"],
+                }
+            )
 
         return AgentResult(
             success=True,

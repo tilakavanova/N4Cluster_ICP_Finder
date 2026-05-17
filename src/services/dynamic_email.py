@@ -79,7 +79,9 @@ async def generate_email_content(
     Returns:
         Dict with 'subject' and 'body' keys.
     """
-    restaurant_type = (archetype or {}).get("restaurant_type") or lead.get("business_type", "restaurant")
+    restaurant_type = (archetype or {}).get("restaurant_type") or lead.get(
+        "business_type", "restaurant"
+    )
     city = (archetype or {}).get("city") or lead.get("city", "your area")
 
     # Check archetype cache first
@@ -100,7 +102,10 @@ async def generate_email_content(
     try:
         content = await llm_client.extract_json(prompt)
         if not content or "subject" not in content:
-            content = {"subject": f"Grow your {restaurant_type} in {city}", "body": content.get("body", "")}
+            content = {
+                "subject": f"Grow your {restaurant_type} in {city}",
+                "body": content.get("body", ""),
+            }
 
         # Cache the archetype skeleton (before personalisation)
         set_cached_archetype(restaurant_type, city, content)

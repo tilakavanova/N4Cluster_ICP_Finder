@@ -23,9 +23,9 @@ logger = get_logger("anomaly_detection")
 
 # ── Thresholds ───────────────────────────────────────────────────
 
-BOUNCE_RATE_THRESHOLD = 0.10       # 10%
-COMPLAINT_RATE_THRESHOLD = 0.01    # 1%
-VOLUME_DROP_THRESHOLD = 0.50       # 50% drop from previous period
+BOUNCE_RATE_THRESHOLD = 0.10  # 10%
+COMPLAINT_RATE_THRESHOLD = 0.01  # 1%
+VOLUME_DROP_THRESHOLD = 0.50  # 50% drop from previous period
 
 # Look-back window for metrics
 LOOKBACK_HOURS = 24
@@ -118,21 +118,25 @@ async def check_campaign_health(
 
     # High bounce rate
     if metrics["total_sends"] > 0 and metrics["bounce_rate"] > BOUNCE_RATE_THRESHOLD:
-        anomalies.append({
-            "type": "high_bounce",
-            "metric_value": metrics["bounce_rate"],
-            "threshold": BOUNCE_RATE_THRESHOLD,
-            "details": {"bounces": metrics["bounces"], "sends": metrics["total_sends"]},
-        })
+        anomalies.append(
+            {
+                "type": "high_bounce",
+                "metric_value": metrics["bounce_rate"],
+                "threshold": BOUNCE_RATE_THRESHOLD,
+                "details": {"bounces": metrics["bounces"], "sends": metrics["total_sends"]},
+            }
+        )
 
     # High complaint rate
     if metrics["total_sends"] > 0 and metrics["complaint_rate"] > COMPLAINT_RATE_THRESHOLD:
-        anomalies.append({
-            "type": "high_complaint",
-            "metric_value": metrics["complaint_rate"],
-            "threshold": COMPLAINT_RATE_THRESHOLD,
-            "details": {"complaints": metrics["complaints"], "sends": metrics["total_sends"]},
-        })
+        anomalies.append(
+            {
+                "type": "high_complaint",
+                "metric_value": metrics["complaint_rate"],
+                "threshold": COMPLAINT_RATE_THRESHOLD,
+                "details": {"complaints": metrics["complaints"], "sends": metrics["total_sends"]},
+            }
+        )
 
     # Volume drop
     previous_volume = await _get_previous_volume(session, campaign_id)
@@ -140,12 +144,14 @@ async def check_campaign_health(
         current = metrics["total_sends"]
         drop_ratio = 1.0 - (current / previous_volume) if previous_volume > 0 else 0.0
         if drop_ratio > VOLUME_DROP_THRESHOLD:
-            anomalies.append({
-                "type": "volume_drop",
-                "metric_value": drop_ratio,
-                "threshold": VOLUME_DROP_THRESHOLD,
-                "details": {"current_volume": current, "previous_volume": previous_volume},
-            })
+            anomalies.append(
+                {
+                    "type": "volume_drop",
+                    "metric_value": drop_ratio,
+                    "threshold": VOLUME_DROP_THRESHOLD,
+                    "details": {"current_volume": current, "previous_volume": previous_volume},
+                }
+            )
 
     return anomalies
 

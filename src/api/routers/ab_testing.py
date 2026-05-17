@@ -26,6 +26,7 @@ router = APIRouter(prefix="/ab-tests", tags=["ab-testing"])
 
 # ── Request / response schemas ───────────────────────────────
 
+
 class CreateExperimentRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     variants: list[dict] = Field(..., min_length=2)
@@ -38,7 +39,9 @@ class CreateScoringExperimentRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     profile_a_id: UUID
     profile_b_id: UUID
-    metric: str = Field(default="conversion_rate", pattern=r"^(open_rate|click_rate|reply_rate|conversion_rate)$")
+    metric: str = Field(
+        default="conversion_rate", pattern=r"^(open_rate|click_rate|reply_rate|conversion_rate)$"
+    )
 
 
 class RecordOutcomeRequest(BaseModel):
@@ -51,6 +54,7 @@ class AssignVariantRequest(BaseModel):
 
 
 # ── Endpoints ────────────────────────────────────────────────
+
 
 @router.post("", status_code=201)
 async def create_experiment(

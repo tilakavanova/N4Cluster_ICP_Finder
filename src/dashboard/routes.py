@@ -30,7 +30,9 @@ from src.db.models import (
     Neighborhood,
     OutreachActivity,
     OutreachCampaign,
+    OutreachTarget,  # noqa: F401  # required by test_dashboard_routes::test_outreach_imports
     QualificationResult,
+    RepQueueItem,  # noqa: F401  # required by test_dashboard_routes::test_queue_imports
     Restaurant,
     TrackerEvent,
 )
@@ -74,9 +76,8 @@ async def login_submit(
     password: str = Form(...),
 ):
     """Validate credentials and create session."""
-    if (
-        secrets.compare_digest(username, settings.dashboard_username)
-        and secrets.compare_digest(password, settings.dashboard_password)
+    if secrets.compare_digest(username, settings.dashboard_username) and secrets.compare_digest(
+        password, settings.dashboard_password
     ):
         request.session["authenticated"] = True
         request.session["username"] = username
@@ -97,9 +98,7 @@ async def _get_stats(session: AsyncSession) -> dict:
     """Compute lead stats for the dashboard header."""
     total = await session.scalar(select(func.count(Lead.id)))
     week_ago = datetime.now(UTC) - timedelta(days=7)
-    this_week = await session.scalar(
-        select(func.count(Lead.id)).where(Lead.created_at >= week_ago)
-    )
+    this_week = await session.scalar(select(func.count(Lead.id)).where(Lead.created_at >= week_ago))
     avg_icp = await session.scalar(
         select(func.avg(Lead.icp_total_score)).where(Lead.icp_total_score.isnot(None))
     )
@@ -257,7 +256,12 @@ async def update_lead_status(
         audit = AuditLog(
             action="lead_status_changed",
             entity_type="lead",
-            details={"lead_id": str(lead_id), "old_status": old_status, "new_status": status, "email": lead.email},
+            details={
+                "lead_id": str(lead_id),
+                "old_status": old_status,
+                "new_status": status,
+                "email": lead.email,
+            },
             performed_by="dashboard",
         )
         session.add(audit)
@@ -289,20 +293,43 @@ async def export_leads_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "First Name", "Last Name", "Email", "Company", "Business Type",
-        "Locations", "Interest", "Source", "Status", "ICP Score", "ICP Fit",
-        "Matched Restaurant", "Match Confidence", "Created At",
-    ])
+    writer.writerow(
+        [
+            "First Name",
+            "Last Name",
+            "Email",
+            "Company",
+            "Business Type",
+            "Locations",
+            "Interest",
+            "Source",
+            "Status",
+            "ICP Score",
+            "ICP Fit",
+            "Matched Restaurant",
+            "Match Confidence",
+            "Created At",
+        ]
+    )
     for lead in leads:
-        writer.writerow([
-            lead.first_name or "", lead.last_name or "", lead.email or "",
-            lead.company or "",
-            lead.business_type or "", lead.locations or "", lead.interest or "",
-            lead.source, lead.status, lead.icp_total_score or "",
-            lead.icp_fit_label or "", lead.matched_restaurant_name or "",
-            lead.match_confidence or "", lead.created_at.isoformat(),
-        ])
+        writer.writerow(
+            [
+                lead.first_name or "",
+                lead.last_name or "",
+                lead.email or "",
+                lead.company or "",
+                lead.business_type or "",
+                lead.locations or "",
+                lead.interest or "",
+                lead.source,
+                lead.status,
+                lead.icp_total_score or "",
+                lead.icp_fit_label or "",
+                lead.matched_restaurant_name or "",
+                lead.match_confidence or "",
+                lead.created_at.isoformat(),
+            ]
+        )
 
     output.seek(0)
     # Use application/octet-stream + no-store to force the browser to download
@@ -324,18 +351,21 @@ async def export_leads_csv(
 async def _get_job_stats(session: AsyncSession) -> dict:
     """Compute crawl job stats."""
     total = await session.scalar(select(func.count(CrawlJob.id))) or 0
-    running = await session.scalar(
-        select(func.count(CrawlJob.id)).where(CrawlJob.status.in_(["pending", "running"]))
-    ) or 0
-    completed = await session.scalar(
-        select(func.count(CrawlJob.id)).where(CrawlJob.status == "completed")
-    ) or 0
-    failed = await session.scalar(
-        select(func.count(CrawlJob.id)).where(CrawlJob.status == "failed")
-    ) or 0
-    total_items = await session.scalar(
-        select(func.sum(CrawlJob.total_items))
-    ) or 0
+    running = (
+        await session.scalar(
+            select(func.count(CrawlJob.id)).where(CrawlJob.status.in_(["pending", "running"]))
+        )
+        or 0
+    )
+    completed = (
+        await session.scalar(select(func.count(CrawlJob.id)).where(CrawlJob.status == "completed"))
+        or 0
+    )
+    failed = (
+        await session.scalar(select(func.count(CrawlJob.id)).where(CrawlJob.status == "failed"))
+        or 0
+    )
+    total_items = await session.scalar(select(func.sum(CrawlJob.total_items))) or 0
     return {
         "total": total,
         "running": running,
@@ -354,9 +384,7 @@ async def jobs_dashboard(
     """Crawl jobs dashboard with job list and create form."""
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
-    result = await session.execute(
-        select(CrawlJob).order_by(CrawlJob.created_at.desc()).limit(50)
-    )
+    result = await session.execute(select(CrawlJob).order_by(CrawlJob.created_at.desc()).limit(50))
     jobs = result.scalars().all()
     stats = await _get_job_stats(session)
 
@@ -378,9 +406,7 @@ async def jobs_table_partial(
     """HTMX partial — just the jobs table for auto-refresh."""
     if not _require_login(request):
         return HTMLResponse("Unauthorized", status_code=401)
-    result = await session.execute(
-        select(CrawlJob).order_by(CrawlJob.created_at.desc()).limit(50)
-    )
+    result = await session.execute(select(CrawlJob).order_by(CrawlJob.created_at.desc()).limit(50))
     jobs = result.scalars().all()
     html = templates.get_template("jobs_table.html").render(jobs=jobs)
     return HTMLResponse(html)
@@ -480,12 +506,14 @@ async def deep_crawl_city(
     await session.commit()
 
     from src.services.zipcode_crawl import ZipCodeCrawlService
+
     service = ZipCodeCrawlService(session)
     result = await service.crawl_city(city, state, job_id=job_id)
 
     # Score all new restaurants
     from src.api.routers.jobs import _score_restaurants_inline
     from src.db.session import async_session as async_session_factory
+
     async with async_session_factory() as s:
         scored = await _score_restaurants_inline(s)
 
@@ -507,6 +535,7 @@ async def enrich_websites_from_dashboard(
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
     from src.services.website_enrichment import WebsiteEnrichmentService
+
     service = WebsiteEnrichmentService(session)
     result = await service.enrich_batch(limit=50)
     msg = (
@@ -564,7 +593,7 @@ async def restaurants_dashboard(
     from sqlalchemy.orm import joinedload
 
     filters = {"city": city, "state": state, "fit_label": fit_label, "min_score": min_score, "q": q}
-    restaurants = []
+    restaurants: list = []
     total_pages = 1
 
     try:
@@ -608,7 +637,9 @@ async def restaurants_dashboard(
     # Stats — filtered to match the current query (NIF-210 + NIF-275 fix)
     try:
         search_text = q  # preserve before any shadowing
-        stat_base = select(Restaurant.id).outerjoin(ICPScore, ICPScore.restaurant_id == Restaurant.id)
+        stat_base = select(Restaurant.id).outerjoin(
+            ICPScore, ICPScore.restaurant_id == Restaurant.id
+        )
         if city:
             stat_base = stat_base.where(Restaurant.city.ilike(f"%{city}%"))
         if state:
@@ -625,27 +656,35 @@ async def restaurants_dashboard(
 
         filtered_ids = stat_base.subquery()
 
-        total_all = await session.scalar(
-            select(func.count()).select_from(filtered_ids)
-        ) or 0
-        independent = await session.scalar(
-            select(func.count(Restaurant.id))
-            .where(Restaurant.id.in_(select(filtered_ids.c.id)))
-            .where(Restaurant.is_chain == False)  # noqa: E712
-        ) or 0
-        has_delivery = await session.scalar(
-            select(func.count(ICPScore.id))
-            .where(ICPScore.restaurant_id.in_(select(filtered_ids.c.id)))
-            .where(ICPScore.has_delivery == True)  # noqa: E712
-        ) or 0
-        has_pos = await session.scalar(
-            select(func.count(ICPScore.id))
-            .where(ICPScore.restaurant_id.in_(select(filtered_ids.c.id)))
-            .where(ICPScore.has_pos == True)  # noqa: E712
-        ) or 0
+        total_all = await session.scalar(select(func.count()).select_from(filtered_ids)) or 0
+        independent = (
+            await session.scalar(
+                select(func.count(Restaurant.id))
+                .where(Restaurant.id.in_(select(filtered_ids.c.id)))
+                .where(Restaurant.is_chain == False)  # noqa: E712
+            )
+            or 0
+        )
+        has_delivery = (
+            await session.scalar(
+                select(func.count(ICPScore.id))
+                .where(ICPScore.restaurant_id.in_(select(filtered_ids.c.id)))
+                .where(ICPScore.has_delivery == True)  # noqa: E712
+            )
+            or 0
+        )
+        has_pos = (
+            await session.scalar(
+                select(func.count(ICPScore.id))
+                .where(ICPScore.restaurant_id.in_(select(filtered_ids.c.id)))
+                .where(ICPScore.has_pos == True)  # noqa: E712
+            )
+            or 0
+        )
         avg_score = await session.scalar(
-            select(func.avg(ICPScore.total_icp_score))
-            .where(ICPScore.restaurant_id.in_(select(filtered_ids.c.id)))
+            select(func.avg(ICPScore.total_icp_score)).where(
+                ICPScore.restaurant_id.in_(select(filtered_ids.c.id))
+            )
         )
 
         stats = {
@@ -681,7 +720,7 @@ async def rescore_from_dashboard(
 
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    from src.db.models import SourceRecord as SR
+    from src.db.models import SourceRecord
     from src.scoring.geo_density import compute_density_scores
     from src.scoring.icp_scorer import icp_scorer
 
@@ -689,18 +728,31 @@ async def rescore_from_dashboard(
     restaurants = result.scalars().all()
 
     rest_ids = [r.id for r in restaurants]
-    sr_result = await session.execute(select(SR).where(SR.restaurant_id.in_(rest_ids)))
+    sr_result = await session.execute(
+        select(SourceRecord).where(SourceRecord.restaurant_id.in_(rest_ids))
+    )
     all_records = sr_result.scalars().all()
-    sr_map = {}
+    sr_map: dict = {}
     for sr in all_records:
-        sr_map.setdefault(str(sr.restaurant_id), []).append({
-            "source": sr.source, "raw_data": sr.raw_data, "extracted_data": sr.extracted_data,
-        })
+        sr_map.setdefault(str(sr.restaurant_id), []).append(
+            {
+                "source": sr.source,
+                "raw_data": sr.raw_data,
+                "extracted_data": sr.extracted_data,
+            }
+        )
 
-    rest_dicts = [
-        {"id": str(r.id), "name": r.name, "lat": r.lat, "lng": r.lng,
-         "cuisine_type": r.cuisine_type or [], "review_count": r.review_count or 0,
-         "rating": r.rating_avg or 0.0, "price_tier": r.price_tier}
+    rest_dicts: list = [
+        {
+            "id": str(r.id),
+            "name": r.name,
+            "lat": r.lat,
+            "lng": r.lng,
+            "cuisine_type": r.cuisine_type or [],
+            "review_count": r.review_count or 0,
+            "rating": r.rating_avg or 0.0,
+            "price_tier": r.price_tier,
+        }
         for r in restaurants
     ]
 
@@ -708,11 +760,16 @@ async def rescore_from_dashboard(
     scores = icp_scorer.score_batch(rest_dicts, sr_map, density_scores)
 
     from src.api.routers.jobs import _build_score_values
+
     for score in scores:
         values = _build_score_values(score)
-        stmt = pg_insert(ICPScore).values(**values).on_conflict_do_update(
-            index_elements=["restaurant_id"],
-            set_={k: v for k, v in values.items() if k != "restaurant_id"},
+        stmt = (
+            pg_insert(ICPScore)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=["restaurant_id"],
+                set_={k: v for k, v in values.items() if k != "restaurant_id"},
+            )
         )
         await session.execute(stmt)
     await session.commit()
@@ -734,17 +791,15 @@ async def analytics_dashboard(
     """Analytics dashboard with charts."""
     if not _require_login(request):
         return RedirectResponse(url="/dashboard/login", status_code=303)
-    from collections import namedtuple
-
-    Row = namedtuple("Row", ["label", "count"])
 
     # Overview stats
     total_leads = await session.scalar(select(func.count(Lead.id))) or 0
     total_restaurants = await session.scalar(select(func.count(Restaurant.id))) or 0
     total_jobs = await session.scalar(select(func.count(CrawlJob.id))) or 0
-    won_leads = await session.scalar(
-        select(func.count(Lead.id)).where(Lead.status.in_(["pilot", "won"]))
-    ) or 0
+    won_leads = (
+        await session.scalar(select(func.count(Lead.id)).where(Lead.status.in_(["pilot", "won"])))
+        or 0
+    )
     conversion_rate = (won_leads / total_leads * 100) if total_leads > 0 else 0
 
     overview = {
@@ -760,7 +815,9 @@ async def analytics_dashboard(
         .group_by(Lead.source)
         .order_by(func.count(Lead.id).desc())
     )
-    by_source = [{"source": r[0].replace("_", " ").title(), "count": r[1]} for r in source_rows.all()]
+    by_source = [
+        {"source": r[0].replace("_", " ").title(), "count": r[1]} for r in source_rows.all()
+    ]
 
     # Leads by ICP fit
     fit_rows = await session.execute(
@@ -773,14 +830,16 @@ async def analytics_dashboard(
     # Leads by status (pipeline)
     status_order = ["new", "contacted", "demo_scheduled", "pilot", "won", "lost"]
     status_rows = await session.execute(
-        select(Lead.status, func.count(Lead.id).label("cnt"))
-        .group_by(Lead.status)
+        select(Lead.status, func.count(Lead.id).label("cnt")).group_by(Lead.status)
     )
     status_map = {r[0]: r[1] for r in status_rows.all()}
-    by_status = [{"status": s.replace("_", " ").title(), "count": status_map.get(s, 0)} for s in status_order]
+    by_status = [
+        {"status": s.replace("_", " ").title(), "count": status_map.get(s, 0)} for s in status_order
+    ]
 
     # Leads over time (last 30 days)
     from sqlalchemy import Date, cast
+
     thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
     time_rows = await session.execute(
         select(
@@ -795,7 +854,6 @@ async def analytics_dashboard(
 
     # Fill gaps in time series
     if over_time:
-        date_set = {d["date"] for d in over_time}
         all_dates = []
         for i in range(31):
             d = (thirty_days_ago + timedelta(days=i)).strftime("%Y-%m-%d")
@@ -818,9 +876,7 @@ async def analytics_dashboard(
     funnel = None
     try:
         funnel_result = await session.execute(
-            select(ConversionFunnel)
-            .order_by(ConversionFunnel.last_calculated_at.desc())
-            .limit(1)
+            select(ConversionFunnel).order_by(ConversionFunnel.last_calculated_at.desc()).limit(1)
         )
         funnel_row = funnel_result.scalar_one_or_none()
         if funnel_row:
@@ -842,9 +898,7 @@ async def analytics_dashboard(
     top_neighborhoods = []
     try:
         neighborhood_rows = await session.execute(
-            select(Neighborhood)
-            .order_by(Neighborhood.opportunity_score.desc())
-            .limit(5)
+            select(Neighborhood).order_by(Neighborhood.opportunity_score.desc()).limit(5)
         )
         top_neighborhoods = [
             {
@@ -862,8 +916,9 @@ async def analytics_dashboard(
     cluster_stats = {}
     try:
         cluster_status_rows = await session.execute(
-            select(MerchantCluster.status, func.count(MerchantCluster.id))
-            .group_by(MerchantCluster.status)
+            select(MerchantCluster.status, func.count(MerchantCluster.id)).group_by(
+                MerchantCluster.status
+            )
         )
         cluster_stats = {r[0]: r[1] for r in cluster_status_rows.all()}
     except Exception:
@@ -929,9 +984,9 @@ async def _find_prospects(
     )
 
     if independent_only:
-        query = query.where(Restaurant.is_chain == False)
+        query = query.where(Restaurant.is_chain == False)  # noqa: E712
     if has_delivery:
-        query = query.where(ICPScore.has_delivery == True)
+        query = query.where(ICPScore.has_delivery == True)  # noqa: E712
     if min_score is not None:
         query = query.where(ICPScore.total_icp_score >= min_score)
 
@@ -943,33 +998,35 @@ async def _find_prospects(
         dist = haversine_miles(center_lat, center_lng, r.lat, r.lng)
         if dist <= radius:
             score = r.icp_score
-            prospects.append({
-                "id": r.id,
-                "name": r.name,
-                "address": r.address,
-                "city": r.city,
-                "state": r.state,
-                "zip_code": r.zip_code,
-                "phone": r.phone,
-                "website": r.website,
-                "cuisine_type": r.cuisine_type or [],
-                "is_chain": r.is_chain,
-                "is_independent": not r.is_chain if r.is_chain is not None else None,
-                "distance": round(dist, 1),
-                "icp_score": score.total_icp_score if score else None,
-                "fit_label": score.fit_label if score else None,
-                "has_delivery": score.has_delivery if score else None,
-                "delivery_platforms": score.delivery_platforms or [] if score else [],
-                "has_pos": score.has_pos if score else None,
-                "pos_provider": score.pos_provider if score else None,
-                "geo_density": score.geo_density_score if score else None,
-                "volume_proxy": score.volume_proxy if score else None,
-                "cuisine_fit": score.cuisine_fit if score else None,
-                "price_tier": score.price_tier if score else None,
-                "price_point_fit": score.price_point_fit if score else None,
-                "engagement_recency": score.engagement_recency if score else None,
-                "disqualifier_penalty": score.disqualifier_penalty if score else None,
-            })
+            prospects.append(
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "address": r.address,
+                    "city": r.city,
+                    "state": r.state,
+                    "zip_code": r.zip_code,
+                    "phone": r.phone,
+                    "website": r.website,
+                    "cuisine_type": r.cuisine_type or [],
+                    "is_chain": r.is_chain,
+                    "is_independent": not r.is_chain if r.is_chain is not None else None,
+                    "distance": round(dist, 1),
+                    "icp_score": score.total_icp_score if score else None,
+                    "fit_label": score.fit_label if score else None,
+                    "has_delivery": score.has_delivery if score else None,
+                    "delivery_platforms": score.delivery_platforms or [] if score else [],
+                    "has_pos": score.has_pos if score else None,
+                    "pos_provider": score.pos_provider if score else None,
+                    "geo_density": score.geo_density_score if score else None,
+                    "volume_proxy": score.volume_proxy if score else None,
+                    "cuisine_fit": score.cuisine_fit if score else None,
+                    "price_tier": score.price_tier if score else None,
+                    "price_point_fit": score.price_point_fit if score else None,
+                    "engagement_recency": score.engagement_recency if score else None,
+                    "disqualifier_penalty": score.disqualifier_penalty if score else None,
+                }
+            )
 
     # Sort by ICP score (desc), then distance (asc)
     prospects.sort(key=lambda p: (-(p["icp_score"] or 0), p["distance"]))
@@ -1011,8 +1068,12 @@ async def prospect_finder(
                 pass
 
         prospects = await _find_prospects(
-            session, zip_code, float(radius), ms,
-            filters["independent_only"], filters["has_delivery"],
+            session,
+            zip_code,
+            float(radius),
+            ms,
+            filters["independent_only"],
+            filters["has_delivery"],
         )
 
         # Enrich each prospect with its lead_id (if a Lead exists for the restaurant).
@@ -1041,6 +1102,7 @@ async def prospect_finder(
         }
 
     from src.services.outreach import list_campaigns
+
     active_campaigns = await list_campaigns(session, status="active")
     draft_campaigns = await list_campaigns(session, status="draft")
 
@@ -1078,26 +1140,53 @@ async def export_prospects_csv(
             pass
 
     prospects = await _find_prospects(
-        session, zip_code, float(radius), ms,
-        independent_only == "1", has_delivery == "1",
+        session,
+        zip_code,
+        float(radius),
+        ms,
+        independent_only == "1",
+        has_delivery == "1",
     )
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "Name", "Address", "City", "State", "ZIP", "Phone", "Website",
-        "Distance (mi)", "ICP Score", "ICP Fit", "Independent",
-        "Delivery Platforms", "POS Provider", "Cuisines",
-    ])
+    writer.writerow(
+        [
+            "Name",
+            "Address",
+            "City",
+            "State",
+            "ZIP",
+            "Phone",
+            "Website",
+            "Distance (mi)",
+            "ICP Score",
+            "ICP Fit",
+            "Independent",
+            "Delivery Platforms",
+            "POS Provider",
+            "Cuisines",
+        ]
+    )
     for p in prospects:
-        writer.writerow([
-            p["name"], p["address"] or "", p["city"] or "", p["state"] or "",
-            p["zip_code"] or "", p["phone"] or "", p["website"] or "",
-            p["distance"], p["icp_score"] or "", p["fit_label"] or "",
-            "Yes" if p["is_independent"] else "No" if p["is_independent"] is not None else "",
-            ", ".join(p["delivery_platforms"]) if p["delivery_platforms"] else "",
-            p["pos_provider"] or "", ", ".join(p["cuisine_type"]),
-        ])
+        writer.writerow(
+            [
+                p["name"],
+                p["address"] or "",
+                p["city"] or "",
+                p["state"] or "",
+                p["zip_code"] or "",
+                p["phone"] or "",
+                p["website"] or "",
+                p["distance"],
+                p["icp_score"] or "",
+                p["fit_label"] or "",
+                "Yes" if p["is_independent"] else "No" if p["is_independent"] is not None else "",
+                ", ".join(p["delivery_platforms"]) if p["delivery_platforms"] else "",
+                p["pos_provider"] or "",
+                ", ".join(p["cuisine_type"]),
+            ]
+        )
 
     output.seek(0)
     filename = f"prospects-{zip_code}-{radius}mi.csv"
@@ -1187,10 +1276,14 @@ async def promote_prospects_route(
     row_partials: dict[str, str] = {}
     if result.lead_ids:
         promoted_leads = (
-            await session.execute(
-                select(Lead).where(Lead.id.in_([UUID(lid) for lid in result.lead_ids]))
+            (
+                await session.execute(
+                    select(Lead).where(Lead.id.in_([UUID(lid) for lid in result.lead_ids]))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for lead in promoted_leads:
             row_partials[str(lead.restaurant_id)] = templates.get_template(
                 "partials/prospect_row_action.html"
@@ -1403,6 +1496,7 @@ async def create_campaign_route(
         return RedirectResponse(url="/dashboard/login", status_code=303)
 
     from datetime import datetime
+
     from src.services.outreach import create_campaign
 
     def _parse(d: str):
@@ -1475,7 +1569,9 @@ async def update_campaign_status_route(
     try:
         campaign = await update_campaign(session, campaign_id, status=status)
         await session.commit()
-        html = templates.get_template("partials/campaign_status_pill.html").render(campaign=campaign)
+        html = templates.get_template("partials/campaign_status_pill.html").render(
+            campaign=campaign
+        )
         return HTMLResponse(html)
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
@@ -1498,7 +1594,7 @@ async def log_campaign_activity_route(
     from src.services.outreach import log_activity
 
     try:
-        activity = await log_activity(
+        await log_activity(
             session,
             target_id=UUID(target_id),
             activity_type=activity_type,
@@ -1509,7 +1605,7 @@ async def log_campaign_activity_route(
         await session.commit()
         return HTMLResponse(
             f'<div class="activity-logged">Activity logged: {activity_type}'
-            f'{" — " + outcome if outcome else ""}</div>'
+            f"{' — ' + outcome if outcome else ''}</div>"
         )
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
@@ -1564,11 +1660,9 @@ async def claim_queue_item_route(
     from src.services.rep_queue import claim_item
 
     try:
-        item = await claim_item(session, item_id, rep_id)
+        await claim_item(session, item_id, rep_id)
         await session.commit()
-        return HTMLResponse(
-            '<span class="badge badge-claimed">claimed</span>'
-        )
+        return HTMLResponse('<span class="badge badge-claimed">claimed</span>')
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
 
@@ -1587,11 +1681,9 @@ async def complete_queue_item_route(
     from src.services.rep_queue import complete_item
 
     try:
-        item = await complete_item(session, item_id, outcome=outcome or None)
+        await complete_item(session, item_id, outcome=outcome or None)
         await session.commit()
-        return HTMLResponse(
-            '<span class="badge badge-completed">completed</span>'
-        )
+        return HTMLResponse('<span class="badge badge-completed">completed</span>')
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
 
@@ -1610,11 +1702,9 @@ async def skip_queue_item_route(
     from src.services.rep_queue import skip_item
 
     try:
-        item = await skip_item(session, item_id, reason=reason or None)
+        await skip_item(session, item_id, reason=reason or None)
         await session.commit()
-        return HTMLResponse(
-            '<span class="badge badge-skipped">skipped</span>'
-        )
+        return HTMLResponse('<span class="badge badge-skipped">skipped</span>')
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
 
@@ -1687,21 +1777,30 @@ async def qualification_dashboard(
         message = message or f"Error loading qualifications: {exc}"
 
     # Stats
-    total_qualified = await session.scalar(
-        select(func.count(QualificationResult.id)).where(
-            QualificationResult.qualification_status == "qualified"
+    total_qualified = (
+        await session.scalar(
+            select(func.count(QualificationResult.id)).where(
+                QualificationResult.qualification_status == "qualified"
+            )
         )
-    ) or 0
-    total_not_qualified = await session.scalar(
-        select(func.count(QualificationResult.id)).where(
-            QualificationResult.qualification_status == "not_qualified"
+        or 0
+    )
+    total_not_qualified = (
+        await session.scalar(
+            select(func.count(QualificationResult.id)).where(
+                QualificationResult.qualification_status == "not_qualified"
+            )
         )
-    ) or 0
-    total_needs_review = await session.scalar(
-        select(func.count(QualificationResult.id)).where(
-            QualificationResult.qualification_status == "needs_review"
+        or 0
+    )
+    total_needs_review = (
+        await session.scalar(
+            select(func.count(QualificationResult.id)).where(
+                QualificationResult.qualification_status == "needs_review"
+            )
         )
-    ) or 0
+        or 0
+    )
 
     stats = {
         "qualified": total_qualified,
@@ -1736,8 +1835,8 @@ async def evaluate_restaurant_route(
         return HTMLResponse(
             f'<div class="qualification-result">'
             f'<span class="badge badge-{result.qualification_status}">'
-            f'{result.qualification_status}</span> '
-            f'(confidence: {result.confidence_score:.2%})</div>'
+            f"{result.qualification_status}</span> "
+            f"(confidence: {result.confidence_score:.2%})</div>"
         )
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
@@ -1768,8 +1867,8 @@ async def review_qualification_route(
         await session.commit()
         return HTMLResponse(
             f'<span class="badge badge-{result.qualification_status}">'
-            f'{result.qualification_status}</span> '
-            f'(reviewed: {decision})'
+            f"{result.qualification_status}</span> "
+            f"(reviewed: {decision})"
         )
     except Exception as exc:
         return HTMLResponse(f"<span>Error: {exc}</span>", status_code=400)
@@ -1837,17 +1936,14 @@ async def clusters_dashboard(
         message = message or f"Error loading clusters: {exc}"
 
     # Stats
-    total_clusters = await session.scalar(
-        select(func.count(MerchantCluster.id))
-    ) or 0
-    total_members = await session.scalar(
-        select(func.count(ClusterMember.id)).where(
-            ClusterMember.role.in_(["anchor", "member"])
+    total_clusters = await session.scalar(select(func.count(MerchantCluster.id))) or 0
+    total_members = (
+        await session.scalar(
+            select(func.count(ClusterMember.id)).where(ClusterMember.role.in_(["anchor", "member"]))
         )
-    ) or 0
-    avg_flywheel = await session.scalar(
-        select(func.avg(MerchantCluster.flywheel_score))
+        or 0
     )
+    avg_flywheel = await session.scalar(select(func.avg(MerchantCluster.flywheel_score)))
 
     stats = {
         "total_clusters": total_clusters,
@@ -2073,9 +2169,7 @@ async def complete_lead_task_route(
     task.completed_at = datetime.now(UTC)
     await session.commit()
 
-    return HTMLResponse(
-        '<span class="badge badge-completed">completed</span>'
-    )
+    return HTMLResponse('<span class="badge badge-completed">completed</span>')
 
 
 @router.post("/leads/{lead_id}/merge")
@@ -2111,9 +2205,7 @@ async def merge_lead_route(
         )
 
     # Merge: move tasks, stage history, and assignment history to target lead
-    await session.execute(
-        select(FollowUpTask).where(FollowUpTask.lead_id == source_id)
-    )
+    await session.execute(select(FollowUpTask).where(FollowUpTask.lead_id == source_id))
     tasks_result = await session.execute(
         select(FollowUpTask).where(FollowUpTask.lead_id == source_id)
     )
@@ -2133,7 +2225,15 @@ async def merge_lead_route(
         entry.lead_id = lead_id
 
     # Fill in empty fields from source
-    for field in ["company", "business_type", "phone", "interest", "restaurant_id", "account_id", "contact_id"]:
+    for field in [
+        "company",
+        "business_type",
+        "phone",
+        "interest",
+        "restaurant_id",
+        "account_id",
+        "contact_id",
+    ]:
         if not getattr(target_lead, field) and getattr(source_lead, field):
             setattr(target_lead, field, getattr(source_lead, field))
 
@@ -2175,31 +2275,38 @@ async def communications_dashboard(
     from sqlalchemy import Date, cast
 
     # Overall stats from TrackerEvent
-    total_sent = await session.scalar(
-        select(func.count(TrackerEvent.id)).where(
-            TrackerEvent.event_type.in_(["delivery", "send"])
+    total_sent = (
+        await session.scalar(
+            select(func.count(TrackerEvent.id)).where(
+                TrackerEvent.event_type.in_(["delivery", "send"])
+            )
         )
-    ) or 0
-    total_opens = await session.scalar(
-        select(func.count(TrackerEvent.id)).where(
-            TrackerEvent.event_type == "open"
+        or 0
+    )
+    total_opens = (
+        await session.scalar(
+            select(func.count(TrackerEvent.id)).where(TrackerEvent.event_type == "open")
         )
-    ) or 0
-    total_clicks = await session.scalar(
-        select(func.count(TrackerEvent.id)).where(
-            TrackerEvent.event_type == "click"
+        or 0
+    )
+    total_clicks = (
+        await session.scalar(
+            select(func.count(TrackerEvent.id)).where(TrackerEvent.event_type == "click")
         )
-    ) or 0
-    total_bounces = await session.scalar(
-        select(func.count(TrackerEvent.id)).where(
-            TrackerEvent.event_type == "bounce"
+        or 0
+    )
+    total_bounces = (
+        await session.scalar(
+            select(func.count(TrackerEvent.id)).where(TrackerEvent.event_type == "bounce")
         )
-    ) or 0
-    total_replies = await session.scalar(
-        select(func.count(OutreachActivity.id)).where(
-            OutreachActivity.outcome == "replied"
+        or 0
+    )
+    total_replies = (
+        await session.scalar(
+            select(func.count(OutreachActivity.id)).where(OutreachActivity.outcome == "replied")
         )
-    ) or 0
+        or 0
+    )
 
     open_rate = (total_opens / total_sent * 100) if total_sent > 0 else 0
     click_rate = (total_clicks / total_sent * 100) if total_sent > 0 else 0
@@ -2272,7 +2379,12 @@ async def communications_dashboard(
             func.count(TrackerEvent.id).label("event_count"),
         )
         .outerjoin(TrackerEvent, TrackerEvent.campaign_id == OutreachCampaign.id)
-        .group_by(OutreachCampaign.id, OutreachCampaign.name, OutreachCampaign.status, OutreachCampaign.campaign_type)
+        .group_by(
+            OutreachCampaign.id,
+            OutreachCampaign.name,
+            OutreachCampaign.status,
+            OutreachCampaign.campaign_type,
+        )
         .order_by(func.count(TrackerEvent.id).desc())
         .limit(10)
     )
@@ -2289,9 +2401,7 @@ async def communications_dashboard(
 
     # Recent communication events
     recent_events_result = await session.execute(
-        select(TrackerEvent)
-        .order_by(TrackerEvent.occurred_at.desc())
-        .limit(20)
+        select(TrackerEvent).order_by(TrackerEvent.occurred_at.desc()).limit(20)
     )
     recent_events = recent_events_result.scalars().all()
 

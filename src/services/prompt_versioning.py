@@ -43,7 +43,9 @@ async def create_prompt(
         select(LLMPromptTemplate).where(LLMPromptTemplate.name == name).limit(1)
     )
     if existing.scalar_one_or_none():
-        raise ValueError(f"Prompt '{name}' already exists. Use update_prompt to create a new version.")
+        raise ValueError(
+            f"Prompt '{name}' already exists. Use update_prompt to create a new version."
+        )
 
     template = LLMPromptTemplate(
         name=name,

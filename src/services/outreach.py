@@ -41,7 +41,9 @@ async def create_campaign(
 ) -> OutreachCampaign:
     """Create a new outreach campaign."""
     if campaign_type not in VALID_CAMPAIGN_TYPES:
-        raise ValueError(f"Invalid campaign_type: {campaign_type}. Must be one of {VALID_CAMPAIGN_TYPES}")
+        raise ValueError(
+            f"Invalid campaign_type: {campaign_type}. Must be one of {VALID_CAMPAIGN_TYPES}"
+        )
     if status not in VALID_CAMPAIGN_STATUSES:
         raise ValueError(f"Invalid status: {status}. Must be one of {VALID_CAMPAIGN_STATUSES}")
 
@@ -56,7 +58,13 @@ async def create_campaign(
     )
     session.add(campaign)
     await session.flush()
-    logger.info("campaign_created", campaign_id=str(campaign.id), name=name, type=campaign_type, status=status)
+    logger.info(
+        "campaign_created",
+        campaign_id=str(campaign.id),
+        name=name,
+        type=campaign_type,
+        status=status,
+    )
     return campaign
 
 
@@ -147,7 +155,7 @@ async def select_targets(
     rows = result.all()
 
     targets = []
-    for idx, (restaurant, icp_score) in enumerate(rows):
+    for idx, (restaurant, _icp_score) in enumerate(rows):
         # Check if this restaurant is already a target in this campaign
         existing = await session.execute(
             select(OutreachTarget).where(
@@ -258,7 +266,9 @@ async def log_activity(
 ) -> OutreachActivity:
     """Log an outreach activity against a target."""
     if activity_type not in VALID_ACTIVITY_TYPES:
-        raise ValueError(f"Invalid activity_type: {activity_type}. Must be one of {VALID_ACTIVITY_TYPES}")
+        raise ValueError(
+            f"Invalid activity_type: {activity_type}. Must be one of {VALID_ACTIVITY_TYPES}"
+        )
     if outcome and outcome not in VALID_OUTCOMES:
         raise ValueError(f"Invalid outcome: {outcome}. Must be one of {VALID_OUTCOMES}")
 

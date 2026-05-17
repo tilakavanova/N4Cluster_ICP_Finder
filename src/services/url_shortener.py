@@ -68,6 +68,7 @@ def replace_urls_in_message(
     Returns:
         The message with all URLs replaced.
     """
+
     def _replace(match: re.Match) -> str:
         original = match.group(1)
         return shorten_url(

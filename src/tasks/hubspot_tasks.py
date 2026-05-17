@@ -59,8 +59,8 @@ def process_hubspot_webhook(self, events: list[dict]):
     Args:
         events: List of HubSpot event dicts from the webhook payload.
     """
-    async def _process():
 
+    async def _process():
 
         from src.db.models import AuditLog, Lead, LeadStageHistory
         from src.db.session import async_session
@@ -96,9 +96,7 @@ def process_hubspot_webhook(self, events: list[dict]):
                             processed += 1
 
                         elif property_name == "closedate":
-                            await _handle_close_date_change(
-                                session, lead, property_value, AuditLog
-                            )
+                            await _handle_close_date_change(session, lead, property_value, AuditLog)
                             processed += 1
 
                         else:
@@ -165,37 +163,31 @@ def process_hubspot_webhook(self, events: list[dict]):
 # ---------------------------------------------------------------------------
 
 
-async def _find_lead_by_deal_id(session, deal_id: str, Lead):
+async def _find_lead_by_deal_id(session, deal_id: str, Lead):  # noqa: N803  # model class injection
     """Find a Lead whose hubspot_deal_id matches the given HubSpot deal ID."""
     from sqlalchemy import select
 
-    result = await session.execute(
-        select(Lead).where(Lead.hubspot_deal_id == deal_id)
-    )
+    result = await session.execute(select(Lead).where(Lead.hubspot_deal_id == deal_id))
     return result.scalar_one_or_none()
 
 
-async def _find_lead_by_contact_id(session, contact_id: str, Lead):
+async def _find_lead_by_contact_id(session, contact_id: str, Lead):  # noqa: N803  # model class injection
     """Find a Lead whose hubspot_contact_id matches the given HubSpot contact ID."""
     from sqlalchemy import select
 
-    result = await session.execute(
-        select(Lead).where(Lead.hubspot_contact_id == contact_id)
-    )
+    result = await session.execute(select(Lead).where(Lead.hubspot_contact_id == contact_id))
     return result.scalar_one_or_none()
 
 
-async def _find_lead_by_email(session, email: str, Lead):
+async def _find_lead_by_email(session, email: str, Lead):  # noqa: N803  # model class injection
     """Find a Lead by email address (case-insensitive fallback lookup)."""
     from sqlalchemy import func, select
 
-    result = await session.execute(
-        select(Lead).where(func.lower(Lead.email) == email.lower())
-    )
+    result = await session.execute(select(Lead).where(func.lower(Lead.email) == email.lower()))
     return result.scalar_one_or_none()
 
 
-async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHistory, AuditLog):
+async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHistory, AuditLog):  # noqa: N803
     """Map HubSpot deal stage to local lifecycle_stage and persist the change."""
     from datetime import datetime
 
@@ -208,16 +200,18 @@ async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHisto
             lead_id=str(lead.id),
         )
         # Log but do not crash — unknown stages are silently skipped
-        session.add(AuditLog(
-            action="hubspot_stage_unknown",
-            entity_type="lead",
-            details={
-                "lead_id": str(lead.id),
-                "hubspot_stage": hs_stage,
-                "hubspot_deal_id": lead.hubspot_deal_id,
-            },
-            performed_by="hubspot_webhook",
-        ))
+        session.add(
+            AuditLog(
+                action="hubspot_stage_unknown",
+                entity_type="lead",
+                details={
+                    "lead_id": str(lead.id),
+                    "hubspot_stage": hs_stage,
+                    "hubspot_deal_id": lead.hubspot_deal_id,
+                },
+                performed_by="hubspot_webhook",
+            )
+        )
         return
 
     old_stage = lead.lifecycle_stage
@@ -245,18 +239,20 @@ async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHisto
     session.add(history)
 
     # Audit log entry
-    session.add(AuditLog(
-        action="hubspot_stage_sync",
-        entity_type="lead",
-        details={
-            "lead_id": str(lead.id),
-            "from_stage": old_stage,
-            "to_stage": local_stage,
-            "hubspot_stage": hs_stage,
-            "hubspot_deal_id": lead.hubspot_deal_id,
-        },
-        performed_by="hubspot_webhook",
-    ))
+    session.add(
+        AuditLog(
+            action="hubspot_stage_sync",
+            entity_type="lead",
+            details={
+                "lead_id": str(lead.id),
+                "from_stage": old_stage,
+                "to_stage": local_stage,
+                "hubspot_stage": hs_stage,
+                "hubspot_deal_id": lead.hubspot_deal_id,
+            },
+            performed_by="hubspot_webhook",
+        )
+    )
 
     logger.info(
         "hubspot_webhook_stage_updated",
@@ -267,22 +263,24 @@ async def _handle_deal_stage_change(session, lead, hs_stage: str, LeadStageHisto
     )
 
 
-async def _handle_close_date_change(session, lead, close_date_value: str, AuditLog):
+async def _handle_close_date_change(session, lead, close_date_value: str, AuditLog):  # noqa: N803
     """Record a deal close-date change in the audit log and update Lead metadata."""
     from datetime import datetime
 
     lead.updated_at = datetime.now(UTC)
 
-    session.add(AuditLog(
-        action="hubspot_closedate_sync",
-        entity_type="lead",
-        details={
-            "lead_id": str(lead.id),
-            "close_date": close_date_value,
-            "hubspot_deal_id": lead.hubspot_deal_id,
-        },
-        performed_by="hubspot_webhook",
-    ))
+    session.add(
+        AuditLog(
+            action="hubspot_closedate_sync",
+            entity_type="lead",
+            details={
+                "lead_id": str(lead.id),
+                "close_date": close_date_value,
+                "hubspot_deal_id": lead.hubspot_deal_id,
+            },
+            performed_by="hubspot_webhook",
+        )
+    )
 
     logger.info(
         "hubspot_webhook_closedate_updated",
@@ -291,7 +289,13 @@ async def _handle_close_date_change(session, lead, close_date_value: str, AuditL
     )
 
 
-async def _handle_contact_property_change(session, lead, property_name: str, property_value: str, AuditLog):
+async def _handle_contact_property_change(
+    session,
+    lead,
+    property_name: str,
+    property_value: str,
+    AuditLog,  # noqa: N803  # model class injection
+):
     """Apply a HubSpot contact property change to the local Lead."""
     from datetime import datetime
 
@@ -309,18 +313,20 @@ async def _handle_contact_property_change(session, lead, property_name: str, pro
     setattr(lead, local_field, property_value)
     lead.updated_at = datetime.now(UTC)
 
-    session.add(AuditLog(
-        action="hubspot_contact_sync",
-        entity_type="lead",
-        details={
-            "lead_id": str(lead.id),
-            "field": local_field,
-            "old_value": old_value,
-            "new_value": property_value,
-            "hubspot_contact_id": lead.hubspot_contact_id,
-        },
-        performed_by="hubspot_webhook",
-    ))
+    session.add(
+        AuditLog(
+            action="hubspot_contact_sync",
+            entity_type="lead",
+            details={
+                "lead_id": str(lead.id),
+                "field": local_field,
+                "old_value": old_value,
+                "new_value": property_value,
+                "hubspot_contact_id": lead.hubspot_contact_id,
+            },
+            performed_by="hubspot_webhook",
+        )
+    )
 
     logger.info(
         "hubspot_webhook_contact_updated",

@@ -54,7 +54,9 @@ async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("application_starting", debug=settings.debug)
     if settings.allow_seed_routes:
-        logger.warning("seed_routes_enabled", message="Seed routes are ENABLED — disable in production!")
+        logger.warning(
+            "seed_routes_enabled", message="Seed routes are ENABLED — disable in production!"
+        )
     yield
     logger.info("application_shutting_down")
 
@@ -138,7 +140,9 @@ app.include_router(address_router.router, prefix="/api/v1")
 app.include_router(prompts_router.router, prefix="/api/v1")
 app.include_router(agents_router.router, prefix="/api/v1")
 app.include_router(metrics_router.router)  # /metrics — no prefix (Prometheus convention)
-app.include_router(tracking_router.router)  # /t/{token}, /t/s/{token}, and /px/{token}.gif — no prefix
+app.include_router(
+    tracking_router.router
+)  # /t/{token}, /t/s/{token}, and /px/{token}.gif — no prefix
 app.include_router(webhooks_router.router)  # /webhooks/sendgrid, /webhooks/sendgrid/inbound
 app.include_router(hubspot_webhooks_router.router)  # /webhooks/hubspot
 app.include_router(unsubscribe_router.router)  # /unsubscribe/{token}, /unsubscribe/one-click
@@ -154,10 +158,12 @@ async def health():
 async def llm_usage():
     """Return daily LLM token usage for cost monitoring."""
     from src.extraction.llm_client import get_daily_usage
+
     return get_daily_usage()
 
 
 def run():
     """Entry point for CLI."""
     import uvicorn
+
     uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=settings.debug)

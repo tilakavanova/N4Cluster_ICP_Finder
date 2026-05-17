@@ -31,7 +31,9 @@ router = APIRouter(
 
 class RecordEventBody(BaseModel):
     restaurant_id: UUID
-    event_type: str = Field(..., pattern="^(discovered|contacted|demo_scheduled|pilot_started|converted|churned)$")
+    event_type: str = Field(
+        ..., pattern="^(discovered|contacted|demo_scheduled|pilot_started|converted|churned)$"
+    )
     source: str | None = None
     lead_id: UUID | None = None
     metadata: dict | None = None
@@ -70,7 +72,9 @@ def _funnel_to_dict(funnel) -> dict:
         "churned": funnel.churned,
         "conversion_rate": funnel.conversion_rate,
         "avg_days_to_convert": funnel.avg_days_to_convert,
-        "last_calculated_at": funnel.last_calculated_at.isoformat() if funnel.last_calculated_at else None,
+        "last_calculated_at": funnel.last_calculated_at.isoformat()
+        if funnel.last_calculated_at
+        else None,
     }
 
 
@@ -117,7 +121,11 @@ async def get_funnel_summary(
     """Get funnel summary for a period (NIF-149)."""
     funnel = await get_funnel(session, period, zip_code)
     if not funnel:
-        raise HTTPException(404, f"No funnel data for period '{period}'" + (f" zip_code '{zip_code}'" if zip_code else ""))
+        raise HTTPException(
+            404,
+            f"No funnel data for period '{period}'"
+            + (f" zip_code '{zip_code}'" if zip_code else ""),
+        )
     return _funnel_to_dict(funnel)
 
 

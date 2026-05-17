@@ -90,9 +90,7 @@ class LeadEnrichmentService:
 
         # Tier 1: Exact name match (case-insensitive)
         result = await self.session.execute(
-            select(Restaurant)
-            .where(func.lower(Restaurant.name) == func.lower(company))
-            .limit(1)
+            select(Restaurant).where(func.lower(Restaurant.name) == func.lower(company)).limit(1)
         )
         exact_match = result.scalar_one_or_none()
         if exact_match:

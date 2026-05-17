@@ -13,7 +13,10 @@ router = APIRouter(prefix="/changes", tags=["changes"])
 
 @router.get("/")
 async def list_changes(
-    change_type: str | None = Query(None, description="Filter by change type: new_restaurant, rating_change, delivery_change, field_update"),
+    change_type: str | None = Query(
+        None,
+        description="Filter by change type: new_restaurant, rating_change, delivery_change, field_update",
+    ),
     days: int = Query(7, ge=1, le=90, description="Look back N days"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),

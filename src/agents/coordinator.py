@@ -76,20 +76,24 @@ class CoordinatorAgent(BaseAgent):
             agent = get_agent(stage_name)
             if not agent:
                 logger.warning("pipeline_agent_missing", stage=stage_name)
-                results.append({
-                    "stage": stage_name,
-                    "status": "skipped",
-                    "reason": "agent not registered",
-                })
+                results.append(
+                    {
+                        "stage": stage_name,
+                        "status": "skipped",
+                        "reason": "agent not registered",
+                    }
+                )
                 continue
 
             result = await agent.execute(current_context, session)
-            results.append({
-                "stage": stage_name,
-                "status": "completed" if result.success else "failed",
-                "data": result.data,
-                "errors": result.errors,
-            })
+            results.append(
+                {
+                    "stage": stage_name,
+                    "status": "completed" if result.success else "failed",
+                    "data": result.data,
+                    "errors": result.errors,
+                }
+            )
 
             if not result.success:
                 logger.warning("pipeline_stage_failed", stage=stage_name, errors=result.errors)
@@ -119,17 +123,20 @@ class CoordinatorAgent(BaseAgent):
 
         for agent_info in agents:
             agent = get_agent(agent_info["name"])
-            health.append({
-                "name": agent_info["name"],
-                "description": agent_info["description"],
-                "registered": agent is not None,
-            })
+            health.append(
+                {
+                    "name": agent_info["name"],
+                    "description": agent_info["description"],
+                    "registered": agent is not None,
+                }
+            )
 
         # Check campaign anomalies if session available
         anomaly_summary = None
         if session:
             try:
                 from src.services.anomaly_detection import check_all_campaigns
+
                 anomaly_summary = await check_all_campaigns(session)
             except Exception as exc:
                 logger.warning("health_check_anomaly_failed", error=str(exc))

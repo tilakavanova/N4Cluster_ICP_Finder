@@ -1,6 +1,7 @@
 """Promote restaurants from the Prospect Finder into Leads + outreach campaigns."""
 
 from dataclasses import dataclass, field
+from datetime import UTC
 from uuid import UUID
 
 from sqlalchemy import select
@@ -51,6 +52,7 @@ async def promote_prospects(
     effective_campaign_id = campaign_id
     if new_campaign is not None:
         from src.services.outreach import create_campaign as _create_campaign
+
         campaign = await _create_campaign(
             session,
             name=new_campaign.name,
@@ -66,9 +68,7 @@ async def promote_prospects(
     for rid in restaurant_ids:
         try:
             async with session.begin_nested():
-                await _promote_one(
-                    session, rid, effective_campaign_id, owner, actor, result
-                )
+                await _promote_one(session, rid, effective_campaign_id, owner, actor, result)
         except IntegrityError:
             # Race: another request created a Lead for this restaurant between our
             # pre-flight check and the flush inside _promote_one. The SAVEPOINT was
@@ -82,9 +82,7 @@ async def promote_prospects(
                 result.skipped_already_lead += 1
             else:
                 logger.exception("promote_one_integrity_error", restaurant_id=str(rid))
-                result.failed.append(
-                    {"restaurant_id": str(rid), "reason": "integrity_error"}
-                )
+                result.failed.append({"restaurant_id": str(rid), "reason": "integrity_error"})
         except (ValueError, SQLAlchemyError) as exc:
             logger.exception("promote_one_failed", restaurant_id=str(rid))
             result.failed.append({"restaurant_id": str(rid), "reason": str(exc)})
@@ -173,13 +171,11 @@ async def _promote_one(
 
     # Data-quality warning — Restaurant has no email column, only phone.
     if not restaurant.phone:
-        result.data_warnings.append(
-            {"restaurant_id": str(restaurant_id), "warning": "no_phone"}
-        )
+        result.data_warnings.append({"restaurant_id": str(restaurant_id), "warning": "no_phone"})
 
     # Qualification dispatch — reuse a non-expired qualified/needs_review result
     # if present, otherwise dispatch a Celery task to qualify this restaurant.
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from src.services.qualification import get_latest_qualification
 
@@ -187,10 +183,7 @@ async def _promote_one(
     reuse = (
         existing_qual is not None
         and existing_qual.qualification_status in {"qualified", "needs_review"}
-        and (
-            existing_qual.expires_at is None
-            or existing_qual.expires_at > datetime.now(timezone.utc)
-        )
+        and (existing_qual.expires_at is None or existing_qual.expires_at > datetime.now(UTC))
     )
     if reuse:
         result.reused_qualifications += 1
@@ -202,9 +195,7 @@ async def _promote_one(
     else:
         from src.tasks.qualification_tasks import qualify_restaurant_task
 
-        async_result = qualify_restaurant_task.delay(
-            str(restaurant_id), str(lead.id)
-        )
+        async_result = qualify_restaurant_task.delay(str(restaurant_id), str(lead.id))
         result.qualification_task_ids.append(async_result.id)
 
     logger.info("prospect_promoted", restaurant_id=str(restaurant_id), lead_id=str(lead.id))

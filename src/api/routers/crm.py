@@ -30,6 +30,7 @@ router = APIRouter(prefix="/crm", tags=["crm"], dependencies=[Depends(require_au
 
 # --- Schemas ---
 
+
 class AccountCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     business_type: str | None = None
@@ -118,6 +119,7 @@ class LeadMergeRequest(BaseModel):
 
 # --- Account endpoints ---
 
+
 @router.post("/accounts", status_code=201)
 async def create_account(payload: AccountCreate, session: AsyncSession = Depends(get_session)):
     """Create a new account (merchant business)."""
@@ -193,6 +195,7 @@ async def get_account(account_id: UUID, session: AsyncSession = Depends(get_sess
 
 # --- Contact endpoints ---
 
+
 @router.post("/contacts", status_code=201)
 async def create_contact(payload: ContactCreate, session: AsyncSession = Depends(get_session)):
     """Create a contact linked to an account."""
@@ -236,9 +239,12 @@ async def list_contacts(
 
 # --- Lead lifecycle endpoints ---
 
+
 @router.patch("/leads/{lead_id}/stage")
 async def update_lead_stage(
-    lead_id: UUID, payload: LeadStageUpdate, session: AsyncSession = Depends(get_session),
+    lead_id: UUID,
+    payload: LeadStageUpdate,
+    session: AsyncSession = Depends(get_session),
 ):
     """Update lead lifecycle stage with history tracking."""
     lead = await session.get(Lead, lead_id)
@@ -248,20 +254,29 @@ async def update_lead_stage(
     old_stage = lead.lifecycle_stage
     lead.lifecycle_stage = payload.lifecycle_stage
 
-    session.add(LeadStageHistory(
-        lead_id=lead.id,
+    session.add(
+        LeadStageHistory(
+            lead_id=lead.id,
+            from_stage=old_stage,
+            to_stage=payload.lifecycle_stage,
+            changed_by=payload.changed_by,
+        )
+    )
+
+    logger.info(
+        "lead_stage_changed",
+        lead_id=str(lead_id),
         from_stage=old_stage,
         to_stage=payload.lifecycle_stage,
-        changed_by=payload.changed_by,
-    ))
-
-    logger.info("lead_stage_changed", lead_id=str(lead_id), from_stage=old_stage, to_stage=payload.lifecycle_stage)
+    )
     return {"lead_id": str(lead_id), "lifecycle_stage": payload.lifecycle_stage}
 
 
 @router.patch("/leads/{lead_id}/owner")
 async def update_lead_owner(
-    lead_id: UUID, payload: LeadOwnerUpdate, session: AsyncSession = Depends(get_session),
+    lead_id: UUID,
+    payload: LeadOwnerUpdate,
+    session: AsyncSession = Depends(get_session),
 ):
     """Assign lead to owner with history tracking."""
     lead = await session.get(Lead, lead_id)
@@ -271,20 +286,26 @@ async def update_lead_owner(
     old_owner = lead.owner
     lead.owner = payload.owner
 
-    session.add(LeadAssignmentHistory(
-        lead_id=lead.id,
-        from_owner=old_owner,
-        to_owner=payload.owner,
-        changed_by=payload.changed_by,
-    ))
+    session.add(
+        LeadAssignmentHistory(
+            lead_id=lead.id,
+            from_owner=old_owner,
+            to_owner=payload.owner,
+            changed_by=payload.changed_by,
+        )
+    )
 
-    logger.info("lead_owner_changed", lead_id=str(lead_id), from_owner=old_owner, to_owner=payload.owner)
+    logger.info(
+        "lead_owner_changed", lead_id=str(lead_id), from_owner=old_owner, to_owner=payload.owner
+    )
     return {"lead_id": str(lead_id), "owner": payload.owner}
 
 
 @router.patch("/leads/{lead_id}/link")
 async def link_lead(
-    lead_id: UUID, payload: LeadLinkUpdate, session: AsyncSession = Depends(get_session),
+    lead_id: UUID,
+    payload: LeadLinkUpdate,
+    session: AsyncSession = Depends(get_session),
 ):
     """Link lead to account and/or contact."""
     lead = await session.get(Lead, lead_id)
@@ -296,24 +317,44 @@ async def link_lead(
     if payload.contact_id is not None:
         lead.contact_id = payload.contact_id
 
-    logger.info("lead_linked", lead_id=str(lead_id), account_id=str(payload.account_id), contact_id=str(payload.contact_id))
-    return {"lead_id": str(lead_id), "account_id": str(lead.account_id) if lead.account_id else None}
+    logger.info(
+        "lead_linked",
+        lead_id=str(lead_id),
+        account_id=str(payload.account_id),
+        contact_id=str(payload.contact_id),
+    )
+    return {
+        "lead_id": str(lead_id),
+        "account_id": str(lead.account_id) if lead.account_id else None,
+    }
 
 
 @router.get("/leads/{lead_id}/history")
 async def lead_history(lead_id: UUID, session: AsyncSession = Depends(get_session)):
     """Get combined stage + assignment history for a lead."""
-    stages = (await session.execute(
-        select(LeadStageHistory)
-        .where(LeadStageHistory.lead_id == lead_id)
-        .order_by(LeadStageHistory.changed_at.desc())
-    )).scalars().all()
+    stages = (
+        (
+            await session.execute(
+                select(LeadStageHistory)
+                .where(LeadStageHistory.lead_id == lead_id)
+                .order_by(LeadStageHistory.changed_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
 
-    assignments = (await session.execute(
-        select(LeadAssignmentHistory)
-        .where(LeadAssignmentHistory.lead_id == lead_id)
-        .order_by(LeadAssignmentHistory.changed_at.desc())
-    )).scalars().all()
+    assignments = (
+        (
+            await session.execute(
+                select(LeadAssignmentHistory)
+                .where(LeadAssignmentHistory.lead_id == lead_id)
+                .order_by(LeadAssignmentHistory.changed_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     return {
         "lead_id": str(lead_id),
@@ -340,12 +381,24 @@ async def lead_history(lead_id: UUID, session: AsyncSession = Depends(get_sessio
 
 # --- Account update with history (NIF-70) ---
 
-ACCOUNT_TRACKED_FIELDS = {"name", "business_type", "location_count", "website", "phone", "city", "state", "zip_code", "notes"}
+ACCOUNT_TRACKED_FIELDS = {
+    "name",
+    "business_type",
+    "location_count",
+    "website",
+    "phone",
+    "city",
+    "state",
+    "zip_code",
+    "notes",
+}
 
 
 @router.patch("/accounts/{account_id}")
 async def update_account(
-    account_id: UUID, payload: AccountUpdate, session: AsyncSession = Depends(get_session),
+    account_id: UUID,
+    payload: AccountUpdate,
+    session: AsyncSession = Depends(get_session),
 ):
     """Update account fields with change history tracking."""
     account = await session.get(Account, account_id)
@@ -362,13 +415,15 @@ async def update_account(
         str_new = str(new_value) if new_value is not None else None
         if str_old != str_new:
             setattr(account, field, new_value)
-            session.add(AccountHistory(
-                account_id=account.id,
-                field_name=field,
-                old_value=str_old,
-                new_value=str_new,
-                changed_by=payload.changed_by,
-            ))
+            session.add(
+                AccountHistory(
+                    account_id=account.id,
+                    field_name=field,
+                    old_value=str_old,
+                    new_value=str_new,
+                    changed_by=payload.changed_by,
+                )
+            )
             changes.append(field)
 
     logger.info("account_updated", account_id=str(account_id), changed_fields=changes)
@@ -404,7 +459,9 @@ CONTACT_TRACKED_FIELDS = {"first_name", "last_name", "email", "phone", "role", "
 
 @router.patch("/contacts/{contact_id}")
 async def update_contact(
-    contact_id: UUID, payload: ContactUpdate, session: AsyncSession = Depends(get_session),
+    contact_id: UUID,
+    payload: ContactUpdate,
+    session: AsyncSession = Depends(get_session),
 ):
     """Update contact fields with change history tracking."""
     contact = await session.get(Contact, contact_id)
@@ -421,13 +478,15 @@ async def update_contact(
         str_new = str(new_value) if new_value is not None else None
         if str_old != str_new:
             setattr(contact, field, new_value)
-            session.add(ContactHistory(
-                contact_id=contact.id,
-                field_name=field,
-                old_value=str_old,
-                new_value=str_new,
-                changed_by=payload.changed_by,
-            ))
+            session.add(
+                ContactHistory(
+                    contact_id=contact.id,
+                    field_name=field,
+                    old_value=str_old,
+                    new_value=str_new,
+                    changed_by=payload.changed_by,
+                )
+            )
             changes.append(field)
 
     logger.info("contact_updated", contact_id=str(contact_id), changed_fields=changes)
@@ -458,6 +517,7 @@ async def contact_history(contact_id: UUID, session: AsyncSession = Depends(get_
 
 # --- Follow-up tasks (NIF-112) ---
 
+
 @router.post("/tasks", status_code=201)
 async def create_task(payload: TaskCreate, session: AsyncSession = Depends(get_session)):
     """Create a follow-up task for a lead."""
@@ -468,7 +528,9 @@ async def create_task(payload: TaskCreate, session: AsyncSession = Depends(get_s
     task = FollowUpTask(**payload.model_dump())
     session.add(task)
     await session.flush()
-    logger.info("task_created", task_id=str(task.id), lead_id=str(payload.lead_id), type=payload.task_type)
+    logger.info(
+        "task_created", task_id=str(task.id), lead_id=str(payload.lead_id), type=payload.task_type
+    )
     return {
         "id": str(task.id),
         "lead_id": str(task.lead_id),
@@ -488,7 +550,9 @@ async def list_tasks(
     session: AsyncSession = Depends(get_session),
 ):
     """List follow-up tasks with optional filters."""
-    query = select(FollowUpTask).order_by(FollowUpTask.due_date.asc().nullslast(), FollowUpTask.created_at.desc())
+    query = select(FollowUpTask).order_by(
+        FollowUpTask.due_date.asc().nullslast(), FollowUpTask.created_at.desc()
+    )
     if lead_id:
         query = query.where(FollowUpTask.lead_id == lead_id)
     if status:
@@ -517,7 +581,9 @@ async def list_tasks(
 
 
 @router.patch("/tasks/{task_id}")
-async def update_task(task_id: UUID, payload: TaskUpdate, session: AsyncSession = Depends(get_session)):
+async def update_task(
+    task_id: UUID, payload: TaskUpdate, session: AsyncSession = Depends(get_session)
+):
     """Update a follow-up task."""
     task = await session.get(FollowUpTask, task_id)
     if not task:
@@ -535,6 +601,7 @@ async def update_task(task_id: UUID, payload: TaskUpdate, session: AsyncSession 
 
 
 # --- Lead merge (NIF-115) ---
+
 
 @router.post("/leads/merge")
 async def merge_leads(payload: LeadMergeRequest, session: AsyncSession = Depends(get_session)):
@@ -554,12 +621,30 @@ async def merge_leads(payload: LeadMergeRequest, session: AsyncSession = Depends
 
     # Transfer enrichment data from source if target lacks it
     merge_fields = [
-        "company", "business_type", "locations", "interest", "message",
-        "restaurant_id", "icp_score_id", "icp_fit_label", "icp_total_score",
-        "matched_restaurant_name", "match_confidence", "is_independent",
-        "has_delivery", "delivery_platforms", "has_pos", "pos_provider",
-        "geo_density_score", "hubspot_contact_id", "hubspot_deal_id",
-        "utm_source", "utm_medium", "utm_campaign", "account_id", "contact_id",
+        "company",
+        "business_type",
+        "locations",
+        "interest",
+        "message",
+        "restaurant_id",
+        "icp_score_id",
+        "icp_fit_label",
+        "icp_total_score",
+        "matched_restaurant_name",
+        "match_confidence",
+        "is_independent",
+        "has_delivery",
+        "delivery_platforms",
+        "has_pos",
+        "pos_provider",
+        "geo_density_score",
+        "hubspot_contact_id",
+        "hubspot_deal_id",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "account_id",
+        "contact_id",
     ]
     merged_fields = []
     for field in merge_fields:
@@ -575,22 +660,36 @@ async def merge_leads(payload: LeadMergeRequest, session: AsyncSession = Depends
     source.status = "merged"
 
     # Move source's stage/assignment history to target
-    stage_entries = (await session.execute(
-        select(LeadStageHistory).where(LeadStageHistory.lead_id == source.id)
-    )).scalars().all()
+    stage_entries = (
+        (
+            await session.execute(
+                select(LeadStageHistory).where(LeadStageHistory.lead_id == source.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     for entry in stage_entries:
         entry.lead_id = target.id
 
-    assignment_entries = (await session.execute(
-        select(LeadAssignmentHistory).where(LeadAssignmentHistory.lead_id == source.id)
-    )).scalars().all()
+    assignment_entries = (
+        (
+            await session.execute(
+                select(LeadAssignmentHistory).where(LeadAssignmentHistory.lead_id == source.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     for entry in assignment_entries:
         entry.lead_id = target.id
 
     # Move follow-up tasks to target
-    tasks = (await session.execute(
-        select(FollowUpTask).where(FollowUpTask.lead_id == source.id)
-    )).scalars().all()
+    tasks = (
+        (await session.execute(select(FollowUpTask).where(FollowUpTask.lead_id == source.id)))
+        .scalars()
+        .all()
+    )
     for task in tasks:
         task.lead_id = target.id
 

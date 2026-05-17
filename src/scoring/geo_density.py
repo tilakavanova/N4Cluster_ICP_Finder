@@ -81,7 +81,9 @@ def compute_density_scores(
         score = min(base_score + cluster_bonus[i], 1.0)
         scores[str(rid)] = round(score, 4)
 
-    logger.info("density_scores_computed", total=len(scores), avg=round(np.mean(list(scores.values())), 4))
+    logger.info(
+        "density_scores_computed", total=len(scores), avg=round(np.mean(list(scores.values())), 4)
+    )
     return scores
 
 

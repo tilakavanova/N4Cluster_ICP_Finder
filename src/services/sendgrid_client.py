@@ -169,7 +169,7 @@ class SendGridClient:
             )
             # Preserve original quote style
             quote = match.group(0)[5]  # char after 'href='
-            return f'href={quote}{wrapped}{quote}'
+            return f"href={quote}{wrapped}{quote}"
 
         return _LINK_RE.sub(_replace, html)
 
@@ -192,7 +192,7 @@ class SendGridClient:
         pixel_tag = f'<img src="{pixel_url}" width="1" height="1" alt="" style="display:none" />'
         closing = re.search(r"</body>", html, re.IGNORECASE)
         if closing:
-            return html[: closing.start()] + pixel_tag + html[closing.start():]
+            return html[: closing.start()] + pixel_tag + html[closing.start() :]
         return html + pixel_tag
 
     def _apply_tracking_settings(self, message: Mail) -> None:

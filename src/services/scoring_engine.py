@@ -57,9 +57,9 @@ def _build_restaurant_context(restaurant: Restaurant, source_records: list[Sourc
     """Collect data needed by signal evaluators from ORM objects."""
     records_dicts = []
     raw_text = ""
-    extracted = {}
+    extracted: dict = {}
     for sr in source_records:
-        rec = {
+        rec: dict = {
             "source": sr.source,
             "raw_data": sr.raw_data or {},
             "extracted_data": sr.extracted_data or {},
@@ -155,7 +155,7 @@ def _apply_rules(rules: list[ScoringRule], signal_name: str, raw_value: float) -
     for rule in rules:
         if rule.signal_name != signal_name:
             continue
-        cond = rule.condition or {}
+        cond: dict = rule.condition or {}
         if rule.rule_type == "threshold":
             if raw_value >= cond.get("min", 0):
                 bonus += rule.points
@@ -198,7 +198,7 @@ async def evaluate_restaurant(
     rules = rules_result.scalars().all()
 
     ctx = _build_restaurant_context(restaurant, source_records)
-    signals_config = profile.signals or []
+    signals_config: list = profile.signals or []
 
     breakdown = []
     total_score = 0.0
@@ -219,14 +219,16 @@ async def evaluate_restaurant(
         weighted_value = weight * raw_value + rule_bonus
         total_score += weighted_value
 
-        breakdown.append({
-            "signal": sig_name,
-            "raw_value": round(raw_value, 3),
-            "weight": weight,
-            "weighted_value": round(weighted_value, 3),
-            "rule_bonus": round(rule_bonus, 2),
-            "explanation": explanation,
-        })
+        breakdown.append(
+            {
+                "signal": sig_name,
+                "raw_value": round(raw_value, 3),
+                "weight": weight,
+                "weighted_value": round(weighted_value, 3),
+                "rule_bonus": round(rule_bonus, 2),
+                "explanation": explanation,
+            }
+        )
 
     total_score = round(max(0.0, min(total_score, 100.0)), 2)
     fit_label = _classify_fit(total_score)
@@ -262,7 +264,13 @@ async def evaluate_restaurant(
         session.add(score_exp)
 
     await session.flush()
-    logger.info("restaurant_scored", restaurant=str(restaurant_id), profile=profile.name, score=total_score, fit=fit_label)
+    logger.info(
+        "restaurant_scored",
+        restaurant=str(restaurant_id),
+        profile=profile.name,
+        score=total_score,
+        fit=fit_label,
+    )
     return score_exp
 
 
@@ -335,7 +343,13 @@ async def recalculate_batch(
         logger.error("recalc_failed", profile=str(profile_id), error=str(exc))
 
     await session.flush()
-    logger.info("recalc_complete", profile=str(profile_id), status=job.status, processed=processed, total=total)
+    logger.info(
+        "recalc_complete",
+        profile=str(profile_id),
+        status=job.status,
+        processed=processed,
+        total=total,
+    )
     return job
 
 

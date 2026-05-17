@@ -64,14 +64,16 @@ class LeadDiscoveryAgent(BaseAgent):
 
             result = await session.execute(query)
             for restaurant, icp in result.all():
-                discovered.append({
-                    "restaurant_id": str(restaurant.id),
-                    "name": restaurant.name,
-                    "city": restaurant.city,
-                    "zip_code": restaurant.zip_code,
-                    "icp_score": icp.total_icp_score if icp else None,
-                    "fit_label": icp.fit_label if icp else "unknown",
-                })
+                discovered.append(
+                    {
+                        "restaurant_id": str(restaurant.id),
+                        "name": restaurant.name,
+                        "city": restaurant.city,
+                        "zip_code": restaurant.zip_code,
+                        "icp_score": icp.total_icp_score if icp else None,
+                        "fit_label": icp.fit_label if icp else "unknown",
+                    }
+                )
 
         return AgentResult(
             success=True,

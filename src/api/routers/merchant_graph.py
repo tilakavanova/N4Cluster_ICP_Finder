@@ -53,7 +53,9 @@ async def get_graph_by_restaurant(
     )
     entity = result.scalar_one_or_none()
     if not entity:
-        raise HTTPException(404, "No graph entity for this restaurant. Use POST /build to create one.")
+        raise HTTPException(
+            404, "No graph entity for this restaurant. Use POST /build to create one."
+        )
     graph = await query_graph(session, entity.id, relationship_type)
     return graph
 

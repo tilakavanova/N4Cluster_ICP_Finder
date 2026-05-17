@@ -168,12 +168,14 @@ async def send_bulk_outreach(
         # Rate limit guard
         if sent >= DAILY_SEND_LIMIT:
             rate_limited += 1
-            details.append({
-                "target_id": str(target_id),
-                "status": "rate_limited",
-                "message_id": None,
-                "error": "Daily send limit reached",
-            })
+            details.append(
+                {
+                    "target_id": str(target_id),
+                    "status": "rate_limited",
+                    "message_id": None,
+                    "error": "Daily send limit reached",
+                }
+            )
             continue
 
         # Apply simple {{key}} personalisation to the template
@@ -191,12 +193,14 @@ async def send_bulk_outreach(
             redis_client=redis_client,
         )
 
-        details.append({
-            "target_id": str(target_id),
-            "status": result["status"],
-            "message_id": result.get("message_id"),
-            "error": result.get("error"),
-        })
+        details.append(
+            {
+                "target_id": str(target_id),
+                "status": result["status"],
+                "message_id": result.get("message_id"),
+                "error": result.get("error"),
+            }
+        )
 
         if result["status"] == "sent":
             sent += 1

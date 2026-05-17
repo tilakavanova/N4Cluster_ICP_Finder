@@ -65,17 +65,14 @@ async def _aggregate_engagement_scores_async(hours: int = 24):
                     .where(OutreachTarget.lead_id.in_(lead_ids))
                 )
                 activities = [
-                    {"activity_type": r[0], "outcome": r[1]}
-                    for r in activities_result.all()
+                    {"activity_type": r[0], "outcome": r[1]} for r in activities_result.all()
                 ]
 
                 score = communication_engagement_score(tracker_events, activities)
                 if score is not None:
                     # Update ICPScore
                     icp_result = await session.execute(
-                        select(ICPScore).where(
-                            ICPScore.restaurant_id == restaurant_id
-                        )
+                        select(ICPScore).where(ICPScore.restaurant_id == restaurant_id)
                     )
                     icp_score = icp_result.scalar_one_or_none()
                     if icp_score:
@@ -143,16 +140,13 @@ async def _recalculate_all_engagement_async():
                     .where(OutreachTarget.lead_id.in_(lead_ids))
                 )
                 activities = [
-                    {"activity_type": r[0], "outcome": r[1]}
-                    for r in activities_result.all()
+                    {"activity_type": r[0], "outcome": r[1]} for r in activities_result.all()
                 ]
 
                 score = communication_engagement_score(tracker_events, activities)
                 if score is not None:
                     icp_result = await session.execute(
-                        select(ICPScore).where(
-                            ICPScore.restaurant_id == restaurant_id
-                        )
+                        select(ICPScore).where(ICPScore.restaurant_id == restaurant_id)
                     )
                     icp_score = icp_result.scalar_one_or_none()
                     if icp_score:

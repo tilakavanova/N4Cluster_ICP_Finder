@@ -106,7 +106,7 @@ button{{background:#d9534f;color:#fff;border:none;padding:10px 20px;cursor:point
 @router.post("/one-click", include_in_schema=True)
 async def one_click_unsubscribe(
     request: Request,
-    List_Unsubscribe: str | None = Form(default=None, alias="List-Unsubscribe"),
+    List_Unsubscribe: str | None = Form(default=None, alias="List-Unsubscribe"),  # noqa: N803
 ) -> Response:
     """RFC 8058 one-click unsubscribe endpoint.
 
@@ -123,9 +123,8 @@ async def one_click_unsubscribe(
 
     async with async_session() as session:
         from sqlalchemy import select  # noqa: PLC0415
-        result = await session.execute(
-            select(Lead).where(Lead.email == email)
-        )
+
+        result = await session.execute(select(Lead).where(Lead.email == email))
         lead = result.scalar_one_or_none()
         if lead:
             lead.email_opt_out = True

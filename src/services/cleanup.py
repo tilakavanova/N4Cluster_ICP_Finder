@@ -79,7 +79,9 @@ class CleanupService:
         # this away.
         count = result.rowcount  # type: ignore[attr-defined]
         if count:
-            logger.info("stale_jobs_marked", count=count, timeout_minutes=settings.stale_job_timeout_minutes)
+            logger.info(
+                "stale_jobs_marked", count=count, timeout_minutes=settings.stale_job_timeout_minutes
+            )
         return count
 
     async def _delete_old_jobs(self, retention_days: int) -> int:
@@ -87,8 +89,7 @@ class CleanupService:
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)
 
         result = await self.session.execute(
-            delete(CrawlJob)
-            .where(
+            delete(CrawlJob).where(
                 CrawlJob.status.in_(["completed", "failed"]),
                 CrawlJob.created_at < cutoff,
             )
@@ -113,9 +114,7 @@ class CleanupService:
         orphan_ids = [row[0] for row in orphan_result.all()]
 
         if orphan_ids:
-            await self.session.execute(
-                delete(SourceRecord).where(SourceRecord.id.in_(orphan_ids))
-            )
+            await self.session.execute(delete(SourceRecord).where(SourceRecord.id.in_(orphan_ids)))
             logger.info("orphaned_records_cleaned", count=len(orphan_ids))
 
         return len(orphan_ids)

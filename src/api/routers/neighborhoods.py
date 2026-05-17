@@ -44,14 +44,20 @@ async def list_neighborhoods(
     """Rank neighborhoods by opportunity score (NIF-120)."""
     offset = (page - 1) * page_size
     return await rank_neighborhoods(
-        session, state=state, city=city,
-        min_restaurants=min_restaurants, limit=page_size, offset=offset,
+        session,
+        state=state,
+        city=city,
+        min_restaurants=min_restaurants,
+        limit=page_size,
+        offset=offset,
     )
 
 
 @router.post("/compare")
 async def compare(
-    zip_codes: list[str] = Query(..., min_length=2, max_length=10, description="ZIP codes to compare"),
+    zip_codes: list[str] = Query(
+        ..., min_length=2, max_length=10, description="ZIP codes to compare"
+    ),
     session: AsyncSession = Depends(get_session),
 ):
     """Compare neighborhoods side by side (NIF-121)."""

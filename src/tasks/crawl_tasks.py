@@ -74,33 +74,37 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                     )
                     existing = (await session.execute(existing_query)).scalar_one_or_none()
 
-                    stmt = insert(Restaurant).values(
-                        name=name,
-                        address=address or None,
-                        city=record.get("city"),
-                        state=record.get("state"),
-                        zip_code=record.get("zip_code"),
-                        lat=record.get("lat"),
-                        lng=record.get("lng"),
-                        phone=record.get("phone"),
-                        website=record.get("website"),
-                        cuisine_type=cuisine,
-                        rating_avg=rating,
-                        review_count=review_count,
-                        price_tier=price_tier,
-                    ).on_conflict_do_update(
-                        constraint="uq_restaurant_name_address",
-                        set_={
-                            "lat": record.get("lat"),
-                            "lng": record.get("lng"),
-                            "phone": record.get("phone"),
-                            "website": record.get("website"),
-                            "cuisine_type": cuisine,
-                            "rating_avg": rating,
-                            "review_count": review_count,
-                            "price_tier": price_tier,
-                            "updated_at": datetime.now(UTC),
-                        },
+                    stmt = (
+                        insert(Restaurant)
+                        .values(
+                            name=name,
+                            address=address or None,
+                            city=record.get("city"),
+                            state=record.get("state"),
+                            zip_code=record.get("zip_code"),
+                            lat=record.get("lat"),
+                            lng=record.get("lng"),
+                            phone=record.get("phone"),
+                            website=record.get("website"),
+                            cuisine_type=cuisine,
+                            rating_avg=rating,
+                            review_count=review_count,
+                            price_tier=price_tier,
+                        )
+                        .on_conflict_do_update(
+                            constraint="uq_restaurant_name_address",
+                            set_={
+                                "lat": record.get("lat"),
+                                "lng": record.get("lng"),
+                                "phone": record.get("phone"),
+                                "website": record.get("website"),
+                                "cuisine_type": cuisine,
+                                "rating_avg": rating,
+                                "review_count": review_count,
+                                "price_tier": price_tier,
+                                "updated_at": datetime.now(UTC),
+                            },
+                        )
                     )
                     await session.execute(stmt)
                     await session.flush()
@@ -115,55 +119,75 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                     # --- Change Detection ---
                     if rest and not existing:
                         # New restaurant detected
-                        session.add(RestaurantChange(
-                            restaurant_id=rest.id,
-                            change_type="new_restaurant",
-                            source=record.get("source", source),
-                        ))
+                        session.add(
+                            RestaurantChange(
+                                restaurant_id=rest.id,
+                                change_type="new_restaurant",
+                                source=record.get("source", source),
+                            )
+                        )
                     elif rest and existing:
                         src_name = record.get("source", source)
                         # Rating change
-                        if rating is not None and existing.rating_avg is not None and abs((rating or 0) - (existing.rating_avg or 0)) >= 0.1:
-                            session.add(RestaurantChange(
-                                restaurant_id=rest.id,
-                                change_type="rating_change",
-                                field_name="rating_avg",
-                                old_value=str(existing.rating_avg),
-                                new_value=str(rating),
-                                source=src_name,
-                            ))
+                        if (
+                            rating is not None
+                            and existing.rating_avg is not None
+                            and abs((rating or 0) - (existing.rating_avg or 0)) >= 0.1
+                        ):
+                            session.add(
+                                RestaurantChange(
+                                    restaurant_id=rest.id,
+                                    change_type="rating_change",
+                                    field_name="rating_avg",
+                                    old_value=str(existing.rating_avg),
+                                    new_value=str(rating),
+                                    source=src_name,
+                                )
+                            )
                         # Review count change
-                        if review_count and existing.review_count and review_count != existing.review_count:
-                            session.add(RestaurantChange(
-                                restaurant_id=rest.id,
-                                change_type="field_update",
-                                field_name="review_count",
-                                old_value=str(existing.review_count),
-                                new_value=str(review_count),
-                                source=src_name,
-                            ))
+                        if (
+                            review_count
+                            and existing.review_count
+                            and review_count != existing.review_count
+                        ):
+                            session.add(
+                                RestaurantChange(
+                                    restaurant_id=rest.id,
+                                    change_type="field_update",
+                                    field_name="review_count",
+                                    old_value=str(existing.review_count),
+                                    new_value=str(review_count),
+                                    source=src_name,
+                                )
+                            )
                         # Delivery/platform change (detected from source type)
-                        raw = record.get("raw_data", record) or record
-                        new_has_delivery = raw.get("has_delivery", False)
-                        new_platforms = raw.get("delivery_platforms") or raw.get("delivery_platform")
-                        if record.get("source", source) in ("doordash", "ubereats", "grubhub", "delivery"):
-                            session.add(RestaurantChange(
-                                restaurant_id=rest.id,
-                                change_type="delivery_change",
-                                field_name="delivery_source",
-                                new_value=record.get("source", source),
-                                source=src_name,
-                            ))
+                        if record.get("source", source) in (
+                            "doordash",
+                            "ubereats",
+                            "grubhub",
+                            "delivery",
+                        ):
+                            session.add(
+                                RestaurantChange(
+                                    restaurant_id=rest.id,
+                                    change_type="delivery_change",
+                                    field_name="delivery_source",
+                                    new_value=record.get("source", source),
+                                    source=src_name,
+                                )
+                            )
                         # Price tier change
                         if price_tier and existing.price_tier and price_tier != existing.price_tier:
-                            session.add(RestaurantChange(
-                                restaurant_id=rest.id,
-                                change_type="field_update",
-                                field_name="price_tier",
-                                old_value=existing.price_tier,
-                                new_value=price_tier,
-                                source=src_name,
-                            ))
+                            session.add(
+                                RestaurantChange(
+                                    restaurant_id=rest.id,
+                                    change_type="field_update",
+                                    field_name="price_tier",
+                                    old_value=existing.price_tier,
+                                    new_value=price_tier,
+                                    source=src_name,
+                                )
+                            )
 
                     if rest:
                         source_rec = SourceRecord(
@@ -176,9 +200,19 @@ def crawl_source(self, source: str, query: str, location: str, job_id: str | Non
                         session.add(source_rec)
                         count += 1
                     else:
-                        logger.warning("restaurant_not_found_after_insert", name=name, address=address[:80] if address else None)
+                        logger.warning(
+                            "restaurant_not_found_after_insert",
+                            name=name,
+                            address=address[:80] if address else None,
+                        )
 
-                logger.info("crawl_insert_summary", source=source, inserted=count, skipped=skipped, total_from_api=len(results))
+                logger.info(
+                    "crawl_insert_summary",
+                    source=source,
+                    inserted=count,
+                    skipped=skipped,
+                    total_from_api=len(results),
+                )
                 await session.commit()
 
                 if job_id:
@@ -218,6 +252,7 @@ def run_daily_crawl():
     sources = ["google_maps", "yelp", "delivery"]
 
     from celery import group
+
     tasks = []
     for query, location in locations:
         for source in sources:

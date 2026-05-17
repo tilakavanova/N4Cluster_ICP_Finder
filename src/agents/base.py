@@ -128,7 +128,4 @@ def get_agent(name: str) -> BaseAgent | None:
 
 def list_agents() -> list[dict[str, str]]:
     """Return metadata for all registered agents."""
-    return [
-        {"name": a.name, "description": a.description}
-        for a in _registry.values()
-    ]
+    return [{"name": a.name, "description": a.description} for a in _registry.values()]

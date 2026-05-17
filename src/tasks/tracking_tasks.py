@@ -43,6 +43,7 @@ def log_tracker_event(
         user_agent: Raw User-Agent header value.
         occurred_at: ISO-8601 timestamp string; defaults to now if omitted.
     """
+
     async def _persist():
         import uuid as _uuid
 
@@ -54,11 +55,7 @@ def log_tracker_event(
 
         provider_event_id = f"{token}:{event_type}"
 
-        ts = (
-            datetime.fromisoformat(occurred_at)
-            if occurred_at
-            else datetime.now(UTC)
-        )
+        ts = datetime.fromisoformat(occurred_at) if occurred_at else datetime.now(UTC)
 
         metadata: dict = {}
         if ip_hash:
@@ -69,9 +66,7 @@ def log_tracker_event(
         async with async_session() as session:
             # Deduplication check — provider_event_id has a UNIQUE constraint
             existing = await session.execute(
-                select(TrackerEvent).where(
-                    TrackerEvent.provider_event_id == provider_event_id
-                )
+                select(TrackerEvent).where(TrackerEvent.provider_event_id == provider_event_id)
             )
             if existing.scalar_one_or_none() is not None:
                 logger.info(

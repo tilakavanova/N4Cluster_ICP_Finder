@@ -24,6 +24,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 # Legacy dependency (kept for backward compat, used internally)
 # ---------------------------------------------------------------------------
 
+
 async def require_api_key(api_key: str | None = Security(api_key_header)) -> str:
     """Dependency that enforces API key authentication.
 
@@ -45,6 +46,7 @@ async def require_api_key(api_key: str | None = Security(api_key_header)) -> str
 # ---------------------------------------------------------------------------
 # Unified auth dependency
 # ---------------------------------------------------------------------------
+
 
 async def require_auth(
     api_key: str | None = Security(api_key_header),
@@ -100,11 +102,13 @@ async def require_auth(
 # Scope enforcement
 # ---------------------------------------------------------------------------
 
+
 def require_scope(scope: str):
     """Return a FastAPI dependency that checks the JWT payload has *scope*.
 
     Legacy and dev-mode contexts have all scopes granted.
     """
+
     async def _check(auth: dict = Depends(require_auth)) -> dict:
         mode = auth.get("mode", "")
         if mode in ("legacy", "dev"):

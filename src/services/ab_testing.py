@@ -182,7 +182,7 @@ class ABTestService:
         if not assignment:
             raise ValueError(f"No assignment found for experiment={experiment_id}, lead={lead_id}")
 
-        outcome = assignment.outcome or {}
+        outcome: dict = assignment.outcome or {}
         outcome["metric_value"] = metric_value
         outcome["recorded_at"] = datetime.now(UTC).isoformat()
         assignment.outcome = outcome
@@ -283,8 +283,10 @@ class ABTestService:
         second_name, second_stats = sorted_variants[1]
 
         p_value = self._z_test_proportions(
-            best_stats["mean"], best_stats["count"],
-            second_stats["mean"], second_stats["count"],
+            best_stats["mean"],
+            best_stats["count"],
+            second_stats["mean"],
+            second_stats["count"],
         )
 
         significant = p_value < 0.05
@@ -340,10 +342,13 @@ class ABTestService:
     async def get_active_scoring_experiment(self) -> ABExperiment | None:
         """Return the currently running scoring profile experiment, if any."""
         result = await self.session.execute(
-            select(ABExperiment).where(
+            select(ABExperiment)
+            .where(
                 ABExperiment.experiment_type == "scoring_profile",
                 ABExperiment.status == "running",
-            ).order_by(ABExperiment.started_at.desc()).limit(1)
+            )
+            .order_by(ABExperiment.started_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
