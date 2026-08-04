@@ -191,7 +191,7 @@ async def test_qualification_card_renders_for_lead_with_qualified_result(
     async_client, db_session, sample_restaurant_with_icp_score, logged_in_session
 ):
     """Seed Lead + QualificationResult directly, then fetch the polling endpoint."""
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
 
     from src.db.models import Lead, QualificationResult
 
@@ -209,7 +209,7 @@ async def test_qualification_card_renders_for_lead_with_qualified_result(
         qualification_status="qualified",
         confidence_score=0.92,
         signals_summary=["ICP-fit", "delivery-on"],
-        qualified_at=datetime.now(timezone.utc),
+        qualified_at=datetime.now(UTC),
     )
     db_session.add(qual)
     await db_session.commit()
