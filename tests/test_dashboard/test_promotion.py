@@ -155,6 +155,28 @@ async def test_promote_new_campaign_sentinel_without_name_does_not_crash(
     assert "Promoted" in response.text
 
 
+async def test_promote_toast_surfaces_missing_phone_warning(
+    async_client, sample_restaurant_with_icp_score, logged_in_session
+):
+    """NIF-290: the sample restaurant has no phone, so promotion records a
+    no_phone data-warning. The toast must surface it so the rep knows to
+    enrich the lead before outreach.
+    """
+    response = await async_client.post(
+        "/dashboard/prospects/promote",
+        data={
+            "restaurant_ids": [str(sample_restaurant_with_icp_score.id)],
+            "campaign_id": "",
+            "new_campaign_name": "",
+            "owner": "",
+            "notes": "",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert "no phone on file" in response.text
+    assert "1 lead has" in response.text
+
+
 async def test_promote_unauthenticated_redirects(async_client, monkeypatch):
     """When dashboard_password is set and there is no session, expect a 303
     redirect to the login page (mirrors the behaviour of other dashboard

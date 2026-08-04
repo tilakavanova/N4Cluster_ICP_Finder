@@ -8,6 +8,12 @@
     {% if result.reused_qualifications %} · Reused {{ result.reused_qualifications }} qualifications{% endif %}
     {% if result.campaign_id %} · Added to <em>{{ campaign_name }}</em>{% endif %}
   </div>
+  {% if result.data_warnings %}
+  {% set missing_phone = result.data_warnings | selectattr("warning", "equalto", "no_phone") | list | length %}
+  <div class="text-xs text-amber-300 mt-1">
+    &#9888; {{ missing_phone }} {{ "lead has" if missing_phone == 1 else "leads have" }} no phone on file — enrich before outreach.
+  </div>
+  {% endif %}
   {% if result.lead_ids %}
   <a href="/dashboard/leads?ids={{ result.lead_ids|join(',') }}" class="text-cobalt-300 text-xs underline mt-1 inline-block">
     View Leads &rarr;
