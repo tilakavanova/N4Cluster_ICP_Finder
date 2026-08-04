@@ -91,6 +91,70 @@ async def test_promote_single_restaurant_returns_toast_and_row(
     assert "Already a Lead" in body or str(sample_restaurant_with_icp_score.id) in body
 
 
+async def test_promote_with_new_campaign_sentinel_creates_campaign(
+    async_client, db_session, sample_restaurant_with_icp_score, logged_in_session
+):
+    """The modal's 'Create new campaign' path submits campaign_id='__new__'
+    (a sentinel, NOT a UUID) alongside the new_campaign_* fields.
+
+    The route must interpret '__new__' as "create a new campaign" rather than
+    feeding it to UUID(), which raises ValueError and 500s. This is also the
+    default-selected option whenever no active/draft campaigns exist, so on a
+    fresh system every plain promote submit hits this path.
+    """
+    from sqlalchemy import select
+
+    from src.db.models import OutreachCampaign
+
+    response = await async_client.post(
+        "/dashboard/prospects/promote",
+        data={
+            "restaurant_ids": [str(sample_restaurant_with_icp_score.id)],
+            "campaign_id": "__new__",
+            "new_campaign_name": "Spring Outreach",
+            "new_campaign_type": "email",
+            "new_campaign_status": "draft",
+            "owner": "",
+            "notes": "",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert "Promoted" in response.text
+    # A campaign with the submitted name was actually created.
+    created = (
+        (
+            await db_session.execute(
+                select(OutreachCampaign).where(OutreachCampaign.name == "Spring Outreach")
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert created is not None
+    # And the toast reflects the campaign attachment.
+    assert "Spring Outreach" in response.text
+
+
+async def test_promote_new_campaign_sentinel_without_name_does_not_crash(
+    async_client, sample_restaurant_with_icp_score, logged_in_session
+):
+    """'__new__' selected but no name typed (e.g. the no-campaigns default the
+    user never touched) must still promote the lead, not 500 on UUID('__new__').
+    """
+    response = await async_client.post(
+        "/dashboard/prospects/promote",
+        data={
+            "restaurant_ids": [str(sample_restaurant_with_icp_score.id)],
+            "campaign_id": "__new__",
+            "new_campaign_name": "",
+            "owner": "",
+            "notes": "",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert "Promoted" in response.text
+
+
 async def test_promote_unauthenticated_redirects(async_client, monkeypatch):
     """When dashboard_password is set and there is no session, expect a 303
     redirect to the login page (mirrors the behaviour of other dashboard
@@ -181,9 +245,7 @@ async def test_prospects_page_renders_with_action_column(
 
 
 @pytest.mark.asyncio
-async def test_prospects_page_includes_bulk_toolbar_and_modal(
-    async_client, logged_in_session
-):
+async def test_prospects_page_includes_bulk_toolbar_and_modal(async_client, logged_in_session):
     response = await async_client.get("/dashboard/prospects?zip_code=02115")
     assert response.status_code == 200
     body = response.text
@@ -221,6 +283,7 @@ async def test_lead_detail_includes_qualification_card_slot(
     async_client, db_session, sample_restaurant_with_icp_score, logged_in_session
 ):
     from src.db.models import Lead
+
     lead = Lead(
         source="prospect_finder",
         status="new",
@@ -243,6 +306,7 @@ async def test_lead_detail_renders_cleanly_for_null_identity_fields(
 ):
     """Prospect-promoted Lead has None first_name/last_name/email — page must not render 'None'."""
     from src.db.models import Lead
+
     lead = Lead(
         source="prospect_finder",
         status="new",
@@ -271,6 +335,7 @@ async def test_leads_list_renders_cleanly_for_null_identity_fields(
 ):
     """Leads list page must not render 'None' for prospect-promoted Leads."""
     from src.db.models import Lead
+
     lead = Lead(
         source="prospect_finder",
         status="new",
