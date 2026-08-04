@@ -1240,19 +1240,29 @@ async def promote_prospects_route(
     from src.services.prospect_promotion import NewCampaignSpec, promote_prospects
 
     rids = [UUID(r) for r in restaurant_ids]
+
+    # The campaign <select> in promote_modal.html carries three kinds of value:
+    #   - a real campaign UUID (attach to that campaign)
+    #   - "" — the explicit "None" option (promote without a campaign)
+    #   - "__new__" — the "Create new campaign…" sentinel; the new_campaign_*
+    #     fields carry the details. This is ALSO the default-selected option
+    #     whenever no active/draft campaigns exist, so it must be handled here.
+    # "__new__" is NOT a UUID — passing it to UUID() raises ValueError and 500s.
+    is_new_campaign = campaign_id == "__new__"
     new_campaign = None
-    if new_campaign_name.strip():
+    if is_new_campaign and new_campaign_name.strip():
         new_campaign = NewCampaignSpec(
             name=new_campaign_name.strip(),
             campaign_type=new_campaign_type,
             status=new_campaign_status,
         )
+    selected_campaign_id = UUID(campaign_id) if campaign_id and not is_new_campaign else None
 
     actor = request.session.get("username") or "dashboard"
     result = await promote_prospects(
         session=session,
         restaurant_ids=rids,
-        campaign_id=UUID(campaign_id) if campaign_id else None,
+        campaign_id=selected_campaign_id,
         new_campaign=new_campaign,
         owner=owner.strip() or None,
         notes=notes.strip() or None,
@@ -1289,8 +1299,13 @@ async def promote_prospects_route(
                 "partials/prospect_row_action.html"
             ).render(restaurant_id=str(lead.restaurant_id), lead_id=str(lead.id))
 
+    # innerHTML (not outerHTML): the target is the `<td id="prospect-action-…">`
+    # cell. outerHTML would replace the <td> with this wrapper <div>, which is
+    # invalid inside a <tr> and gets hoisted out of the table by the browser,
+    # visually destroying the action cell. innerHTML keeps the <td> and only
+    # swaps its contents for the rendered row-action partial.
     oob_blocks = "\n".join(
-        f'<div hx-swap-oob="outerHTML:#prospect-action-{rid}">{partial}</div>'
+        f'<div hx-swap-oob="innerHTML:#prospect-action-{rid}">{partial}</div>'
         for rid, partial in row_partials.items()
     )
     return HTMLResponse(toast_html + "\n" + oob_blocks)

@@ -189,6 +189,12 @@
 </div>
 {% endif %}
 
+{# Persistent target for the promote toast. The promote route returns a toast
+   partial with hx-swap-oob="true", which requires a matching #promote-toast
+   element to already exist in the DOM — without this placeholder HTMX silently
+   drops the toast and the promotion appears to do nothing. #}
+<div id="promote-toast"></div>
+
 {% include "partials/promote_modal.html" %}
 
 <script>
